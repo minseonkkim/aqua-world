@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>AquaWorld Fish Preview</title>
+<style>
+  body { margin: 0; background: #0a1825; color: #cfe; font-family: -apple-system, sans-serif; }
+  h1 { padding: 16px; margin: 0; font-size: 18px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px; padding: 0 12px 32px;
+  }
+  .cell {
+    background: #15263a; border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .cell canvas { display: block; width: 100%; height: 240px; background: #1b3050; }
+  .cell .label { padding: 8px 10px; font-size: 13px; opacity: 0.9; }
+</style>
+</head>
+<body>
+<h1>AquaWorld 물고기 GLB 프리뷰 — 자동 회전 / 마우스로 살펴보기</h1>
+<div class="grid" id="grid"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const FISH = [
+  'clownfish','guppy','goldfish','seahorse','zebrafish',
+  'betta','angelfish','mandarin','sea_dragon','coelacanth',
+];
+
+const loader = new GLTFLoader();
+const grid = document.getElementById('grid');
+
+for (const id of FISH) {
+  const cell = document.createElement('div');
+  cell.className = 'cell';
+  const canvas = document.createElement('canvas');
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = id + ' — 로딩…';
+  cell.append(canvas, label);
+  grid.append(cell);
+
+  const w = canvas.clientWidth || 300, h = 240;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1b3050);
+  const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 100);
+  camera.position.set(2.2, 1.0, 2.2);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const key = new THREE.DirectionalLight(0xffffff, 1.2);
+  key.position.set(3, 5, 4);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x88bbff, 0.4);
+  rim.position.set(-3, 1, -2);
+  scene.add(rim);
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+
+  let model = null;
+  loader.load(`/models/fish/${id}.glb`,
+    (gltf) => {
+      model = gltf.scene;
+      // center + scale to fit
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scale = 1.4 / maxDim;
+      model.scale.setScalar(scale);
+      scene.add(model);
+      label.textContent = `${id} — ${(size.x*scale).toFixed(2)} × ${(size.y*scale).toFixed(2)} × ${(size.z*scale).toFixed(2)}`;
+    },
+    undefined,
+    (err) => { label.textContent = id + ' — 로드 실패: ' + err.message; }
+  );
+
+  function tick() {
+    requestAnimationFrame(tick);
+    if (model) model.rotation.y += 0.005;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  tick();
+}
+</script>
+</body>
+</html>

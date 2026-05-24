@@ -4,6 +4,7 @@ import { createWaterMaterial } from './WaterShader';
 import { useCameraControls } from '@/hooks/useCameraControls';
 import { Fish, TankEnvironment } from '@/types';
 import { STAGE_SCALE } from '@/constants';
+import { cloneFishModel, getFishModel, preloadFishModels } from '@/utils/fishModelLoader';
 
 interface Props {
   environment: TankEnvironment;
@@ -20,15 +21,7 @@ const ENV: Record<TankEnvironment, { water: number; ambient: number; bg: string 
   space:        { water: 0x0d0d2b, ambient: 0x1a1a44, bg: '#000008' },
 };
 
-// 희귀도별 색상
-const RARITY_MESH_COLORS: Record<string, number> = {
-  common: 0xaaaaaa,
-  rare: 0x4488ff,
-  epic: 0xaa44cc,
-  legendary: 0xffaa00,
-};
-
-// 플레이스홀더 물고기 색상 (수조에 물고기가 없을 때 기본 표시용)
+// 플레이스홀더 물고기 색상 (수조에 물고기가 없을 때 / GLB 로드 전)
 const DEFAULT_FISH_COLORS = [0xff6b35, 0xffd700, 0x4ecdc4, 0xff6b9d, 0x95e1d3];
 
 export default function TankScene({ environment, fish = [], onFishClick, style }: Props) {
@@ -37,7 +30,7 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const waterRef = useRef<THREE.Mesh | null>(null);
-  const fishMeshesRef = useRef<THREE.Mesh[]>([]);
+  const fishMeshesRef = useRef<THREE.Object3D[]>([]);
   const fishDataRef = useRef<(Fish | null)[]>([]);
   const rafRef = useRef(0);
   const clock = useRef(new THREE.Clock());
@@ -52,48 +45,77 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
   const fishRef = useRef<Fish[]>(fish);
   useEffect(() => { fishRef.current = fish; }, [fish]);
 
-  const buildFishMesh = useCallback((color: number, index: number, scale: number = 1): THREE.Mesh => {
+  // GLB 로드 전 / speciesId 누락 시 사용할 플레이스홀더 메시 생성
+  const buildPlaceholderMesh = useCallback((color: number, scale: number): THREE.Mesh => {
     const geo = new THREE.SphereGeometry(0.22, 8, 6);
     geo.scale(1.5, 0.7, 0.9);
     const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, shininess: 80 }));
-    mesh.position.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6);
     mesh.scale.setScalar(scale);
-    mesh.userData.vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 0.02,
-      (Math.random() - 0.5) * 0.008,
-      (Math.random() - 0.5) * 0.02,
-    );
-    mesh.userData.phase = Math.random() * Math.PI * 2;
-    mesh.userData.fishIndex = index;
     return mesh;
   }, []);
 
+  // speciesId가 있으면 캐시된 GLB clone, 없거나 미로드면 플레이스홀더.
+  // 결과는 항상 Group으로 감싸 wrapper.rotation.y로 진행 방향을 제어.
+  const buildFishObject = useCallback(
+    (index: number, speciesId: string | null, stageScale: number, fallbackColor: number): THREE.Group => {
+      const wrapper = new THREE.Group();
+      let inner: THREE.Object3D | null = null;
+      let baseScale = 1;
+
+      if (speciesId) {
+        const modelClone = cloneFishModel(speciesId);
+        const meta = getFishModel(speciesId);
+        if (modelClone && meta) {
+          inner = modelClone;
+          baseScale = meta.baseScale;
+        }
+      }
+      if (!inner) {
+        inner = buildPlaceholderMesh(fallbackColor, 1);
+      }
+      wrapper.add(inner);
+      wrapper.scale.setScalar(baseScale * stageScale);
+      wrapper.position.set(
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 4,
+        (Math.random() - 0.5) * 6,
+      );
+      wrapper.userData.vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 0.02,
+        (Math.random() - 0.5) * 0.008,
+        (Math.random() - 0.5) * 0.02,
+      );
+      wrapper.userData.phase = Math.random() * Math.PI * 2;
+      wrapper.userData.fishIndex = index;
+      return wrapper;
+    },
+    [buildPlaceholderMesh],
+  );
+
   const syncFishMeshes = useCallback((scene: THREE.Scene) => {
     const currentFish = fishRef.current;
-    // 기존 물고기 메시 제거
     fishMeshesRef.current.forEach(m => scene.remove(m));
     fishMeshesRef.current = [];
     fishDataRef.current = [];
 
     if (currentFish.length > 0) {
       currentFish.forEach((f, i) => {
-        const color = RARITY_MESH_COLORS.common;
         const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
-        const mesh = buildFishMesh(color, i, stageScale);
-        mesh.position.set(f.position.x, f.position.y, f.position.z);
-        scene.add(mesh);
-        fishMeshesRef.current.push(mesh);
+        const obj = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
+        obj.position.set(f.position.x, f.position.y, f.position.z);
+        scene.add(obj);
+        fishMeshesRef.current.push(obj);
         fishDataRef.current.push(f);
       });
     } else {
       DEFAULT_FISH_COLORS.forEach((color, i) => {
-        const mesh = buildFishMesh(color, i);
-        scene.add(mesh);
-        fishMeshesRef.current.push(mesh);
+        const obj = buildFishObject(i, null, 1, color);
+        scene.add(obj);
+        fishMeshesRef.current.push(obj);
         fishDataRef.current.push(null);
       });
     }
-  }, [buildFishMesh]);
+  }, [buildFishObject]);
 
   const init = useCallback((canvas: HTMLCanvasElement) => {
     const w = canvas.clientWidth;
@@ -179,6 +201,17 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
     syncFishMeshes(scene);
   }, [fish, syncFishMeshes]);
 
+  // 마운트 시 GLB 프리로드 → 완료되면 플레이스홀더를 실제 모델로 교체
+  useEffect(() => {
+    let cancelled = false;
+    preloadFishModels().then(() => {
+      if (cancelled) return;
+      const scene = sceneRef.current;
+      if (scene) syncFishMeshes(scene);
+    });
+    return () => { cancelled = true; };
+  }, [syncFishMeshes]);
+
   // 클릭/탭 핸들러 (드래그와 구분)
   const handlePointerDown = useCallback((e: PointerEvent) => {
     clickStartRef.current = { x: e.clientX, y: e.clientY };
@@ -201,11 +234,16 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
     pointerRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycasterRef.current.setFromCamera(pointerRef.current, camera);
-    const hits = raycasterRef.current.intersectObjects(fishMeshesRef.current);
+    // GLB는 Group + 자식 Mesh 구조이므로 recursive 탐색 + 부모 체인을 거슬러 wrapper 찾기
+    const hits = raycasterRef.current.intersectObjects(fishMeshesRef.current, true);
     if (hits.length > 0) {
-      const idx = hits[0].object.userData.fishIndex as number;
-      const fishData = fishDataRef.current[idx];
-      if (fishData) onFishClick(fishData);
+      let obj: THREE.Object3D | null = hits[0].object;
+      while (obj && obj.userData.fishIndex === undefined) obj = obj.parent;
+      if (obj) {
+        const idx = obj.userData.fishIndex as number;
+        const fishData = fishDataRef.current[idx];
+        if (fishData) onFishClick(fishData);
+      }
     }
   }, [onFishClick]);
 
