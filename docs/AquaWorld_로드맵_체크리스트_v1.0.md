@@ -140,7 +140,7 @@
 
 ### 1-4. Firebase 연동 기초 확인
 
-- [ ] 🔴 Firebase 프로젝트 생성 (Web 앱 등록)
+- [x] 🔴 Firebase 프로젝트 생성 (Web 앱 등록)
 - [ ] 🔴 Firebase Authentication 기초 연동 (이메일 테스트)
 - [ ] 🔴 Firestore 기본 CRUD 동작 확인
 - [x] 🟡 Firebase SDK 설치 및 config 파일 생성 (.env.example 포함)
