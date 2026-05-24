@@ -38,24 +38,6 @@ interface UserState {
   addCollectedSpecies: (speciesId: string) => void;
 }
 
-const createDefaultUser = (): User => ({
-  id: '',
-  displayName: '',
-  email: '',
-  pearl: 0,
-  starCoral: 0,
-  level: 1,
-  experience: 0,
-  loginStreak: 0,
-  lastLoginAt: 0,
-  createdAt: Date.now(),
-  tanks: [],
-  inventory: [],
-  collectedSpecies: [],
-  feedCountToday: 0,
-  lastFeedResetAt: Date.now(),
-});
-
 function rollSpecies(tier: EggTier): string {
   const rarityPool = RARITY_BY_EGG[tier];
   const rarity: FishRarity = rarityPool[Math.floor(Math.random() * rarityPool.length)];
