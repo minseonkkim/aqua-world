@@ -1,12 +1,45 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
+import { useTankStore } from '@/store/useTankStore';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
 
+function createDefaultTank() {
+  return {
+    id: 'tank_default',
+    name: '나의 수조',
+    environment: 'coral_reef' as const,
+    fish: [],
+    decorations: [],
+    cleanliness: 100,
+    lightMode: 'auto' as const,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
 export default function App() {
-  const { isAuthenticated, isLoading } = useUserStore();
+  const { isAuthenticated, isLoading, setLoading, claimDailyLogin } = useUserStore();
+
+  useEffect(() => {
+    const { isAuthenticated: auth } = useUserStore.getState();
+
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
+    // 재방문 유저: 수조 없으면 생성
+    const { tanks, addTank } = useTankStore.getState();
+    if (tanks.length === 0) {
+      addTank(createDefaultTank());
+    }
+
+    claimDailyLogin();
+    setLoading(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (

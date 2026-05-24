@@ -120,6 +120,23 @@ export const SPACING = {
 
 export const COMPENDIUM_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
+// ==================== 가챠: 알 등급별 희귀도 풀 ====================
+
+import { FishRarity, EggTier } from '../types';
+
+export const RARITY_BY_EGG: Record<EggTier, FishRarity[]> = {
+  basic:     ['common','common','common','common','common','common','common','rare','rare','rare'],
+  rare:      ['rare','rare','rare','rare','rare','rare','epic','epic','epic','legendary'],
+  legendary: ['epic','epic','epic','epic','epic','legendary','legendary','legendary','legendary','legendary'],
+};
+
+export const SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
+  common:    ['clownfish', 'guppy', 'goldfish', 'seahorse', 'zebrafish'],
+  rare:      ['betta', 'angelfish', 'mandarin_fish'],
+  epic:      ['leafy_sea_dragon'],
+  legendary: ['coelacanth'],
+};
+
 // ==================== 플레이어 레벨 ====================
 
 export const LEVEL_EXP_TABLE = Array.from({ length: 100 }, (_, i) => ({
