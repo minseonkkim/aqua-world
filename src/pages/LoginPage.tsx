@@ -2,16 +2,18 @@ import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { signInWithGoogle } from '@/services/firebase/auth';
+import { loadUserFromFirestore, loadUserTanks, saveUserToFirestore, saveTankToFirestore } from '@/services/firebase/firestore';
+import { Tank } from '@/types';
 
-function createDefaultTank() {
+function createDefaultTank(): Tank {
   return {
     id: 'tank_default',
     name: '나의 수조',
-    environment: 'coral_reef' as const,
+    environment: 'coral_reef',
     fish: [],
     decorations: [],
     cleanliness: 100,
-    lightMode: 'auto' as const,
+    lightMode: 'auto',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -20,20 +22,36 @@ function createDefaultTank() {
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { setUser, claimDailyLogin } = useUserStore();
-  const { tanks, addTank } = useTankStore();
+  const { tanks, addTank, setTanks } = useTankStore();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
       const firebaseUser = await signInWithGoogle();
-      const existingUser = useUserStore.getState().user;
-      const isNewUser = !existingUser || existingUser.id !== firebaseUser.uid;
 
-      if (isNewUser) {
-        setUser({
+      // 기존 유저인지 Firestore에서 확인
+      const [firestoreUser, firestoreTanks] = await Promise.all([
+        loadUserFromFirestore(firebaseUser.uid),
+        loadUserTanks(firebaseUser.uid),
+      ]);
+
+      if (firestoreUser) {
+        // 기존 유저: Firestore 데이터 복원
+        setUser(firestoreUser);
+        if (firestoreTanks.length > 0) {
+          setTanks(firestoreTanks);
+        } else if (tanks.length === 0) {
+          const defaultTank = createDefaultTank();
+          addTank(defaultTank);
+          await saveTankToFirestore(defaultTank, firebaseUser.uid);
+        }
+      } else {
+        // 신규 유저: 기본값으로 생성 후 Firestore에 저장
+        const newUser = {
           id: firebaseUser.uid,
           displayName: firebaseUser.displayName ?? 'AquaWorld 유저',
           email: firebaseUser.email ?? '',
+          photoURL: firebaseUser.photoURL ?? undefined,
           pearl: 200,
           starCoral: 20,
           level: 1,
@@ -46,11 +64,18 @@ export default function LoginPage() {
           collectedSpecies: [],
           feedCountToday: 0,
           lastFeedResetAt: Date.now(),
-        });
-        if (tanks.length === 0) addTank(createDefaultTank());
-      } else {
-        setUser(existingUser);
+        };
+        const defaultTank = createDefaultTank();
+
+        setUser(newUser);
+        addTank(defaultTank);
+
+        await Promise.all([
+          saveUserToFirestore(newUser),
+          saveTankToFirestore(defaultTank, firebaseUser.uid),
+        ]);
       }
+
       claimDailyLogin();
     } catch (err) {
       console.error('[Google Login]', err);

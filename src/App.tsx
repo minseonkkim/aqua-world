@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { onAuthChanged } from '@/services/firebase/auth';
+import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -23,6 +24,7 @@ function createDefaultTank() {
 
 export default function App() {
   const { isAuthenticated, isLoading, setLoading, claimDailyLogin } = useUserStore();
+  useFirestoreSync();
 
   useEffect(() => {
     const { isAuthenticated: auth } = useUserStore.getState();
