@@ -64,6 +64,7 @@ export default function LoginPage() {
           collectedSpecies: [],
           feedCountToday: 0,
           lastFeedResetAt: Date.now(),
+          tutorialStep: 0,
         };
         const defaultTank = createDefaultTank();
 
@@ -105,6 +106,7 @@ export default function LoginPage() {
       collectedSpecies: [],
       feedCountToday: 0,
       lastFeedResetAt: Date.now(),
+      tutorialStep: 0,
     });
 
     if (tanks.length === 0) addTank(createDefaultTank());

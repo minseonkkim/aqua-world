@@ -1,6 +1,6 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -21,9 +21,13 @@ let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 
 if (isConfigured) {
-  app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]!;
+  const alreadyInitialized = getApps().length > 0;
+  app = alreadyInitialized ? getApps()[0]! : initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app);
+  // initializeFirestore는 최초 1회만 호출 가능 — HMR 재호출 방지
+  db = alreadyInitialized
+    ? getFirestore(app)
+    : initializeFirestore(app, { ignoreUndefinedProperties: true });
   storage = getStorage(app);
 } else {
   console.warn('[Firebase] .env 파일에 실제 Firebase 설정값을 입력해주세요. 현재 게스트 모드로 동작합니다.');

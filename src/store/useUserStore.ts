@@ -25,7 +25,7 @@ interface UserState {
   addStarCoral: (amount: number) => void;
   spendStarCoral: (amount: number) => boolean;
 
-  addEggToInventory: (tier: EggTier) => void;
+  addEggToInventory: (tier: EggTier, overrideHatchSeconds?: number) => void;
   removeEggFromInventory: (eggId: string) => void;
   startHatching: (eggId: string) => void;
   // returns speciesId on success, null if not ready
@@ -36,6 +36,8 @@ interface UserState {
   recordFeed: () => boolean;
 
   addCollectedSpecies: (speciesId: string) => void;
+
+  setTutorialStep: (step: number) => void;
 }
 
 function rollSpecies(tier: EggTier): string {
@@ -84,13 +86,14 @@ export const useUserStore = create<UserState>()(
         return true;
       },
 
-      addEggToInventory: tier => {
+      addEggToInventory: (tier, overrideHatchSeconds) => {
         const { user } = get();
         if (!user) return;
+        const defaultDuration = tier === 'basic' ? 300 : tier === 'rare' ? 1800 : 7200;
         const newEgg: Egg = {
           id: `egg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
           tier,
-          hatchDuration: tier === 'basic' ? 300 : tier === 'rare' ? 1800 : 7200,
+          hatchDuration: overrideHatchSeconds ?? defaultDuration,
           startedAt: 0,
           isHatching: false,
         };
@@ -198,6 +201,12 @@ export const useUserStore = create<UserState>()(
         const { user } = get();
         if (!user || user.collectedSpecies.includes(speciesId)) return;
         set({ user: { ...user, collectedSpecies: [...user.collectedSpecies, speciesId] } });
+      },
+
+      setTutorialStep: step => {
+        const { user } = get();
+        if (!user) return;
+        set({ user: { ...user, tutorialStep: step } });
       },
     }),
     {

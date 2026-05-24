@@ -48,6 +48,10 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
   const { bindCanvas, apply } = useCameraControls(cameraRef);
   const env = ENV[environment];
 
+  // fish prop을 ref로 보관 — syncFishMeshes를 안정화시켜 init/메인 useEffect 재실행 방지
+  const fishRef = useRef<Fish[]>(fish);
+  useEffect(() => { fishRef.current = fish; }, [fish]);
+
   const buildFishMesh = useCallback((color: number, index: number, scale: number = 1): THREE.Mesh => {
     const geo = new THREE.SphereGeometry(0.22, 8, 6);
     geo.scale(1.5, 0.7, 0.9);
@@ -65,26 +69,23 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
   }, []);
 
   const syncFishMeshes = useCallback((scene: THREE.Scene) => {
+    const currentFish = fishRef.current;
     // 기존 물고기 메시 제거
     fishMeshesRef.current.forEach(m => scene.remove(m));
     fishMeshesRef.current = [];
     fishDataRef.current = [];
 
-    if (fish.length > 0) {
-      // 실제 물고기 데이터 기반 렌더링
-      fish.forEach((f, i) => {
-        // speciesId로 희귀도 유추하는 대신 저장된 position 사용
-        const color = RARITY_MESH_COLORS.common; // 기본 common, 이후 GLB 교체 예정
+    if (currentFish.length > 0) {
+      currentFish.forEach((f, i) => {
+        const color = RARITY_MESH_COLORS.common;
         const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
         const mesh = buildFishMesh(color, i, stageScale);
-        // 저장된 위치가 있으면 사용
         mesh.position.set(f.position.x, f.position.y, f.position.z);
         scene.add(mesh);
         fishMeshesRef.current.push(mesh);
         fishDataRef.current.push(f);
       });
     } else {
-      // 빈 수조: 기본 플레이스홀더 5마리
       DEFAULT_FISH_COLORS.forEach((color, i) => {
         const mesh = buildFishMesh(color, i);
         scene.add(mesh);
@@ -92,7 +93,7 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
         fishDataRef.current.push(null);
       });
     }
-  }, [fish, buildFishMesh]);
+  }, [buildFishMesh]);
 
   const init = useCallback((canvas: HTMLCanvasElement) => {
     const w = canvas.clientWidth;
@@ -171,12 +172,12 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
     return ro;
   }, [apply, env, syncFishMeshes]);
 
-  // fish prop 변경 시 메시 동기화
+  // fish prop 변경 시 메시 동기화 (init useEffect를 다시 트리거하지 않음)
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
     syncFishMeshes(scene);
-  }, [syncFishMeshes]);
+  }, [fish, syncFishMeshes]);
 
   // 클릭/탭 핸들러 (드래그와 구분)
   const handlePointerDown = useCallback((e: PointerEvent) => {

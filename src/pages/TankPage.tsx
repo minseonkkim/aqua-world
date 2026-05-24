@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import TankScene from '@/components/3d/TankScene';
 import DailyRewardModal from '@/components/DailyRewardModal';
 import IncubatorPanel from '@/components/IncubatorPanel';
 import FishInfoCard from '@/components/FishInfoCard';
 import HatchAnimationModal from '@/components/HatchAnimationModal';
+import TutorialOverlay, { TutorialAction } from '@/components/TutorialOverlay';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
@@ -15,7 +16,16 @@ interface PendingHatch {
 }
 
 export default function TankPage() {
-  const { user, addPearl, recordFeed, pendingDailyReward, collectHatchedEgg, addCollectedSpecies } = useUserStore();
+  const {
+    user,
+    addPearl,
+    recordFeed,
+    pendingDailyReward,
+    collectHatchedEgg,
+    addCollectedSpecies,
+    addEggToInventory,
+    setTutorialStep,
+  } = useUserStore();
   const { tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const [toast, setToast] = useState('');
@@ -36,6 +46,8 @@ export default function TankPage() {
     setTimeout(() => setToast(''), 2500);
   };
 
+  const handleFishClick = useCallback((f: Fish) => setSelectedFishId(f.id), []);
+
   // 주기적 성장 틱 (30초마다)
   useEffect(() => {
     if (!activeTankId) return;
@@ -53,6 +65,48 @@ export default function TankPage() {
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, [activeTankId, tickFishGrowth, fishInTank]);
+
+  // ===== 튜토리얼 =====
+  const tutorialStep = user?.tutorialStep ?? -1;
+  const tutorialActive = tutorialStep >= 1 && tutorialStep <= 5;
+
+  // 신규 유저(step=0) 진입 시 1단계 시작
+  useEffect(() => {
+    if (user && user.tutorialStep === 0) setTutorialStep(1);
+  }, [user, setTutorialStep]);
+
+  // Step 4 → 5: 부화 시작 감지
+  useEffect(() => {
+    if (tutorialStep !== 4) return;
+    if (user?.inventory.some(e => e.isHatching)) setTutorialStep(5);
+  }, [tutorialStep, user?.inventory, setTutorialStep]);
+
+  // Step 5 → 완료: 수조에 물고기가 추가되면 종료
+  const prevFishCountRef = useRef(fishInTank.length);
+  useEffect(() => {
+    if (tutorialStep === 5 && fishInTank.length > prevFishCountRef.current) {
+      setTutorialStep(-1);
+      showToast('🎉 튜토리얼 완료! 자유롭게 수족관을 즐겨보세요');
+    }
+    prevFishCountRef.current = fishInTank.length;
+  }, [tutorialStep, fishInTank.length, setTutorialStep]);
+
+  const handleTutorialAction = (action: TutorialAction) => {
+    if (action.type === 'skip') {
+      setTutorialStep(-1);
+      return;
+    }
+    if (action.type === 'gift_egg') {
+      addEggToInventory('basic', 10); // 10초 부화 튜토리얼 알
+      showToast('🎁 튜토리얼 알 지급! (10초 부화)');
+      setTutorialStep(4);
+      return;
+    }
+    if (action.type === 'next') {
+      setTutorialStep(tutorialStep + 1);
+    }
+  };
+  // =====================
 
   const handleFeed = () => {
     if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
@@ -125,7 +179,7 @@ export default function TankPage() {
       <TankScene
         environment={environment}
         fish={fishInTank}
-        onFishClick={f => setSelectedFishId(f.id)}
+        onFishClick={handleFishClick}
         style={{ position: 'absolute', inset: 0 }}
       />
 
@@ -174,8 +228,8 @@ export default function TankPage() {
         ))}
       </div>
 
-      {/* 빈 수조 안내 */}
-      {fishInTank.length === 0 && (
+      {/* 빈 수조 안내 — 알도 없고 튜토리얼도 끝났을 때만 */}
+      {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && (
         <div style={{
           position: 'absolute', bottom: 140, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.65)', borderRadius: 16, padding: '12px 20px',
@@ -218,6 +272,11 @@ export default function TankPage() {
           eggTier={pendingHatch.eggTier}
           onComplete={finalizeHatch}
         />
+      )}
+
+      {/* 튜토리얼 오버레이 */}
+      {tutorialActive && !pendingHatch && (
+        <TutorialOverlay step={tutorialStep} onAction={handleTutorialAction} />
       )}
     </div>
   );

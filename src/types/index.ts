@@ -88,6 +88,8 @@ export interface User {
   collectedSpecies: string[]; // species IDs
   feedCountToday: number;
   lastFeedResetAt: number;
+  /** 튜토리얼 진행도: 0=시작 전, 1~5=진행 중, -1=완료/스킵 */
+  tutorialStep?: number;
 }
 
 // ==================== Shop ====================
