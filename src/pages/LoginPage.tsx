@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
+import { signInWithGoogle } from '@/services/firebase/auth';
 
 function createDefaultTank() {
   return {
@@ -20,6 +21,44 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { setUser, claimDailyLogin } = useUserStore();
   const { tanks, addTank } = useTankStore();
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const firebaseUser = await signInWithGoogle();
+      const existingUser = useUserStore.getState().user;
+      const isNewUser = !existingUser || existingUser.id !== firebaseUser.uid;
+
+      if (isNewUser) {
+        setUser({
+          id: firebaseUser.uid,
+          displayName: firebaseUser.displayName ?? 'AquaWorld 유저',
+          email: firebaseUser.email ?? '',
+          pearl: 200,
+          starCoral: 20,
+          level: 1,
+          experience: 0,
+          loginStreak: 0,
+          lastLoginAt: 0,
+          createdAt: Date.now(),
+          tanks: [],
+          inventory: [],
+          collectedSpecies: [],
+          feedCountToday: 0,
+          lastFeedResetAt: Date.now(),
+        });
+        if (tanks.length === 0) addTank(createDefaultTank());
+      } else {
+        setUser(existingUser);
+      }
+      claimDailyLogin();
+    } catch (err) {
+      console.error('[Google Login]', err);
+      alert('Google 로그인에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const guestLogin = async () => {
     setLoading(true);
@@ -43,10 +82,7 @@ export default function LoginPage() {
       lastFeedResetAt: Date.now(),
     });
 
-    if (tanks.length === 0) {
-      addTank(createDefaultTank());
-    }
-
+    if (tanks.length === 0) addTank(createDefaultTank());
     claimDailyLogin();
     setLoading(false);
   };
@@ -65,15 +101,15 @@ export default function LoginPage() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {[
-          { label: '🍎  Apple로 계속하기', bg: '#000', color: '#fff', action: () => comingSoon('Apple') },
-          { label: '🔵  Google로 계속하기', bg: 'var(--color-surface)', color: '#fff', action: () => comingSoon('Google') },
-          { label: '💛  카카오로 계속하기', bg: '#FEE500', color: '#3C1E1E', action: () => comingSoon('카카오') },
-        ].map(btn => (
-          <button key={btn.label} className="btn" style={{ background: btn.bg, color: btn.color }} onClick={btn.action}>
-            {btn.label}
-          </button>
-        ))}
+        <button className="btn" style={{ background: '#000', color: '#fff' }} onClick={() => comingSoon('Apple')} disabled={loading}>
+          🍎  Apple로 계속하기
+        </button>
+        <button className="btn" style={{ background: 'var(--color-surface)', color: '#fff' }} onClick={handleGoogleLogin} disabled={loading}>
+          🔵  Google로 계속하기
+        </button>
+        <button className="btn" style={{ background: '#FEE500', color: '#3C1E1E' }} onClick={() => comingSoon('카카오')} disabled={loading}>
+          💛  카카오로 계속하기
+        </button>
         <button className="btn btn-ghost" onClick={guestLogin} disabled={loading}>
           {loading ? '로딩...' : '🐟 게스트로 시작 (Pearl 200 지급)'}
         </button>

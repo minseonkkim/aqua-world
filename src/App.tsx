@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
+import { onAuthChanged } from '@/services/firebase/auth';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -40,6 +41,18 @@ export default function App() {
     claimDailyLogin();
     setLoading(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Firebase 세션 만료/로그아웃 감지 — 소셜 로그인 유저만 처리
+  useEffect(() => {
+    const unsubscribe = onAuthChanged(firebaseUser => {
+      if (firebaseUser) return;
+      const { isAuthenticated: auth, user } = useUserStore.getState();
+      if (auth && user && !user.id.startsWith('guest_')) {
+        useUserStore.getState().setUser(null);
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   if (isLoading) {
     return (

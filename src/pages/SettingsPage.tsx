@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
+import { signOut } from '@/services/firebase/auth';
 
 export default function SettingsPage() {
   const { user, setUser } = useUserStore();
@@ -7,8 +8,9 @@ export default function SettingsPage() {
   const [bgm, setBgm] = useState(true);
   const [notif, setNotif] = useState(true);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (!confirm('로그아웃 하시겠습니까?')) return;
+    await signOut();
     setUser(null);
   };
 
