@@ -1,11 +1,11 @@
-const typescriptEslint = require('@typescript-eslint/eslint-plugin');
-const typescriptParser = require('@typescript-eslint/parser');
-const reactPlugin = require('eslint-plugin-react');
-const reactHooksPlugin = require('eslint-plugin-react-hooks');
+import typescriptEslint from '@typescript-eslint/eslint-plugin';
+import typescriptParser from '@typescript-eslint/parser';
+import reactPlugin from 'eslint-plugin-react';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
-module.exports = [
+export default [
   {
-    ignores: ['node_modules/**', '.expo/**', 'dist/**', 'build/**'],
+    ignores: ['node_modules/**', 'dist/**', 'build/**'],
   },
   {
     files: ['**/*.ts', '**/*.tsx'],

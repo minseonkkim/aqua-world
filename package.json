@@ -6,8 +6,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .ts,.tsx",
-    "type-check": "tsc --noEmit"
+    "lint": "eslint src",
+    "type-check": "tsc -b --noEmit"
   },
   "dependencies": {
     "firebase": "^11.0.0",

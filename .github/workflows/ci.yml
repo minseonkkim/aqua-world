@@ -26,7 +26,7 @@ jobs:
         run: npm run lint
 
       - name: Run TypeScript check
-        run: npx tsc -b --noEmit
+        run: npm run type-check
 
   build:
     name: Vite Build
