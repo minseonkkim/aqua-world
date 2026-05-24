@@ -1,31 +1,120 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import TankScene from '@/components/3d/TankScene';
 import DailyRewardModal from '@/components/DailyRewardModal';
 import IncubatorPanel from '@/components/IncubatorPanel';
 import FishInfoCard from '@/components/FishInfoCard';
+import HatchAnimationModal from '@/components/HatchAnimationModal';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
-import { Fish, TankEnvironment } from '@/types';
+import { useFishStore } from '@/store/useFishStore';
+import { Fish, TankEnvironment, EggTier } from '@/types';
+
+interface PendingHatch {
+  speciesId: string;
+  eggTier: EggTier;
+}
 
 export default function TankPage() {
-  const { user, addPearl, recordFeed, pendingDailyReward } = useUserStore();
-  const { tanks, activeTankId } = useTankStore();
+  const { user, addPearl, recordFeed, pendingDailyReward, collectHatchedEgg, addCollectedSpecies } = useUserStore();
+  const { tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth } = useTankStore();
+  const { getSpeciesById } = useFishStore();
   const [toast, setToast] = useState('');
-  const [selectedFish, setSelectedFish] = useState<Fish | null>(null);
+  const [selectedFishId, setSelectedFishId] = useState<string | null>(null);
+  const [pendingHatch, setPendingHatch] = useState<PendingHatch | null>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
   const environment: TankEnvironment = activeTank?.environment ?? 'coral_reef';
   const fishInTank = activeTank?.fish ?? [];
+
+  const selectedFish = useMemo(
+    () => fishInTank.find(f => f.id === selectedFishId) ?? null,
+    [fishInTank, selectedFishId],
+  );
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
   };
 
+  // 주기적 성장 틱 (30초마다)
+  useEffect(() => {
+    if (!activeTankId) return;
+    const tick = () => {
+      const advancedIds = tickFishGrowth(activeTankId);
+      if (advancedIds.length > 0) {
+        const names = advancedIds
+          .map(id => fishInTank.find(f => f.id === id)?.name)
+          .filter(Boolean)
+          .join(', ');
+        if (names) showToast(`🌱 ${names} 성장!`);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, [activeTankId, tickFishGrowth, fishInTank]);
+
   const handleFeed = () => {
     if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
     showToast('+10 🪙 Pearl 획득!');
+  };
+
+  const handleFeedFish = (fish: Fish) => {
+    if (!activeTankId) return;
+    if (fish.growthStage === 'large') {
+      showToast('이미 최대 성장 단계입니다');
+      return;
+    }
+    if (!recordFeed()) {
+      showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      return;
+    }
+    addPearl(10);
+    const result = feedFish(activeTankId, fish.id);
+    if (result?.newStage) {
+      showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
+    } else {
+      showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+    }
+  };
+
+  const handleHatchCollect = (eggId: string, eggTier: EggTier) => {
+    const speciesId = collectHatchedEgg(eggId);
+    if (!speciesId) return;
+    setPendingHatch({ speciesId, eggTier });
+  };
+
+  const finalizeHatch = () => {
+    if (!pendingHatch || !activeTank) {
+      setPendingHatch(null);
+      return;
+    }
+    const species = getSpeciesById(pendingHatch.speciesId);
+    const name = species?.name ?? '???';
+    const now = Date.now();
+    const newFish: Fish = {
+      id: `fish_${now}_${Math.random().toString(36).slice(2)}`,
+      speciesId: pendingHatch.speciesId,
+      name,
+      growthStage: 'fry',
+      growthProgress: 0,
+      mood: 'happy',
+      feedCount: 0,
+      lastFedAt: 0,
+      acquiredAt: now,
+      stageStartedAt: now,
+      growthBoostSeconds: 0,
+      position: {
+        x: (Math.random() - 0.5) * 8,
+        y: (Math.random() - 0.5) * 4,
+        z: (Math.random() - 0.5) * 6,
+      },
+    };
+    addFishToTank(activeTank.id, newFish);
+    addCollectedSpecies(pendingHatch.speciesId);
+    setPendingHatch(null);
+    showToast(`✨ ${name} 획득!`);
   };
 
   const remaining = 3 - (user?.feedCountToday ?? 0);
@@ -36,7 +125,7 @@ export default function TankPage() {
       <TankScene
         environment={environment}
         fish={fishInTank}
-        onFishClick={setSelectedFish}
+        onFishClick={f => setSelectedFishId(f.id)}
         style={{ position: 'absolute', inset: 0 }}
       />
 
@@ -64,7 +153,7 @@ export default function TankPage() {
       </div>
 
       {/* 인큐베이터 패널 (왼쪽 하단) */}
-      <IncubatorPanel onHatchSuccess={showToast} />
+      <IncubatorPanel onCollect={handleHatchCollect} />
 
       {/* 우측 액션 버튼 */}
       <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -113,7 +202,33 @@ export default function TankPage() {
       {pendingDailyReward && <DailyRewardModal reward={pendingDailyReward} />}
 
       {/* 물고기 정보 카드 */}
-      {selectedFish && <FishInfoCard fish={selectedFish} onClose={() => setSelectedFish(null)} />}
+      {selectedFish && (
+        <FishInfoCard
+          fish={selectedFish}
+          feedRemaining={remaining}
+          onClose={() => setSelectedFishId(null)}
+          onFeed={() => handleFeedFish(selectedFish)}
+        />
+      )}
+
+      {/* 부화 연출 모달 */}
+      {pendingHatch && (
+        <HatchAnimationModal
+          speciesId={pendingHatch.speciesId}
+          eggTier={pendingHatch.eggTier}
+          onComplete={finalizeHatch}
+        />
+      )}
     </div>
   );
+}
+
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case 'fry': return '치어';
+    case 'juvenile': return '어린 물고기';
+    case 'adult': return '성어';
+    case 'large': return '대형어';
+    default: return stage;
+  }
 }

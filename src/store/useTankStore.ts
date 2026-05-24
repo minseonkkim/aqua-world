@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Tank, TankEnvironment, TankDecoration, Fish } from '../types';
+import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage } from '../types';
+import { FEED_GROWTH_BOOST_SECONDS } from '../constants';
+import { applyGrowthAdvance } from '../utils/growth';
 
 interface TankState {
   tanks: Tank[];
@@ -23,6 +25,11 @@ interface TankState {
   addFishToTank: (tankId: string, fish: Fish) => void;
   updateFish: (tankId: string, fishId: string, updates: Partial<Fish>) => void;
   removeFish: (tankId: string, fishId: string) => void;
+
+  /** 특정 물고기에 먹이를 줘서 성장 가속. 승급 가능하면 즉시 다음 단계로. */
+  feedFish: (tankId: string, fishId: string) => { newStage: FishGrowthStage | null } | null;
+  /** 활성 수조의 모든 물고기 성장 상태를 검사하여 승급 처리. 승급된 fish id 목록 반환. */
+  tickFishGrowth: (tankId: string) => string[];
 }
 
 export const useTankStore = create<TankState>()(
@@ -122,6 +129,58 @@ export const useTankStore = create<TankState>()(
               : t,
           ),
         })),
+
+      feedFish: (tankId, fishId) => {
+        const { tanks } = get();
+        const tank = tanks.find(t => t.id === tankId);
+        const target = tank?.fish.find(f => f.id === fishId);
+        if (!tank || !target) return null;
+        const now = Date.now();
+        const boosted: Fish = {
+          ...target,
+          feedCount: target.feedCount + 1,
+          lastFedAt: now,
+          mood: 'happy',
+          growthBoostSeconds: (target.growthBoostSeconds || 0) + FEED_GROWTH_BOOST_SECONDS,
+        };
+        const advanced = applyGrowthAdvance(boosted, now);
+        const finalFish = advanced ?? boosted;
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? {
+                  ...t,
+                  fish: t.fish.map(f => (f.id === fishId ? finalFish : f)),
+                  updatedAt: now,
+                }
+              : t,
+          ),
+        }));
+        return { newStage: advanced ? advanced.growthStage : null };
+      },
+
+      tickFishGrowth: tankId => {
+        const { tanks } = get();
+        const tank = tanks.find(t => t.id === tankId);
+        if (!tank) return [];
+        const now = Date.now();
+        const advancedIds: string[] = [];
+        const nextFish = tank.fish.map(f => {
+          const advanced = applyGrowthAdvance(f, now);
+          if (advanced) {
+            advancedIds.push(f.id);
+            return advanced;
+          }
+          return f;
+        });
+        if (advancedIds.length === 0) return [];
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId ? { ...t, fish: nextFish, updatedAt: now } : t,
+          ),
+        }));
+        return advancedIds;
+      },
     }),
     { name: 'aquaworld-tank' },
   ),

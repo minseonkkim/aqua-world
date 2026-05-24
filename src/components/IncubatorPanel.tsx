@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
-import { useTankStore } from '@/store/useTankStore';
-import { useFishStore } from '@/store/useFishStore';
-import { Egg, Fish } from '@/types';
+import { Egg, EggTier } from '@/types';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -23,12 +21,11 @@ function formatTime(sec: number): string {
 interface EggCardProps {
   egg: Egg;
   onStart: () => void;
-  onCollect: (speciesId: string) => void;
+  onCollect: () => void;
 }
 
 function EggCard({ egg, onStart, onCollect }: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
-  const { collectHatchedEgg } = useUserStore();
 
   useEffect(() => {
     if (!egg.isHatching) return;
@@ -45,11 +42,6 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
   const pct = egg.isHatching
     ? Math.min(100, ((Date.now() - egg.startedAt) / 1000 / egg.hatchDuration) * 100)
     : 0;
-
-  const handleCollect = () => {
-    const speciesId = collectHatchedEgg(egg.id);
-    if (speciesId) onCollect(speciesId);
-  };
 
   return (
     <div style={{
@@ -105,7 +97,7 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
         </button>
       )}
       {isReady && (
-        <button onClick={handleCollect} style={{
+        <button onClick={onCollect} style={{
           background: 'var(--color-success)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
           fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
@@ -119,50 +111,20 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
 }
 
 interface Props {
-  onHatchSuccess: (message: string) => void;
+  /** 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리. */
+  onCollect: (eggId: string, eggTier: EggTier) => void;
 }
 
-export default function IncubatorPanel({ onHatchSuccess }: Props) {
+export default function IncubatorPanel({ onCollect }: Props) {
   const [open, setOpen] = useState(false);
   const { user, startHatching } = useUserStore();
-  const { tanks, activeTankId, addFishToTank } = useTankStore();
-  const { getSpeciesById } = useFishStore();
 
   const inventory = user?.inventory ?? [];
-  const activeTank = tanks.find(t => t.id === activeTankId);
-
-  const handleCollect = useCallback((eggId: string, speciesId: string) => {
-    if (!activeTank) return;
-    const species = getSpeciesById(speciesId);
-    const name = species?.name ?? '???';
-
-    const newFish: Fish = {
-      id: `fish_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-      speciesId,
-      name,
-      growthStage: 'fry',
-      growthProgress: 0,
-      mood: 'happy',
-      feedCount: 0,
-      lastFedAt: 0,
-      acquiredAt: Date.now(),
-      position: {
-        x: (Math.random() - 0.5) * 8,
-        y: (Math.random() - 0.5) * 4,
-        z: (Math.random() - 0.5) * 6,
-      },
-    };
-
-    addFishToTank(activeTank.id, newFish);
-    onHatchSuccess(`✨ ${name} 획득!`);
-    if (inventory.length <= 1) setOpen(false);
-  }, [activeTank, getSpeciesById, addFishToTank, onHatchSuccess, inventory.length]);
 
   if (inventory.length === 0) return null;
 
   return (
     <>
-      {/* 플로팅 인큐베이터 버튼 */}
       <button
         onClick={() => setOpen(o => !o)}
         style={{
@@ -177,7 +139,6 @@ export default function IncubatorPanel({ onHatchSuccess }: Props) {
         🥚 {inventory.length}
       </button>
 
-      {/* 패널 */}
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 130,
@@ -199,7 +160,10 @@ export default function IncubatorPanel({ onHatchSuccess }: Props) {
                 key={egg.id}
                 egg={egg}
                 onStart={() => startHatching(egg.id)}
-                onCollect={speciesId => handleCollect(egg.id, speciesId)}
+                onCollect={() => {
+                  onCollect(egg.id, egg.tier);
+                  if (inventory.length <= 1) setOpen(false);
+                }}
               />
             ))}
           </div>

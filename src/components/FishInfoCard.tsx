@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Fish } from '@/types';
 import { useFishStore } from '@/store/useFishStore';
+import { computeGrowth, formatRemaining } from '@/utils/growth';
 
 const RARITY_COLORS: Record<string, string> = {
   common: 'var(--color-rarity-common)',
@@ -21,17 +22,34 @@ const GROWTH_LABELS: Record<string, string> = {
   egg: '알', fry: '치어', juvenile: '어린 물고기', adult: '성어', large: '대형어',
 };
 
+const GROWTH_EMOJI: Record<string, string> = {
+  egg: '🥚', fry: '🐟', juvenile: '🐠', adult: '🐡', large: '🦈',
+};
+
 interface Props {
   fish: Fish;
+  feedRemaining: number;
   onClose: () => void;
+  onFeed: () => void;
 }
 
-export default function FishInfoCard({ fish, onClose }: Props) {
+export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: Props) {
   const { getSpeciesById } = useFishStore();
   const species = getSpeciesById(fish.speciesId);
 
   const rarity = species?.rarity ?? 'common';
   const color = RARITY_COLORS[rarity];
+
+  // 매초 성장 진행도 갱신
+  const [snapshot, setSnapshot] = useState(() => computeGrowth(fish));
+  useEffect(() => {
+    setSnapshot(computeGrowth(fish));
+    const id = setInterval(() => setSnapshot(computeGrowth(fish)), 1000);
+    return () => clearInterval(id);
+  }, [fish]);
+
+  const isMax = fish.growthStage === 'large';
+  const canFeed = feedRemaining > 0 && !isMax;
 
   return (
     <div
@@ -51,7 +69,6 @@ export default function FishInfoCard({ fish, onClose }: Props) {
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* 드래그 핸들 */}
         <div style={{ width: 40, height: 4, background: 'rgba(255,255,255,0.2)', borderRadius: 2, margin: '0 auto 20px' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
@@ -62,7 +79,7 @@ export default function FishInfoCard({ fish, onClose }: Props) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 28,
           }}>
-            🐟
+            {GROWTH_EMOJI[fish.growthStage]}
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -81,13 +98,44 @@ export default function FishInfoCard({ fish, onClose }: Props) {
           <div style={{ fontSize: 22 }}>{MOOD_EMOJI[fish.mood]}</div>
         </div>
 
+        {/* 성장 진행도 */}
+        <div style={{
+          background: 'rgba(255,255,255,0.05)',
+          borderRadius: 10,
+          padding: '12px 14px',
+          marginBottom: 12,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+              성장 단계 — <span style={{ color: '#fff', fontWeight: 600 }}>{GROWTH_LABELS[fish.growthStage]}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+              {isMax ? '최대 단계' : formatRemaining(snapshot.remainingSeconds)}
+            </div>
+          </div>
+          <div style={{
+            height: 8, borderRadius: 4,
+            background: 'rgba(255,255,255,0.08)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: 4,
+              width: `${snapshot.progress}%`,
+              background: isMax
+                ? 'linear-gradient(90deg, var(--color-accent), #ff8f00)'
+                : `linear-gradient(90deg, var(--color-primary-light), var(--color-secondary))`,
+              transition: 'width 1s linear',
+            }} />
+          </div>
+        </div>
+
         {/* 스탯 그리드 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
           {[
-            { label: '성장 단계', value: GROWTH_LABELS[fish.growthStage] },
             { label: '서식지', value: species?.habitat ?? '-' },
             { label: '먹이 횟수', value: `${fish.feedCount}회` },
             { label: '기분', value: fish.mood === 'happy' ? '행복' : fish.mood === 'bored' ? '심심함' : '평범' },
+            { label: '성장 가속', value: `+${Math.floor((fish.growthBoostSeconds || 0) / 60)}분` },
           ].map(({ label, value }) => (
             <div key={label} style={{
               background: 'rgba(255,255,255,0.05)',
@@ -100,7 +148,6 @@ export default function FishInfoCard({ fish, onClose }: Props) {
           ))}
         </div>
 
-        {/* 설명 */}
         {species?.description && (
           <div style={{
             background: 'rgba(255,255,255,0.05)',
@@ -115,13 +162,28 @@ export default function FishInfoCard({ fish, onClose }: Props) {
           </div>
         )}
 
-        <button
-          className="btn"
-          style={{ width: '100%', background: 'rgba(255,255,255,0.08)' }}
-          onClick={onClose}
-        >
-          닫기
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn"
+            disabled={!canFeed}
+            onClick={onFeed}
+            style={{
+              flex: 1,
+              background: canFeed ? 'var(--color-primary)' : 'rgba(255,255,255,0.08)',
+              color: canFeed ? '#fff' : 'var(--color-text-disabled)',
+              cursor: canFeed ? 'pointer' : 'not-allowed',
+            }}
+          >
+            🍖 먹이주기 {isMax ? '' : `(${feedRemaining}/3)`}
+          </button>
+          <button
+            className="btn"
+            style={{ flex: 1, background: 'rgba(255,255,255,0.08)' }}
+            onClick={onClose}
+          >
+            닫기
+          </button>
+        </div>
       </div>
     </div>
   );

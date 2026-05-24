@@ -21,11 +21,13 @@ export interface Fish {
   speciesId: string;
   name: string;
   growthStage: FishGrowthStage;
-  growthProgress: number; // 0-100
+  growthProgress: number; // 0-100 (last computed snapshot)
   mood: FishMood;
   feedCount: number; // total feeds received
   lastFedAt: number; // unix timestamp
   acquiredAt: number;
+  stageStartedAt: number; // 현재 단계 진입 시각 (unix ms)
+  growthBoostSeconds: number; // 먹이로 누적된 성장 가속 (초). 단계 승급 시 0으로 초기화
   position: { x: number; y: number; z: number };
   color?: string; // optional color override
 }

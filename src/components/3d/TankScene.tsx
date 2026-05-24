@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { createWaterMaterial } from './WaterShader';
 import { useCameraControls } from '@/hooks/useCameraControls';
 import { Fish, TankEnvironment } from '@/types';
+import { STAGE_SCALE } from '@/constants';
 
 interface Props {
   environment: TankEnvironment;
@@ -47,11 +48,12 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
   const { bindCanvas, apply } = useCameraControls(cameraRef);
   const env = ENV[environment];
 
-  const buildFishMesh = useCallback((color: number, index: number): THREE.Mesh => {
+  const buildFishMesh = useCallback((color: number, index: number, scale: number = 1): THREE.Mesh => {
     const geo = new THREE.SphereGeometry(0.22, 8, 6);
     geo.scale(1.5, 0.7, 0.9);
     const mesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color, shininess: 80 }));
     mesh.position.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 6);
+    mesh.scale.setScalar(scale);
     mesh.userData.vel = new THREE.Vector3(
       (Math.random() - 0.5) * 0.02,
       (Math.random() - 0.5) * 0.008,
@@ -73,7 +75,8 @@ export default function TankScene({ environment, fish = [], onFishClick, style }
       fish.forEach((f, i) => {
         // speciesId로 희귀도 유추하는 대신 저장된 position 사용
         const color = RARITY_MESH_COLORS.common; // 기본 common, 이후 GLB 교체 예정
-        const mesh = buildFishMesh(color, i);
+        const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
+        const mesh = buildFishMesh(color, i, stageScale);
         // 저장된 위치가 있으면 사용
         mesh.position.set(f.position.x, f.position.y, f.position.z);
         scene.add(mesh);

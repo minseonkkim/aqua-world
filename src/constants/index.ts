@@ -1,4 +1,4 @@
-import { FishRarity, EggTier, TankEnvironment } from '../types';
+import { FishRarity, FishGrowthStage, EggTier, TankEnvironment } from '../types';
 
 // ==================== 가챠 확률 ====================
 
@@ -12,10 +12,39 @@ export const GACHA_RATES: Record<FishRarity, number> = {
 // ==================== 성장 시간 (초) ====================
 
 export const GROWTH_TIME_SECONDS: Record<string, number> = {
-  egg_to_fry: 300,       // 5분
+  egg_to_fry: 300,       // 5분 (알 부화로 처리)
   fry_to_juvenile: 1800, // 30분
   juvenile_to_adult: 7200, // 2시간
   adult_to_large: 86400, // 24시간
+};
+
+// 단계 → 다음 단계 진입까지 필요한 초
+export const STAGE_DURATION_SECONDS: Record<FishGrowthStage, number | null> = {
+  egg: 300,
+  fry: 1800,
+  juvenile: 7200,
+  adult: 86400,
+  large: null, // 최종 단계
+};
+
+export const NEXT_STAGE: Record<FishGrowthStage, FishGrowthStage | null> = {
+  egg: 'fry',
+  fry: 'juvenile',
+  juvenile: 'adult',
+  adult: 'large',
+  large: null,
+};
+
+// 먹이 한 번이 성장을 가속하는 시간 (초) — 5분
+export const FEED_GROWTH_BOOST_SECONDS = 300;
+
+// 성장 스테이지별 메시 스케일
+export const STAGE_SCALE: Record<FishGrowthStage, number> = {
+  egg: 0.3,
+  fry: 0.5,
+  juvenile: 0.75,
+  adult: 1.0,
+  large: 1.4,
 };
 
 // ==================== 알 부화 시간 (초) ====================
