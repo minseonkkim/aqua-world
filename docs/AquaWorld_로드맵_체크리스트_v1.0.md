@@ -141,10 +141,10 @@
 ### 1-4. Firebase 연동 기초 확인
 
 - [x] 🔴 Firebase 프로젝트 생성 (Web 앱 등록)
-- [ ] 🔴 Firebase Authentication 기초 연동 (이메일 테스트)
-- [ ] 🔴 Firestore 기본 CRUD 동작 확인
+- [x] 🔴 Firebase Authentication 기초 연동 (Google 소셜 로그인으로 동작 검증)
+- [x] 🔴 Firestore 기본 CRUD 동작 확인 (users/tanks 컬렉션 read/write)
 - [x] 🟡 Firebase SDK 설치 및 config 파일 생성 (.env.example 포함)
-- [ ] 🟡 Firebase Storage 파일 업로드/다운로드 테스트
+- [ ] 🟡 Firebase Storage 파일 업로드/다운로드 테스트 (init만 완료, 실제 업/다운로드 미구현)
 - [ ] 🟢 Firebase Emulator Suite 로컬 환경 세팅
 
 ---
@@ -166,18 +166,18 @@
   - [x] Tab Bar (.tab-bar, .tab-item)
   - [x] Toast 알림 (인라인 컴포넌트)
   - [x] Currency Pill (.currency-pill)
-- [ ] 🔴 Firebase 풀 연동
-  - [ ] Firebase Auth (소셜 로그인)
-    - [ ] Google Sign In
+- [-] 🔴 Firebase 풀 연동
+  - [-] Firebase Auth (소셜 로그인)
+    - [x] Google Sign In
     - [ ] 카카오 로그인
     - [x] 게스트 로그인 (로컬 상태)
-  - [ ] Firestore 데이터 모델 설계 및 구현
-    - [ ] users 컬렉션
-    - [ ] tanks 컬렉션
-    - [ ] fish 컬렉션
-    - [ ] inventory 컬렉션
-    - [ ] eggs 컬렉션
-  - [ ] Firebase Storage 설정 (사용자 스크린샷 등)
+  - [-] Firestore 데이터 모델 설계 및 구현
+    - [x] users 컬렉션 (loadUserFromFirestore / saveUserToFirestore)
+    - [x] tanks 컬렉션 (loadUserTanks / saveTankToFirestore)
+    - [x] fish (Tank.fish 임베디드 배열로 저장)
+    - [x] inventory (User.inventory 임베디드 배열로 저장)
+    - [x] eggs (User.inventory 임베디드 배열로 저장)
+  - [-] Firebase Storage 설정 (SDK init 완료, 업/다운로드 로직 미구현)
 - [x] 🔴 라우팅 구조 구현 (React Router v6)
   - [x] HashRouter (온보딩, 로그인)
   - [x] 탭 라우터 (메인 5개 탭: /tank, /compendium, /shop, /friends, /settings)
