@@ -94,7 +94,7 @@ const MVP_FISH_SPECIES: FishSpecies[] = [
     habitat: '산호초',
     description: '세계에서 가장 아름다운 물고기 중 하나. 화려한 색상의 패턴이 특징.',
     modelPath: 'models/fish/mandarin.glb',
-    thumbnailPath: 'images/fish/mandarin.png',
+    thumbnailPath: 'images/fish/mandarin_fish.png',
     baseGrowthTime: 900,
   },
   {
@@ -105,7 +105,7 @@ const MVP_FISH_SPECIES: FishSpecies[] = [
     habitat: '온대 해역',
     description: '잎사귀처럼 생긴 위장 돌기가 있는 신비로운 어류. 해마의 친척.',
     modelPath: 'models/fish/sea_dragon.glb',
-    thumbnailPath: 'images/fish/sea_dragon.png',
+    thumbnailPath: 'images/fish/leafy_sea_dragon.png',
     baseGrowthTime: 1800,
   },
   {
