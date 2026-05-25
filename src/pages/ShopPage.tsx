@@ -6,7 +6,7 @@ import { CURRENCY, EGG_HATCH_TIME } from '@/constants';
 import { EggTier } from '@/types';
 import { DECORATION_CATALOG } from '@/utils/decorationModels';
 
-type ShopTab = 'egg' | 'decoration' | 'star_coral';
+type ShopTab = 'egg' | 'decoration' | 'pearl' | 'star_coral';
 
 const EGG_ITEMS: {
   tier: EggTier;
@@ -56,6 +56,7 @@ const RARITY_BG: Record<EggTier, string> = {
 const TAB_LABEL: Record<ShopTab, string> = {
   egg: '🥚 알',
   decoration: '🪴 꾸미기',
+  pearl: '🪙 코인',
   star_coral: '🌸 Star Coral',
 };
 
@@ -67,12 +68,22 @@ const DECO_CATEGORY_LABEL: Record<string, string> = {
 };
 
 export default function ShopPage() {
-  const { user, addStarCoral, spendPearl, spendStarCoral, addEggToInventory, addDecorationInventory } = useUserStore();
+  const {
+    user,
+    addPearl,
+    addStarCoral,
+    spendPearl,
+    spendStarCoral,
+    addEggToInventory,
+    addDecorationInventory,
+  } = useUserStore();
   const [toast, setToast] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = (searchParams.get('tab') as ShopTab | null);
+  const tabFromUrl = searchParams.get('tab') as ShopTab | null;
   const [tab, setTab] = useState<ShopTab>(tabFromUrl ?? 'egg');
-  const [decoFilter, setDecoFilter] = useState<'all' | 'plant' | 'rock' | 'driftwood' | 'ornament'>('all');
+  const [decoFilter, setDecoFilter] = useState<'all' | 'plant' | 'rock' | 'driftwood' | 'ornament'>(
+    'all',
+  );
 
   useEffect(() => {
     if (tabFromUrl && tabFromUrl !== tab) setTab(tabFromUrl);
@@ -103,7 +114,25 @@ export default function ShopPage() {
     showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
   };
 
-  const buyEgg = (item: typeof EGG_ITEMS[number]) => {
+  const buyPearl = async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {
+    const total = pkg.pearl + pkg.bonus;
+    if ((user?.starCoral ?? 0) < pkg.starCoral) {
+      showToast(`🌸 Star Coral ${pkg.starCoral - (user?.starCoral ?? 0)} 부족`);
+      return;
+    }
+    const ok = await useModalStore.getState().confirm({
+      emoji: '🪙',
+      title: `${pkg.name} 교환`,
+      message: `🌸 ${pkg.starCoral} → 🪙 ${total.toLocaleString()}`,
+      confirmText: '교환',
+    });
+    if (!ok) return;
+    if (!spendStarCoral(pkg.starCoral)) return;
+    addPearl(total);
+    showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
+  };
+
+  const buyEgg = (item: (typeof EGG_ITEMS)[number]) => {
     const balance = item.currency === 'pearl' ? (user?.pearl ?? 0) : (user?.starCoral ?? 0);
     if (balance < item.price) {
       showToast(`❌ ${item.currency === 'pearl' ? 'Pearl' : 'Star Coral'}이 부족합니다`);
@@ -126,31 +155,49 @@ export default function ShopPage() {
   };
 
   const decoItems = useMemo(
-    () => (decoFilter === 'all' ? DECORATION_CATALOG : DECORATION_CATALOG.filter(d => d.type === decoFilter)),
+    () =>
+      decoFilter === 'all'
+        ? DECORATION_CATALOG
+        : DECORATION_CATALOG.filter(d => d.type === decoFilter),
     [decoFilter],
   );
   const inventory = user?.decorationInventory ?? {};
 
   return (
     <div className="page">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div
+        className="page-header"
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
         상점
         <div style={{ display: 'flex', gap: 8 }}>
-          <div className="currency-pill" style={{ fontSize: 13 }}>🪙 {user?.pearl ?? 0}</div>
-          <div className="currency-pill" style={{ fontSize: 13 }}>🌸 {user?.starCoral ?? 0}</div>
+          <div className="currency-pill" style={{ fontSize: 13 }}>
+            🪙 {user?.pearl ?? 0}
+          </div>
+          <div className="currency-pill" style={{ fontSize: 13 }}>
+            🌸 {user?.starCoral ?? 0}
+          </div>
         </div>
       </div>
 
       {/* 탭 */}
       <div style={{ display: 'flex', gap: 6, padding: '0 16px 8px' }}>
-        {(['egg', 'decoration', 'star_coral'] as ShopTab[]).map(t => (
-          <button key={t} onClick={() => switchTab(t)} style={{
-            flex: 1,
-            background: tab === t ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
-            border: `1px solid ${tab === t ? 'rgba(77, 208, 225, 0.6)' : 'rgba(255,255,255,0.1)'}`,
-            borderRadius: 12, padding: '8px 4px', color: '#fff', fontSize: 13, fontWeight: 600,
-            cursor: 'pointer',
-          }}>
+        {(['egg', 'decoration', 'pearl', 'star_coral'] as ShopTab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => switchTab(t)}
+            style={{
+              flex: 1,
+              background: tab === t ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
+              border: `1px solid ${tab === t ? 'rgba(77, 208, 225, 0.6)' : 'rgba(255,255,255,0.1)'}`,
+              borderRadius: 12,
+              padding: '8px 4px',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
             {TAB_LABEL[t]}
           </button>
         ))}
@@ -163,24 +210,45 @@ export default function ShopPage() {
               key={item.tier}
               onClick={() => buyEgg(item)}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                background: 'var(--color-surface)', borderRadius: 14, padding: '14px 16px',
-                color: '#fff', textAlign: 'left', border: `1px solid ${RARITY_BG[item.tier]}44`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--color-surface)',
+                borderRadius: 14,
+                padding: '14px 16px',
+                color: '#fff',
+                textAlign: 'left',
+                border: `1px solid ${RARITY_BG[item.tier]}44`,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 36 }}>{item.emoji}</span>
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>{item.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 2 }}>{item.desc}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-disabled)' }}>{item.odds}</div>
+                  <div
+                    style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 2 }}
+                  >
+                    {item.desc}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-disabled)' }}>
+                    {item.odds}
+                  </div>
                 </div>
               </div>
-              <span style={{
-                background: RARITY_BG[item.tier], color: '#fff',
-                padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 700,
-                display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
-              }}>
+              <span
+                style={{
+                  background: RARITY_BG[item.tier],
+                  color: '#fff',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  whiteSpace: 'nowrap',
+                }}
+              >
                 {CURRENCY_ICON[item.currency]} {item.price}
               </span>
             </button>
@@ -193,12 +261,21 @@ export default function ShopPage() {
           {/* 카테고리 필터 */}
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
             {(['all', 'plant', 'rock', 'driftwood', 'ornament'] as const).map(c => (
-              <button key={c} onClick={() => setDecoFilter(c)} style={{
-                background: decoFilter === c ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
-                border: `1px solid ${decoFilter === c ? 'rgba(77, 208, 225, 0.6)' : 'rgba(255,255,255,0.1)'}`,
-                borderRadius: 14, padding: '4px 10px', color: '#fff', fontSize: 11,
-                whiteSpace: 'nowrap', cursor: 'pointer',
-              }}>
+              <button
+                key={c}
+                onClick={() => setDecoFilter(c)}
+                style={{
+                  background:
+                    decoFilter === c ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${decoFilter === c ? 'rgba(77, 208, 225, 0.6)' : 'rgba(255,255,255,0.1)'}`,
+                  borderRadius: 14,
+                  padding: '4px 10px',
+                  color: '#fff',
+                  fontSize: 11,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+              >
                 {c === 'all' ? '전체' : DECO_CATEGORY_LABEL[c]}
               </button>
             ))}
@@ -213,35 +290,59 @@ export default function ShopPage() {
                   key={item.modelId}
                   onClick={() => buyDecoration(item.modelId, item.name, item.price, item.emoji)}
                   style={{
-                    background: 'var(--color-surface)', borderRadius: 12, padding: 10,
-                    color: '#fff', textAlign: 'left',
+                    background: 'var(--color-surface)',
+                    borderRadius: 12,
+                    padding: 10,
+                    color: '#fff',
+                    textAlign: 'left',
                     border: '1px solid rgba(255,255,255,0.08)',
-                    opacity: canAfford ? 1 : 0.6, cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', gap: 4, position: 'relative',
+                    opacity: canAfford ? 1 : 0.6,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    position: 'relative',
                   }}
                 >
                   {owned > 0 && (
-                    <span style={{
-                      position: 'absolute', top: 6, right: 6,
-                      background: 'rgba(77, 208, 225, 0.85)', color: '#0a1628',
-                      borderRadius: 10, padding: '2px 6px', fontSize: 10, fontWeight: 700,
-                    }}>보유 {owned}</span>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        background: 'rgba(77, 208, 225, 0.85)',
+                        color: '#0a1628',
+                        borderRadius: 10,
+                        padding: '2px 6px',
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      보유 {owned}
+                    </span>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 32 }}>{item.emoji}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{item.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+                        {item.name}
+                      </div>
                       <div style={{ fontSize: 10, color: 'var(--color-text-disabled)' }}>
                         {DECO_CATEGORY_LABEL[item.type]}
                       </div>
                     </div>
                   </div>
-                  <span style={{
-                    alignSelf: 'flex-end',
-                    background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
-                    color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
-                    padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                  }}>
+                  <span
+                    style={{
+                      alignSelf: 'flex-end',
+                      background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
+                      color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
+                      padding: '4px 10px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
                     🪙 {item.price}
                   </span>
                 </button>
@@ -251,27 +352,108 @@ export default function ShopPage() {
         </div>
       )}
 
+      {tab === 'pearl' && (
+        <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {CURRENCY.PEARL_PACKAGES.map(pkg => {
+            const total = pkg.pearl + pkg.bonus;
+            const canAfford = (user?.starCoral ?? 0) >= pkg.starCoral;
+            return (
+              <button
+                key={pkg.id}
+                onClick={() => buyPearl(pkg)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: 'var(--color-surface)',
+                  borderRadius: 12,
+                  padding: 14,
+                  color: '#fff',
+                  textAlign: 'left',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  opacity: canAfford ? 1 : 0.6,
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 36 }}>🪙</span>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>{pkg.name}</div>
+                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                      {pkg.pearl.toLocaleString()}개
+                      {pkg.bonus > 0 && (
+                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                          {' '}
+                          +{pkg.bonus.toLocaleString()} 보너스
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
+                    color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
+                    padding: '6px 12px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  🌸 {pkg.starCoral}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {tab === 'star_coral' && (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {CURRENCY.STAR_CORAL_PACKAGES.map(pkg => (
-            <button key={pkg.id} onClick={() => buyStarCoral(pkg)} style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: 'var(--color-surface)', borderRadius: 12, padding: 14, color: '#fff', textAlign: 'left',
-            }}>
+            <button
+              key={pkg.id}
+              onClick={() => buyStarCoral(pkg)}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'var(--color-surface)',
+                borderRadius: 12,
+                padding: 14,
+                color: '#fff',
+                textAlign: 'left',
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 36 }}>🌸</span>
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>{pkg.name}</div>
                   <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
                     {pkg.amount}개
-                    {pkg.bonus > 0 && <span style={{ color: 'var(--color-success)', fontWeight: 600 }}> +{pkg.bonus} 보너스</span>}
+                    {pkg.bonus > 0 && (
+                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                        {' '}
+                        +{pkg.bonus} 보너스
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
-              <span style={{
-                background: 'var(--color-accent)', color: '#0a1628',
-                padding: '6px 12px', borderRadius: 8, fontSize: 13, fontWeight: 700,
-              }}>
+              <span
+                style={{
+                  background: 'var(--color-accent)',
+                  color: '#0a1628',
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
                 ₩{pkg.priceKRW.toLocaleString()}
               </span>
             </button>
@@ -283,12 +465,23 @@ export default function ShopPage() {
 
       {/* 토스트 */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.85)', color: '#fff', padding: '10px 20px',
-          borderRadius: 20, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap',
-          zIndex: 200, pointerEvents: 'none',
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 90,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0,0,0,0.85)',
+            color: '#fff',
+            padding: '10px 20px',
+            borderRadius: 20,
+            fontSize: 14,
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            zIndex: 200,
+            pointerEvents: 'none',
+          }}
+        >
           {toast}
         </div>
       )}

@@ -71,6 +71,14 @@ export const CURRENCY = {
     { id: 'sc_1200', name: '화려한 산호', amount: 1200, bonus: 240, priceKRW: 22000 },
     { id: 'sc_3000', name: '전설의 산호', amount: 3000, bonus: 900, priceKRW: 55000 },
   ],
+
+  // Star Coral → Pearl 환전 패키지 (큰 패키지일수록 환율이 좋아짐)
+  PEARL_PACKAGES: [
+    { id: 'pearl_500', name: '동전 한 줌', pearl: 500, bonus: 0, starCoral: 5 },
+    { id: 'pearl_1200', name: '동전 주머니', pearl: 1200, bonus: 100, starCoral: 10 },
+    { id: 'pearl_3000', name: '동전 상자', pearl: 3000, bonus: 400, starCoral: 20 },
+    { id: 'pearl_8000', name: '동전 금고', pearl: 8000, bonus: 1500, starCoral: 50 },
+  ],
 };
 
 // ==================== 수조 환경 ====================
