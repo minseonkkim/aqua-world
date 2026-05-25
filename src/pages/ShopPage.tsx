@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
+import { useModalStore } from '@/store/useModalStore';
 import { CURRENCY, EGG_HATCH_TIME } from '@/constants';
 import { EggTier } from '@/types';
 import { DECORATION_CATALOG } from '@/utils/decorationModels';
@@ -90,8 +91,14 @@ export default function ShopPage() {
     setSearchParams(params, { replace: true });
   };
 
-  const buyStarCoral = (pkg: (typeof CURRENCY.STAR_CORAL_PACKAGES)[number]) => {
-    if (!confirm(`${pkg.name} 구매\n₩${pkg.priceKRW.toLocaleString()} → Star Coral ${pkg.amount + pkg.bonus}개`)) return;
+  const buyStarCoral = async (pkg: (typeof CURRENCY.STAR_CORAL_PACKAGES)[number]) => {
+    const ok = await useModalStore.getState().confirm({
+      emoji: '🌸',
+      title: `${pkg.name} 구매`,
+      message: `₩${pkg.priceKRW.toLocaleString()} → Star Coral ${pkg.amount + pkg.bonus}개`,
+      confirmText: '구매',
+    });
+    if (!ok) return;
     addStarCoral(pkg.amount + pkg.bonus);
     showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
   };

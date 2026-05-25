@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
+import { useModalStore } from '@/store/useModalStore';
 import { signOut } from '@/services/firebase/auth';
 
 export default function SettingsPage() {
@@ -11,7 +12,14 @@ export default function SettingsPage() {
   const [notif, setNotif] = useState(true);
 
   const handleLogout = async () => {
-    if (!confirm('로그아웃 하시겠습니까?')) return;
+    const ok = await useModalStore.getState().confirm({
+      emoji: '👋',
+      title: '로그아웃',
+      message: '로그아웃 하시겠습니까?',
+      confirmText: '로그아웃',
+      tone: 'danger',
+    });
+    if (!ok) return;
     await signOut();
     setUser(null);
     setTanks([]);

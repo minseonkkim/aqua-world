@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
+import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle } from '@/services/firebase/auth';
 import { loadUserFromFirestore, loadUserTanks, saveUserToFirestore, saveTankToFirestore } from '@/services/firebase/firestore';
 import { Tank } from '@/types';
@@ -81,7 +82,12 @@ export default function LoginPage() {
     } catch (err) {
       console.error('[Google Login]', err);
       const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-      alert(`Google 로그인에 실패했습니다.\n\n${msg}\n\n(DevTools 콘솔에서 자세한 스택을 확인하세요)`);
+      await useModalStore.getState().alert({
+        emoji: '⚠️',
+        title: 'Google 로그인 실패',
+        message: `${msg}\n\n(DevTools 콘솔에서 자세한 스택을 확인하세요)`,
+        tone: 'danger',
+      });
     } finally {
       setLoading(false);
     }
@@ -115,7 +121,13 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const comingSoon = (name: string) => alert(`${name} 로그인은 곧 지원됩니다.`);
+  const comingSoon = (name: string) =>
+    useModalStore.getState().alert({
+      emoji: '🚧',
+      title: '준비 중',
+      message: `${name} 로그인은 곧 지원됩니다.`,
+      tone: 'info',
+    });
 
   return (
     <div style={{
