@@ -104,8 +104,27 @@ export default function CompendiumPage() {
           const unlocked = collected.includes(s.id);
           return (
             <div key={s.id} className="card" style={{ cursor: 'pointer' }}>
-              <div style={{ height: 100, background: unlocked ? 'var(--color-bg-light)' : 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: unlocked ? 48 : 36 }}>
-                {unlocked ? '🐟' : '❓'}
+              <div style={{ height: 100, background: unlocked ? 'var(--color-bg-light)' : 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, overflow: 'hidden' }}>
+                {unlocked ? (
+                  <img
+                    src={`${import.meta.env.BASE_URL}${s.thumbnailPath}`}
+                    alt={s.name}
+                    loading="lazy"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      const img = e.currentTarget;
+                      img.style.display = 'none';
+                      const parent = img.parentElement;
+                      if (parent && !parent.querySelector('.thumb-fallback')) {
+                        const span = document.createElement('span');
+                        span.className = 'thumb-fallback';
+                        span.textContent = '🐟';
+                        span.style.fontSize = '48px';
+                        parent.appendChild(span);
+                      }
+                    }}
+                  />
+                ) : '❓'}
               </div>
               <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: unlocked ? '#fff' : 'var(--color-text-disabled)' }}>

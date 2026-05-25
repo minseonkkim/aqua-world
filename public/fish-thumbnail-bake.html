@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AquaWorld — Fish Thumbnail Bake</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a1628;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; color: #4dd0e1; }
+  .subtitle { color: #b0c4de; margin-bottom: 20px; font-size: 13px; line-height: 1.6; }
+  .toolbar { margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar button {
+    background: rgba(77, 208, 225, 0.18);
+    border: 1px solid rgba(77, 208, 225, 0.5);
+    color: #fff; padding: 8px 16px; border-radius: 18px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .toolbar button:hover:not(:disabled) { background: rgba(77, 208, 225, 0.32); }
+  .toolbar button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status { color: #ffd54f; font-size: 12px; margin-left: 8px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: #1a2a44;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .slot {
+    width: 100%;
+    aspect-ratio: 1;
+    background: linear-gradient(180deg, #122a44 0%, #0a1628 100%);
+    display: block;
+  }
+  .label {
+    padding: 8px 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .label .name { font-size: 13px; font-weight: 600; }
+  .label .id { font-size: 10px; color: #5a7a9a; font-family: monospace; }
+</style>
+</head>
+<body>
+  <h1>🐠 Fish Thumbnail Bake</h1>
+  <p class="subtitle">
+    도감용 PNG 썸네일을 굽습니다. 10종 GLB를 각각 512×512 PNG로 렌더링한 뒤 ZIP으로 한 번에 다운로드합니다.<br>
+    받은 <code style="background:#000;padding:2px 6px;border-radius:4px;">fish-thumbnails.zip</code>을 풀어
+    <code style="background:#000;padding:2px 6px;border-radius:4px;">public/images/fish/</code>에 그대로 옮기면 됩니다.
+  </p>
+
+  <div class="toolbar">
+    <button id="downloadBtn" disabled>📦 ZIP 다운로드</button>
+    <span class="status" id="status">로딩 대기 중…</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// useFishStore.ts와 동기화 — id → glb 파일명
+const FISH = [
+  { id: 'clownfish',        glb: 'clownfish'   },
+  { id: 'guppy',            glb: 'guppy'       },
+  { id: 'goldfish',         glb: 'goldfish'    },
+  { id: 'seahorse',         glb: 'seahorse'    },
+  { id: 'zebrafish',        glb: 'zebrafish'   },
+  { id: 'betta',            glb: 'betta'       },
+  { id: 'angelfish',        glb: 'angelfish'   },
+  { id: 'mandarin_fish',    glb: 'mandarin'    },
+  { id: 'leafy_sea_dragon', glb: 'sea_dragon'  },
+  { id: 'coelacanth',       glb: 'coelacanth'  },
+];
+
+const SIZE = 512;
+const grid = document.getElementById('grid');
+const statusEl = document.getElementById('status');
+const downloadBtn = document.getElementById('downloadBtn');
+const loader = new GLTFLoader();
+const pngBlobs = new Map();  // id → Blob
+
+function renderFishToCanvas(scene3d, canvas) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(SIZE, SIZE, false);
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+
+  // 모델 정규화 — fishModelLoader.ts와 동일하게 +X 정면 → +Z로 회전
+  scene3d.rotation.y = -Math.PI / 2;
+  const box = new THREE.Box3().setFromObject(scene3d);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  scene3d.position.sub(center);
+  scene.add(scene3d);
+
+  // 카메라: 정측면 옆모습 (모델 정면이 +Z이므로 +X 축에서 보면 옆면)
+  const camera = new THREE.PerspectiveCamera(28, 1, 0.01, 100);
+  const dist = maxDim * 2.6;
+  camera.position.set(dist, 0, 0);
+  camera.lookAt(0, 0, 0);
+
+  // 조명 — TankScene 분위기와 비슷하게
+  scene.add(new THREE.AmbientLight(0x88aacc, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(2, 3, 2);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x88ccff, 0.6);
+  rim.position.set(-2, 1, -2);
+  scene.add(rim);
+
+  renderer.render(scene, camera);
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      renderer.dispose();
+      resolve(blob);
+    }, 'image/png');
+  });
+}
+
+async function bakeOne(item) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'slot';
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  card.appendChild(canvas);
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.innerHTML = `<span class="name">${item.id}</span><span class="id">${item.glb}.glb</span>`;
+  card.appendChild(label);
+  grid.appendChild(card);
+
+  try {
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load(`models/fish/${item.glb}.glb`, resolve, undefined, reject);
+    });
+    const blob = await renderFishToCanvas(gltf.scene, canvas);
+    pngBlobs.set(item.id, blob);
+  } catch (err) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#5a1818';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.fillStyle = '#ff9c9c';
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('❌ load failed', SIZE / 2, SIZE / 2);
+    console.error('bake failed', item.id, err);
+  }
+}
+
+(async () => {
+  statusEl.textContent = `로딩 중… (0/${FISH.length})`;
+  for (let i = 0; i < FISH.length; i++) {
+    await bakeOne(FISH[i]);
+    statusEl.textContent = `렌더링 완료 (${i + 1}/${FISH.length})`;
+  }
+  if (pngBlobs.size === FISH.length) {
+    statusEl.textContent = `✓ 전체 ${FISH.length}종 완료. ZIP 다운로드 버튼을 누르세요.`;
+    downloadBtn.disabled = false;
+  } else {
+    statusEl.textContent = `⚠️ 일부 실패 (${pngBlobs.size}/${FISH.length}). 콘솔 확인.`;
+    if (pngBlobs.size > 0) downloadBtn.disabled = false;
+  }
+})();
+
+downloadBtn.addEventListener('click', async () => {
+  const zip = new JSZip();
+  const folder = zip.folder('fish');
+  for (const [id, blob] of pngBlobs) {
+    folder.file(`${id}.png`, blob);
+  }
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fish-thumbnails.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
