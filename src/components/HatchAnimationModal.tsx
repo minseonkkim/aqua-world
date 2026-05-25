@@ -137,9 +137,25 @@ export default function HatchAnimationModal({ speciesId, eggTier, onComplete }: 
               justifyContent: 'center',
               fontSize: 72,
               boxShadow: `0 0 36px ${RARITY_COLOR[rarity]}`,
+              overflow: 'hidden',
             }}
           >
-            🐟
+            <img
+              src={`${import.meta.env.BASE_URL}${species.thumbnailPath}`}
+              alt={species.name}
+              style={{ width: '85%', height: '85%', objectFit: 'contain' }}
+              onError={(e) => {
+                const img = e.currentTarget;
+                img.style.display = 'none';
+                const parent = img.parentElement;
+                if (parent && !parent.querySelector('.hatch-fallback')) {
+                  const span = document.createElement('span');
+                  span.className = 'hatch-fallback';
+                  span.textContent = '🐟';
+                  parent.appendChild(span);
+                }
+              }}
+            />
           </div>
 
           <div style={{ fontSize: 13, opacity: 0.85, letterSpacing: 4, fontWeight: 600 }}>
