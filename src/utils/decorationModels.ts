@@ -52,15 +52,15 @@ export function getDecorationMeta(modelId: string): DecorationMeta | undefined {
   return META_BY_ID.get(modelId);
 }
 
-/** GLB 로드 전이거나 modelId 미존재 시 fallback 플레이스홀더 (회색 큐브) */
+/** GLB 로드 전이거나 modelId 미존재 시 fallback 플레이스홀더 (디버깅용: 형광 마젠타 콘 + 큐브) */
 function buildPlaceholder(): THREE.Group {
   const g = new THREE.Group();
-  const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(0.3, 0.3, 0.3),
-    new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.7 }),
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.35, 0.8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff00ff }),
   );
-  cube.position.y = 0.15;
-  g.add(cube);
+  cone.position.y = 0.4;
+  g.add(cone);
   return g;
 }
 

@@ -57,6 +57,12 @@ export interface TankDecoration {
   scale: number;
 }
 
+export interface DecorationPreset {
+  slot: number; // 0, 1, 2
+  decorations: TankDecoration[];
+  savedAt: number;
+}
+
 export interface Tank {
   id: string;
   name: string;
@@ -67,6 +73,7 @@ export interface Tank {
   lightMode: 'auto' | 'day' | 'night' | 'sunset';
   createdAt: number;
   updatedAt: number;
+  decorationPresets?: DecorationPreset[];
 }
 
 // ==================== User ====================
@@ -90,6 +97,10 @@ export interface User {
   lastFeedResetAt: number;
   /** 튜토리얼 진행도: 0=시작 전, 1~5=진행 중, -1=완료/스킵 */
   tutorialStep?: number;
+  /** 데코 인벤토리: modelId → 보유 수량 */
+  decorationInventory?: Record<string, number>;
+  /** 청구 완료한 도감 마일스톤(%) 목록 */
+  claimedCompendiumMilestones?: number[];
 }
 
 // ==================== Shop ====================

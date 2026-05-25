@@ -147,7 +147,25 @@ export const SPACING = {
 
 // ==================== 도감 마일스톤 ====================
 
-export const COMPENDIUM_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+export const COMPENDIUM_MILESTONES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] as const;
+
+export type CompendiumReward =
+  | { type: 'pearl'; amount: number }
+  | { type: 'star_coral'; amount: number }
+  | { type: 'egg'; tier: EggTier };
+
+export const COMPENDIUM_REWARDS: Record<number, CompendiumReward> = {
+  10: { type: 'pearl', amount: 100 },
+  20: { type: 'egg', tier: 'basic' },
+  30: { type: 'pearl', amount: 200 },
+  40: { type: 'star_coral', amount: 20 },
+  50: { type: 'egg', tier: 'rare' },
+  60: { type: 'pearl', amount: 300 },
+  70: { type: 'star_coral', amount: 50 },
+  80: { type: 'egg', tier: 'rare' },
+  90: { type: 'pearl', amount: 500 },
+  100: { type: 'egg', tier: 'legendary' },
+};
 
 // ==================== 가챠: 알 등급별 희귀도 풀 ====================
 

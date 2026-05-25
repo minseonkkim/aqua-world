@@ -10,10 +10,12 @@ interface CameraState {
 const DEFAULT: CameraState = { theta: 0, phi: Math.PI / 4, radius: 8 };
 const MIN_R = 3, MAX_R = 15, MIN_PHI = 0.1, MAX_PHI = Math.PI / 2.2;
 const SENS = 0.005;
+// 모듈 상수 — 매 호출마다 새 Vector3 생성을 방지 (apply useCallback 의존성 안정화)
+const DEFAULT_TARGET = new THREE.Vector3(0, 0, 0);
 
 export function useCameraControls(
   cameraRef: RefObject<THREE.PerspectiveCamera | null>,
-  target = new THREE.Vector3(0, 0, 0),
+  target: THREE.Vector3 = DEFAULT_TARGET,
 ) {
   const state = useRef<CameraState>({ ...DEFAULT });
   const lastMouse = useRef<{ x: number; y: number } | null>(null);

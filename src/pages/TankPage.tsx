@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TankScene from '@/components/3d/TankScene';
 import DailyRewardModal from '@/components/DailyRewardModal';
 import IncubatorPanel from '@/components/IncubatorPanel';
@@ -18,6 +19,7 @@ interface PendingHatch {
 }
 
 export default function TankPage() {
+  const navigate = useNavigate();
   const {
     user,
     addPearl,
@@ -27,10 +29,13 @@ export default function TankPage() {
     addCollectedSpecies,
     addEggToInventory,
     setTutorialStep,
+    consumeDecorationInventory,
+    addDecorationInventory,
   } = useUserStore();
   const {
     tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
+    savePreset, loadPreset, deletePreset,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const [toast, setToast] = useState('');
@@ -190,25 +195,24 @@ export default function TankPage() {
     if (!activeTankId) return;
     const meta = getDecorationMeta(modelId);
     if (!meta) return;
-    const price = meta.price;
-    if (!user || user.pearl < price) {
-      showToast(`🪙 Pearl ${price - (user?.pearl ?? 0)} 부족`);
+    // 인벤토리 소비 (상점에서 구매한 데코만 배치 가능)
+    if (!consumeDecorationInventory(modelId)) {
+      showToast(`🛒 상점에서 먼저 구매하세요`);
       return;
     }
-    useUserStore.getState().addPearl(-price);
     const id = `deco_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const newDeco: TankDecoration = {
       id,
       type: meta.type,
       modelId,
-      position: { x: 0, y: -3, z: 0 }, // 바닥 중앙
+      position: { x: 0, y: -3, z: -1.5 }, // 바닥 중앙(살짝 뒤쪽) — 카탈로그 패널에 가리지 않도록
       rotation: { x: 0, y: 0, z: 0 },
       scale: meta.defaultScale,
     };
     addDecoration(activeTankId, newDeco);
     setSelectedDecoId(id);
     showToast(`✨ ${meta.name} 배치 · 드래그로 이동`);
-  }, [activeTankId, user, addDecoration]);
+  }, [activeTankId, addDecoration, consumeDecorationInventory]);
 
   const handleMoveDecoration = useCallback((id: string, pos: { x: number; y: number; z: number }) => {
     if (!activeTankId) return;
@@ -217,10 +221,13 @@ export default function TankPage() {
 
   const handleDeleteDecoration = useCallback((id: string) => {
     if (!activeTankId) return;
+    const deco = decorationsInTank.find(d => d.id === id);
     removeDecoration(activeTankId, id);
     setSelectedDecoId(null);
-    showToast('🗑 데코 삭제');
-  }, [activeTankId, removeDecoration]);
+    // 삭제 시 인벤토리 복귀
+    if (deco) addDecorationInventory(deco.modelId, 1);
+    showToast('🗑 데코 삭제 · 인벤토리 복귀');
+  }, [activeTankId, decorationsInTank, removeDecoration, addDecorationInventory]);
 
   const handleRotateDecoration = useCallback((id: string, deltaY: number) => {
     if (!activeTankId) return;
@@ -243,6 +250,56 @@ export default function TankPage() {
     setDecorationMode(false);
     setSelectedDecoId(null);
   }, []);
+
+  // ===== 프리셋 핸들러 =====
+  const handleSavePreset = useCallback((slot: number) => {
+    if (!activeTankId) return;
+    const result = savePreset(activeTankId, slot);
+    if (result) showToast(`💾 슬롯 ${slot + 1}에 ${result.decorations.length}개 저장됨`);
+  }, [activeTankId, savePreset]);
+
+  const handleLoadPreset = useCallback((slot: number) => {
+    if (!activeTankId) return;
+    const previous = loadPreset(activeTankId, slot);
+    if (!previous) {
+      showToast(`슬롯 ${slot + 1}이 비어있습니다`);
+      return;
+    }
+    // 기존 배치는 인벤토리로 회수
+    const counts: Record<string, number> = {};
+    previous.forEach(d => { counts[d.modelId] = (counts[d.modelId] ?? 0) + 1; });
+    Object.entries(counts).forEach(([modelId, cnt]) => addDecorationInventory(modelId, cnt));
+    // 새 배치는 인벤토리 소비 — 부족하면 보유한 만큼만 적용
+    // (loadPreset이 이미 새 배치를 set했으므로, 부족분은 다시 빼야 함)
+    const newDecos = useTankStore.getState().tanks.find(t => t.id === activeTankId)?.decorations ?? [];
+    const consumedOk: TankDecoration[] = [];
+    const refunded: TankDecoration[] = [];
+    for (const d of newDecos) {
+      if (consumeDecorationInventory(d.modelId)) consumedOk.push(d);
+      else refunded.push(d);
+    }
+    if (refunded.length > 0) {
+      useTankStore.getState().updateTank(activeTankId, { decorations: consumedOk });
+      showToast(`📂 ${consumedOk.length}개 배치 · ${refunded.length}개는 인벤토리 부족`);
+    } else {
+      showToast(`📂 슬롯 ${slot + 1} 불러옴 · ${consumedOk.length}개 배치`);
+    }
+    setSelectedDecoId(null);
+  }, [activeTankId, loadPreset, addDecorationInventory, consumeDecorationInventory]);
+
+  const handleDeletePreset = useCallback((slot: number) => {
+    if (!activeTankId) return;
+    deletePreset(activeTankId, slot);
+    showToast(`🗑 슬롯 ${slot + 1} 삭제`);
+  }, [activeTankId, deletePreset]);
+
+  const handleShopRedirect = useCallback(() => {
+    setDecorationMode(false);
+    setSelectedDecoId(null);
+    navigate('/shop?tab=decoration');
+  }, [navigate]);
+
+  const presets = activeTank?.decorationPresets ?? [];
 
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden', background: '#000' }}>
@@ -310,11 +367,16 @@ export default function TankPage() {
       {decorationMode && (
         <DecorationModePanel
           selectedDecoration={selectedDecoration}
+          presets={presets}
           onAdd={handleAddDecoration}
           onExit={handleExitDecorationMode}
           onDelete={handleDeleteDecoration}
           onRotate={handleRotateDecoration}
           onScale={handleScaleDecoration}
+          onSavePreset={handleSavePreset}
+          onLoadPreset={handleLoadPreset}
+          onDeletePreset={handleDeletePreset}
+          onShopRedirect={handleShopRedirect}
         />
       )}
 

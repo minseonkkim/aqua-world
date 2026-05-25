@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, Egg, EggTier, FishRarity } from '../types';
-import { CURRENCY, DAILY_LOGIN_REWARDS, LEVEL_EXP_TABLE, RARITY_BY_EGG, SPECIES_BY_RARITY } from '../constants';
+import {
+  COMPENDIUM_REWARDS,
+  CompendiumReward,
+  CURRENCY,
+  DAILY_LOGIN_REWARDS,
+  LEVEL_EXP_TABLE,
+  RARITY_BY_EGG,
+  SPECIES_BY_RARITY,
+} from '../constants';
 
 export interface DailyRewardResult {
   type: 'pearl' | 'star_coral' | 'egg';
@@ -38,6 +46,16 @@ interface UserState {
   addCollectedSpecies: (speciesId: string) => void;
 
   setTutorialStep: (step: number) => void;
+
+  /** 데코 인벤토리 보유 수량 조회 */
+  getDecorationCount: (modelId: string) => number;
+  /** 인벤토리에 추가 (상점 구매 / 데코 삭제 복귀) */
+  addDecorationInventory: (modelId: string, count?: number) => void;
+  /** 인벤토리에서 1개 소비 (배치). 보유 0이면 false */
+  consumeDecorationInventory: (modelId: string) => boolean;
+
+  /** 마일스톤(%) 청구. 조건 미달이면 null, 성공 시 지급된 보상 반환 */
+  claimCompendiumMilestone: (pct: number, currentCollectedCount: number, totalSpecies: number) => CompendiumReward | null;
 }
 
 function rollSpecies(tier: EggTier): string {
@@ -207,6 +225,54 @@ export const useUserStore = create<UserState>()(
         const { user } = get();
         if (!user) return;
         set({ user: { ...user, tutorialStep: step } });
+      },
+
+      getDecorationCount: modelId => {
+        const { user } = get();
+        return user?.decorationInventory?.[modelId] ?? 0;
+      },
+
+      addDecorationInventory: (modelId, count = 1) => {
+        const { user } = get();
+        if (!user) return;
+        const inv = { ...(user.decorationInventory ?? {}) };
+        inv[modelId] = (inv[modelId] ?? 0) + count;
+        set({ user: { ...user, decorationInventory: inv } });
+      },
+
+      consumeDecorationInventory: modelId => {
+        const { user } = get();
+        if (!user) return false;
+        const current = user.decorationInventory?.[modelId] ?? 0;
+        if (current <= 0) return false;
+        const inv = { ...(user.decorationInventory ?? {}) };
+        inv[modelId] = current - 1;
+        if (inv[modelId] === 0) delete inv[modelId];
+        set({ user: { ...user, decorationInventory: inv } });
+        return true;
+      },
+
+      claimCompendiumMilestone: (pct, collectedCount, totalSpecies) => {
+        const { user, addPearl, addStarCoral, addEggToInventory } = get();
+        if (!user) return null;
+        const reward = COMPENDIUM_REWARDS[pct];
+        if (!reward) return null;
+        const claimed = user.claimedCompendiumMilestones ?? [];
+        if (claimed.includes(pct)) return null;
+        // 조건 검증: 현재 진행도가 마일스톤 이상이어야 함
+        const actualPct = Math.floor((collectedCount / totalSpecies) * 100);
+        if (actualPct < pct) return null;
+
+        if (reward.type === 'pearl') addPearl(reward.amount);
+        else if (reward.type === 'star_coral') addStarCoral(reward.amount);
+        else if (reward.type === 'egg') addEggToInventory(reward.tier);
+
+        set(state => ({
+          user: state.user
+            ? { ...state.user, claimedCompendiumMilestones: [...claimed, pct] }
+            : null,
+        }));
+        return reward;
       },
     }),
     {

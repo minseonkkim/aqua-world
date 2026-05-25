@@ -143,11 +143,18 @@ export default function TankScene({
   const syncDecorationMeshes = useCallback((scene: THREE.Scene) => {
     const current = decorationsRef.current;
     const currentIds = new Set(current.map(d => d.id));
-    // 제거된 것 정리
+    console.log('[TankScene] sync deco — decorations:', current.length, 'meshes in map:', decoMeshesRef.current.size);
+    // 제거된 것 정리 — 동시에 스테일 검사 (scene에 없으면 강제 재빌드 대상)
     decoMeshesRef.current.forEach((mesh, id) => {
       if (!currentIds.has(id)) {
         scene.remove(mesh);
         decoMeshesRef.current.delete(id);
+        return;
+      }
+      // 메시가 현재 씬에 실제로 없으면 (StrictMode 재마운트 등으로 스테일) → 제거 후 재빌드 대상
+      if (mesh.parent !== scene) {
+        decoMeshesRef.current.delete(id);
+        console.log('[TankScene] stale mesh removed for', id);
       }
     });
     // 추가/업데이트
@@ -160,6 +167,7 @@ export default function TankScene({
         scene.add(built);
         decoMeshesRef.current.set(d.id, built);
         mesh = built;
+        console.log('[TankScene] added new deco mesh', d.id, d.modelId, 'at', d.position);
       }
       mesh.position.set(d.position.x, d.position.y, d.position.z);
       mesh.rotation.set(d.rotation.x, d.rotation.y, d.rotation.z);
@@ -301,7 +309,11 @@ export default function TankScene({
     preloadDecorationModels().then(() => {
       if (cancelled) return;
       const scene = sceneRef.current;
-      if (scene) syncDecorationMeshes(scene);
+      if (!scene) return;
+      // 로딩 전에 플레이스홀더로 추가된 데코들을 실제 GLB로 재빌드
+      decoMeshesRef.current.forEach((mesh) => scene.remove(mesh));
+      decoMeshesRef.current.clear();
+      syncDecorationMeshes(scene);
     });
     return () => { cancelled = true; };
   }, [syncFishMeshes, syncDecorationMeshes]);

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage } from '../types';
+import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage, DecorationPreset } from '../types';
 import { FEED_GROWTH_BOOST_SECONDS } from '../constants';
 import { applyGrowthAdvance } from '../utils/growth';
 
@@ -30,6 +30,13 @@ interface TankState {
   feedFish: (tankId: string, fishId: string) => { newStage: FishGrowthStage | null } | null;
   /** 활성 수조의 모든 물고기 성장 상태를 검사하여 승급 처리. 승급된 fish id 목록 반환. */
   tickFishGrowth: (tankId: string) => string[];
+
+  /** 현재 배치를 슬롯에 저장 (덮어쓰기). 저장된 decorations 스냅샷 반환 */
+  savePreset: (tankId: string, slot: number) => DecorationPreset | null;
+  /** 슬롯에서 불러와서 현재 decorations를 교체. 교체 전 기존 decorations 반환(인벤토리 복귀용) */
+  loadPreset: (tankId: string, slot: number) => TankDecoration[] | null;
+  /** 슬롯 삭제 */
+  deletePreset: (tankId: string, slot: number) => void;
 }
 
 export const useTankStore = create<TankState>()(
@@ -157,6 +164,60 @@ export const useTankStore = create<TankState>()(
           ),
         }));
         return { newStage: advanced ? advanced.growthStage : null };
+      },
+
+      savePreset: (tankId, slot) => {
+        const { tanks } = get();
+        const tank = tanks.find(t => t.id === tankId);
+        if (!tank) return null;
+        const snapshot: DecorationPreset = {
+          slot,
+          decorations: tank.decorations.map(d => ({ ...d, position: { ...d.position }, rotation: { ...d.rotation } })),
+          savedAt: Date.now(),
+        };
+        const existing = tank.decorationPresets ?? [];
+        const next = [...existing.filter(p => p.slot !== slot), snapshot];
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId ? { ...t, decorationPresets: next, updatedAt: Date.now() } : t,
+          ),
+        }));
+        return snapshot;
+      },
+
+      loadPreset: (tankId, slot) => {
+        const { tanks } = get();
+        const tank = tanks.find(t => t.id === tankId);
+        const preset = tank?.decorationPresets?.find(p => p.slot === slot);
+        if (!tank || !preset) return null;
+        const previous = tank.decorations;
+        const restored = preset.decorations.map(d => ({
+          ...d,
+          // 새 id 부여로 충돌 회피
+          id: `deco_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          position: { ...d.position },
+          rotation: { ...d.rotation },
+        }));
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId ? { ...t, decorations: restored, updatedAt: Date.now() } : t,
+          ),
+        }));
+        return previous;
+      },
+
+      deletePreset: (tankId, slot) => {
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? {
+                  ...t,
+                  decorationPresets: (t.decorationPresets ?? []).filter(p => p.slot !== slot),
+                  updatedAt: Date.now(),
+                }
+              : t,
+          ),
+        }));
       },
 
       tickFishGrowth: tankId => {
