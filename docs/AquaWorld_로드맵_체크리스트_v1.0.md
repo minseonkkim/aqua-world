@@ -202,15 +202,15 @@
 - [x] 🔴 물 셰이더 완성
   - [x] 수면 물결 효과
   - [x] 빛의 굴절 (코스틱스 shimmer)
-  - [ ] 거품 파티클
-  - [ ] 수초 흔들림
+  - [x] 거품 파티클 (BUBBLE_COUNT=35, 환경 색조 + 상승/리셋)
+  - [x] 수초 흔들림 (type='plant' 데코 sin sway)
 - [x] 🔴 기본 조명 시스템 (AmbientLight, DirectionalLight, PointLight)
-  - [ ] 낮/밤 자동 전환 (기기 시간 연동)
-  - [ ] 수동 조명 모드 선택 UI
+  - [x] 낮/밤 자동 전환 (기기 시간 연동, 5초 throttle, 배경/Fog까지 보간)
+  - [-] 수동 조명 모드 선택 UI (lightMode prop은 'auto'|'day'|'night'|'sunset' 지원, 토글 UI 미구현)
 - [x] 🔴 물고기 터치/클릭 인터랙션
   - [x] 클릭 시 이름/정보 카드 팝업
   - [x] 정보 카드에서 개별 먹이주기 (FishInfoCard 버튼)
-  - [ ] 먹이 뿌리기 클릭 인터랙션 (수면 클릭 → 먹이 파티클)
+  - [x] 먹이 뿌리기 클릭 인터랙션 (수면 raycast → 먹이 4~6개 낙하 → 가까운 물고기 추적·섭취)
 - [ ] 🟡 Instanced Mesh 최적화 (수초 등 반복 오브젝트)
 - [ ] 🟡 저사양 모드 (30fps 제한, 셰이더 단순화)
 

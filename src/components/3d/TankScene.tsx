@@ -5,8 +5,10 @@ import { useCameraControls } from '@/hooks/useCameraControls';
 import { Fish, TankDecoration, TankEnvironment } from '@/types';
 import { STAGE_SCALE } from '@/constants';
 import { cloneFishModel, getFishModel, preloadFishModels } from '@/utils/fishModelLoader';
-import { buildDecorationMesh } from '@/utils/decorationModels';
+import { buildDecorationMesh, getDecorationMeta } from '@/utils/decorationModels';
 import { preloadDecorationModels } from '@/utils/decorationModelLoader';
+
+export type LightMode = 'auto' | 'day' | 'night' | 'sunset';
 
 interface Props {
   environment: TankEnvironment;
@@ -19,6 +21,10 @@ interface Props {
   onDecorationSelect?: (id: string | null) => void;
   /** 드래그 종료 시 최종 위치 커밋 */
   onDecorationMove?: (id: string, position: { x: number; y: number; z: number }) => void;
+  /** 조명 모드 — auto: 기기 시간 기반 낮/밤 자동 전환 */
+  lightMode?: LightMode;
+  /** 수면 클릭 시 호출 — 일일 먹이 카운트 등 게임 로직에서 처리 */
+  onSurfaceFeed?: (x: number, z: number) => boolean | void;
   style?: React.CSSProperties;
 }
 
@@ -31,16 +37,35 @@ const ENV: Record<TankEnvironment, { water: number; ambient: number; bg: string 
 };
 
 const FLOOR_Y = -3;
+const WATER_Y = 2.9;
 const TANK_HALF_X = 4.5;
 const TANK_HALF_Z = 3.5;
+const BUBBLE_COUNT = 35;
+const FOOD_LIFETIME_MS = 8000;
 
 // 플레이스홀더 물고기 색상 (수조에 물고기가 없을 때 / GLB 로드 전)
 const DEFAULT_FISH_COLORS = [0xff6b35, 0xffd700, 0x4ecdc4, 0xff6b9d, 0x95e1d3];
 
+interface BubbleData {
+  speed: number;
+  wobbleAmp: number;
+  wobblePhase: number;
+  baseX: number;
+  baseZ: number;
+}
+
+interface FoodParticle {
+  mesh: THREE.Mesh;
+  vel: THREE.Vector3;
+  bornAt: number;
+  eaten: boolean;
+}
+
 export default function TankScene({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
-  onDecorationSelect, onDecorationMove, style,
+  onDecorationSelect, onDecorationMove,
+  lightMode = 'auto', onSurfaceFeed, style,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -51,12 +76,23 @@ export default function TankScene({
   const fishDataRef = useRef<(Fish | null)[]>([]);
   const decoMeshesRef = useRef<Map<string, THREE.Group>>(new Map());
   const decoHighlightRef = useRef<THREE.Mesh | null>(null);
+  const ambientRef = useRef<THREE.AmbientLight | null>(null);
+  const sunRef = useRef<THREE.DirectionalLight | null>(null);
+  const bubblesRef = useRef<THREE.Mesh[]>([]);
+  const foodsRef = useRef<FoodParticle[]>([]);
+  const lastLightTickRef = useRef(0);
   const rafRef = useRef(0);
   const clock = useRef(new THREE.Clock());
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const clickStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggingDecoRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
+
+  // 최신 lightMode/onSurfaceFeed를 ref로 보관 (animate/handler 안에서 최신 값 참조)
+  const lightModeRef = useRef<LightMode>(lightMode);
+  useEffect(() => { lightModeRef.current = lightMode; }, [lightMode]);
+  const onSurfaceFeedRef = useRef(onSurfaceFeed);
+  useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
 
   const { bindCanvas, apply, setEnabled } = useCameraControls(cameraRef);
   const env = ENV[environment];
@@ -164,12 +200,17 @@ export default function TankScene({
         const built = buildDecorationMesh(d.modelId);
         if (!built) return;
         built.userData.decoId = d.id;
+        const meta = getDecorationMeta(d.modelId);
+        built.userData.isPlant = meta?.type === 'plant';
+        built.userData.swayPhase = Math.random() * Math.PI * 2;
         scene.add(built);
         decoMeshesRef.current.set(d.id, built);
         mesh = built;
         console.log('[TankScene] added new deco mesh', d.id, d.modelId, 'at', d.position);
       }
       mesh.position.set(d.position.x, d.position.y, d.position.z);
+      // 기준 회전을 userData에 저장 — animate에서 sway는 base 위에 더해서 적용
+      mesh.userData.baseRotation = { x: d.rotation.x, y: d.rotation.y, z: d.rotation.z };
       mesh.rotation.set(d.rotation.x, d.rotation.y, d.rotation.z);
       mesh.scale.setScalar(d.scale);
     });
@@ -217,10 +258,13 @@ export default function TankScene({
     cameraRef.current = camera;
     apply();
 
-    scene.add(new THREE.AmbientLight(env.ambient, 0.6));
+    const ambient = new THREE.AmbientLight(env.ambient, 0.6);
+    scene.add(ambient);
+    ambientRef.current = ambient;
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
     sun.position.set(5, 10, 5);
     scene.add(sun);
+    sunRef.current = sun;
     const under = new THREE.PointLight(0x4488ff, 0.8, 15);
     under.position.set(0, -2, 0);
     scene.add(under);
@@ -260,6 +304,32 @@ export default function TankScene({
       );
       g.position.set((Math.random() - 0.5) * 9, -2.95, (Math.random() - 0.5) * 7);
       scene.add(g);
+    }
+
+    // 거품 파티클 풀 — 환경에 따라 살짝 색조 변경
+    const bubbleColor = new THREE.Color(env.water).lerp(new THREE.Color(0xffffff), 0.6);
+    const bubbleMat = new THREE.MeshBasicMaterial({
+      color: bubbleColor, transparent: true, opacity: 0.35,
+    });
+    bubblesRef.current.forEach(b => scene.remove(b));
+    bubblesRef.current = [];
+    for (let i = 0; i < BUBBLE_COUNT; i++) {
+      const size = 0.04 + Math.random() * 0.06;
+      const b = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 6, 6),
+        bubbleMat,
+      );
+      const baseX = (Math.random() - 0.5) * 8;
+      const baseZ = (Math.random() - 0.5) * 6;
+      b.position.set(baseX, FLOOR_Y + Math.random() * (WATER_Y - FLOOR_Y), baseZ);
+      b.userData.bubble = {
+        speed: 0.4 + Math.random() * 0.6,
+        wobbleAmp: 0.05 + Math.random() * 0.08,
+        wobblePhase: Math.random() * Math.PI * 2,
+        baseX, baseZ,
+      } satisfies BubbleData;
+      scene.add(b);
+      bubblesRef.current.push(b);
     }
 
     syncFishMeshes(scene);
@@ -337,6 +407,37 @@ export default function TankScene({
     const hit = new THREE.Vector3();
     if (raycasterRef.current.ray.intersectPlane(plane, hit)) return hit;
     return null;
+  }, []);
+
+  // 수면 클릭 시 떨어지는 먹이 파티클 spawn (x,z는 월드 좌표)
+  const spawnFoodParticles = useCallback((x: number, z: number) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const count = 4 + Math.floor(Math.random() * 3); // 4~6개
+    const foodMat = new THREE.MeshStandardMaterial({
+      color: 0xffa64d, emissive: 0x552200, roughness: 0.6,
+    });
+    for (let i = 0; i < count; i++) {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), foodMat);
+      const jitterX = (Math.random() - 0.5) * 0.4;
+      const jitterZ = (Math.random() - 0.5) * 0.4;
+      mesh.position.set(
+        THREE.MathUtils.clamp(x + jitterX, -TANK_HALF_X, TANK_HALF_X),
+        WATER_Y - 0.05,
+        THREE.MathUtils.clamp(z + jitterZ, -TANK_HALF_Z, TANK_HALF_Z),
+      );
+      scene.add(mesh);
+      foodsRef.current.push({
+        mesh,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 0.01,
+          -0.02 - Math.random() * 0.01,
+          (Math.random() - 0.5) * 0.01,
+        ),
+        bornAt: performance.now(),
+        eaten: false,
+      });
+    }
   }, []);
 
   const handlePointerDown = useCallback((e: PointerEvent) => {
@@ -430,28 +531,119 @@ export default function TankScene({
       return;
     }
 
-    // 일반 모드: 물고기 클릭 처리
-    if (!onFishClick) return;
-    const hits = raycasterRef.current.intersectObjects(fishMeshesRef.current, true);
-    if (hits.length > 0) {
-      let obj: THREE.Object3D | null = hits[0].object;
+    // 일반 모드: 물고기 클릭 우선 → 미적중이면 수면 클릭 (먹이 뿌리기)
+    const fishHits = raycasterRef.current.intersectObjects(fishMeshesRef.current, true);
+    if (fishHits.length > 0) {
+      let obj: THREE.Object3D | null = fishHits[0].object;
       while (obj && obj.userData.fishIndex === undefined) obj = obj.parent;
       if (obj) {
         const idx = obj.userData.fishIndex as number;
         const fishData = fishDataRef.current[idx];
-        if (fishData) onFishClick(fishData);
+        if (fishData && onFishClick) onFishClick(fishData);
+        return;
       }
     }
-  }, [onFishClick, onDecorationSelect, onDecorationMove, setEnabled, updatePointer]);
+    // 수면 raycast — 클릭 위치가 수면에 닿았는지 확인
+    if (waterRef.current) {
+      const waterHits = raycasterRef.current.intersectObject(waterRef.current, false);
+      if (waterHits.length > 0) {
+        const p = waterHits[0].point;
+        const accepted = onSurfaceFeedRef.current?.(p.x, p.z);
+        // 콜백이 명시적으로 false를 반환하면 파티클 생략 (일일 한도 초과 등)
+        if (accepted !== false) {
+          spawnFoodParticles(p.x, p.z);
+        }
+      }
+    }
+  }, [onFishClick, onDecorationSelect, onDecorationMove, setEnabled, updatePointer, spawnFoodParticles]);
+
+  // 시간 기반 조명 계수 (0 = 자정, 1 = 정오)
+  const computeDayFactor = useCallback((): number => {
+    const mode = lightModeRef.current;
+    if (mode === 'day') return 1;
+    if (mode === 'night') return 0;
+    if (mode === 'sunset') return 0.4;
+    // auto — 기기 시간 기반 코사인 보간
+    const now = new Date();
+    const h = now.getHours() + now.getMinutes() / 60;
+    return 0.5 - 0.5 * Math.cos((h / 24) * Math.PI * 2);
+  }, []);
+
+  const applyDayNight = useCallback(() => {
+    const ambient = ambientRef.current;
+    const sun = sunRef.current;
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    if (!ambient || !sun || !renderer || !scene) return;
+    const f = computeDayFactor();
+    ambient.intensity = 0.18 + f * 0.45;
+    sun.intensity = 0.35 + f * 0.95;
+    // 햇빛 색: 밤은 푸르스름, 낮은 백색
+    const nightSun = new THREE.Color(0x4466aa);
+    const daySun = new THREE.Color(0xffffff);
+    sun.color.copy(nightSun).lerp(daySun, f);
+    // 배경: 밤은 환경 bg의 70% 어둡게, 낮은 환경 bg 그대로
+    const dayBg = new THREE.Color(env.bg);
+    const nightBg = dayBg.clone().multiplyScalar(0.3);
+    const currentBg = nightBg.clone().lerp(dayBg, f);
+    renderer.setClearColor(currentBg, 1);
+    if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(currentBg);
+  }, [computeDayFactor, env.bg]);
 
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
     const t = clock.current.getElapsedTime();
+    const now = performance.now();
     if (waterRef.current) {
       (waterRef.current.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     }
+
+    // 먹이 파티클: 떨어짐 + 물고기 접근 검출
+    const foods = foodsRef.current;
+    if (foods.length > 0) {
+      const scene = sceneRef.current;
+      for (let i = foods.length - 1; i >= 0; i--) {
+        const fp = foods[i];
+        if (fp.eaten) continue;
+        fp.mesh.position.add(fp.vel);
+        // 물 저항 — y vel 점진 가속
+        fp.vel.y = Math.max(fp.vel.y - 0.0003, -0.05);
+        // 바닥/수명 도달 → 제거
+        if (fp.mesh.position.y < FLOOR_Y + 0.1 || now - fp.bornAt > FOOD_LIFETIME_MS) {
+          scene?.remove(fp.mesh);
+          fp.mesh.geometry.dispose();
+          foods.splice(i, 1);
+        }
+      }
+    }
+
     fishMeshesRef.current.forEach(f => {
       const vel = f.userData.vel as THREE.Vector3;
+      // 가까운 먹이 추적
+      let nearestFood: FoodParticle | null = null;
+      let nearestDist = 2.2;
+      for (const fp of foods) {
+        if (fp.eaten) continue;
+        const dx = fp.mesh.position.x - f.position.x;
+        const dy = fp.mesh.position.y - f.position.y;
+        const dz = fp.mesh.position.z - f.position.z;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d < nearestDist) { nearestDist = d; nearestFood = fp; }
+      }
+      if (nearestFood) {
+        const dir = nearestFood.mesh.position.clone().sub(f.position).normalize().multiplyScalar(0.025);
+        // 부드럽게 vel 보간
+        vel.lerp(dir, 0.15);
+        if (nearestDist < 0.25) {
+          nearestFood.eaten = true;
+          const scene = sceneRef.current;
+          scene?.remove(nearestFood.mesh);
+          nearestFood.mesh.geometry.dispose();
+          const idx = foods.indexOf(nearestFood);
+          if (idx >= 0) foods.splice(idx, 1);
+        }
+      }
+
       f.position.x += vel.x;
       f.position.y += vel.y + Math.sin(t * 1.5 + f.userData.phase) * 0.003;
       f.position.z += vel.z;
@@ -460,6 +652,40 @@ export default function TankScene({
       if (Math.abs(f.position.z) > 3.5) vel.z *= -1;
       if (vel.length() > 0.001) f.rotation.y = Math.atan2(vel.x, vel.z);
     });
+
+    // 거품 상승 + 좌우 흔들림 + 수면 도달 시 리셋
+    bubblesRef.current.forEach(b => {
+      const d = b.userData.bubble as BubbleData;
+      b.position.y += 0.008 * d.speed;
+      b.position.x = d.baseX + Math.sin(t * 1.5 + d.wobblePhase) * d.wobbleAmp;
+      b.position.z = d.baseZ + Math.cos(t * 1.2 + d.wobblePhase) * d.wobbleAmp * 0.6;
+      if (b.position.y > WATER_Y - 0.05) {
+        const baseX = (Math.random() - 0.5) * 8;
+        const baseZ = (Math.random() - 0.5) * 6;
+        d.baseX = baseX;
+        d.baseZ = baseZ;
+        d.wobblePhase = Math.random() * Math.PI * 2;
+        b.position.set(baseX, FLOOR_Y + 0.05, baseZ);
+      }
+    });
+
+    // 수초 흔들림 — type='plant' 데코만
+    decoMeshesRef.current.forEach(mesh => {
+      if (!mesh.userData.isPlant) return;
+      const base = mesh.userData.baseRotation as { x: number; y: number; z: number } | undefined;
+      if (!base) return;
+      const phase = mesh.userData.swayPhase as number;
+      const sway = Math.sin(t * 1.2 + phase) * 0.09;
+      mesh.rotation.x = base.x + sway * 0.5;
+      mesh.rotation.z = base.z + sway;
+    });
+
+    // 낮/밤 — 5초마다 갱신 (per-frame 불필요)
+    if (now - lastLightTickRef.current > 5000) {
+      lastLightTickRef.current = now;
+      applyDayNight();
+    }
+
     // 선택 하이라이트 펄스
     if (decoHighlightRef.current && decoHighlightRef.current.visible) {
       const s = 1 + Math.sin(t * 4) * 0.1;
@@ -468,7 +694,7 @@ export default function TankScene({
     if (rendererRef.current && sceneRef.current && cameraRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
-  }, []);
+  }, [applyDayNight]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -488,6 +714,11 @@ export default function TankScene({
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      // 거품/먹이 파티클 정리 — geometry는 풀별로 동일 (BubbleGeometry는 각자 다름)
+      foodsRef.current.forEach(fp => fp.mesh.geometry.dispose());
+      foodsRef.current = [];
+      bubblesRef.current.forEach(b => b.geometry.dispose());
+      bubblesRef.current = [];
       rendererRef.current?.dispose();
     };
   }, [init, animate, bindCanvas, handlePointerDown, handlePointerMove, handlePointerUp]);

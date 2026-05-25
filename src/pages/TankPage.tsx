@@ -131,6 +131,17 @@ export default function TankPage() {
     showToast('+10 🪙 Pearl 획득!');
   };
 
+  // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
+  const handleSurfaceFeed = useCallback((): boolean => {
+    if (!recordFeed()) {
+      showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      return false;
+    }
+    addPearl(10);
+    showToast('🍤 먹이 뿌리기 · +10 🪙');
+    return true;
+  }, [recordFeed, addPearl]);
+
   const handleFeedFish = (fish: Fish) => {
     if (!activeTankId) return;
     if (fish.growthStage === 'large') {
@@ -313,6 +324,8 @@ export default function TankPage() {
         selectedDecorationId={selectedDecoId}
         onDecorationSelect={setSelectedDecoId}
         onDecorationMove={handleMoveDecoration}
+        lightMode={activeTank?.lightMode ?? 'auto'}
+        onSurfaceFeed={handleSurfaceFeed}
         style={{ position: 'absolute', inset: 0 }}
       />
 
