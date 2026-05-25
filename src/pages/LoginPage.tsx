@@ -80,7 +80,8 @@ export default function LoginPage() {
       claimDailyLogin();
     } catch (err) {
       console.error('[Google Login]', err);
-      alert('Google 로그인에 실패했습니다. 다시 시도해주세요.');
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      alert(`Google 로그인에 실패했습니다.\n\n${msg}\n\n(DevTools 콘솔에서 자세한 스택을 확인하세요)`);
     } finally {
       setLoading(false);
     }

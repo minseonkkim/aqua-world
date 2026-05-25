@@ -19,6 +19,7 @@ export function useCameraControls(
   const lastMouse = useRef<{ x: number; y: number } | null>(null);
   const lastPinch = useRef<number | null>(null);
   const lastTap = useRef(0);
+  const enabledRef = useRef(true);
 
   const apply = useCallback(() => {
     const cam = cameraRef.current;
@@ -40,9 +41,12 @@ export function useCameraControls(
   const bindCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
     if (!canvas) return;
 
-    const onMouseDown = (e: MouseEvent) => { lastMouse.current = { x: e.clientX, y: e.clientY }; };
+    const onMouseDown = (e: MouseEvent) => {
+      if (!enabledRef.current) return;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+    };
     const onMouseMove = (e: MouseEvent) => {
-      if (!lastMouse.current) return;
+      if (!enabledRef.current || !lastMouse.current) return;
       const dx = e.clientX - lastMouse.current.x;
       const dy = e.clientY - lastMouse.current.y;
       state.current.theta -= dx * SENS;
@@ -52,6 +56,7 @@ export function useCameraControls(
     };
     const onMouseUp = () => { lastMouse.current = null; };
     const onWheel = (e: WheelEvent) => {
+      if (!enabledRef.current) return;
       e.preventDefault();
       state.current.radius = Math.max(MIN_R, Math.min(MAX_R, state.current.radius + e.deltaY * 0.01));
       apply();
@@ -61,6 +66,7 @@ export function useCameraControls(
       Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 
     const onTouchStart = (e: TouchEvent) => {
+      if (!enabledRef.current) return;
       if (e.touches.length === 1) {
         lastMouse.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         const now = Date.now();
@@ -71,6 +77,7 @@ export function useCameraControls(
       }
     };
     const onTouchMove = (e: TouchEvent) => {
+      if (!enabledRef.current) return;
       e.preventDefault();
       if (e.touches.length === 1 && lastMouse.current) {
         const dx = e.touches[0].clientX - lastMouse.current.x;
@@ -107,5 +114,10 @@ export function useCameraControls(
     };
   }, [apply, reset]);
 
-  return { bindCanvas, apply, reset };
+  const setEnabled = useCallback((v: boolean) => {
+    enabledRef.current = v;
+    if (!v) { lastMouse.current = null; lastPinch.current = null; }
+  }, []);
+
+  return { bindCanvas, apply, reset, setEnabled };
 }

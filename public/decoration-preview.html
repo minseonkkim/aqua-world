@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AquaWorld — Decoration Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a1628;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #4dd0e1; }
+  .subtitle { color: #b0c4de; margin-bottom: 24px; font-size: 13px; }
+  .category-section { margin-bottom: 32px; }
+  .category-title {
+    font-size: 14px; color: #ffd54f; margin-bottom: 12px;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(255, 213, 79, 0.3);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: #1a2a44;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .slot {
+    aspect-ratio: 1;
+    background: linear-gradient(180deg, #122a44 0%, #0a1628 100%);
+    position: relative;
+    cursor: grab;
+  }
+  .slot:active { cursor: grabbing; }
+  .loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #5a7a9a; font-size: 12px;
+  }
+  .label {
+    padding: 8px 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .label .name { font-size: 13px; font-weight: 600; }
+  .label .id { font-size: 10px; color: #5a7a9a; font-family: monospace; }
+  .toolbar { margin-bottom: 16px; display: flex; gap: 8px; }
+  .toolbar button {
+    background: rgba(77, 208, 225, 0.15);
+    border: 1px solid rgba(77, 208, 225, 0.4);
+    color: #fff; padding: 6px 14px; border-radius: 16px; font-size: 12px; cursor: pointer;
+  }
+  .toolbar button:hover { background: rgba(77, 208, 225, 0.3); }
+
+  /* 단일 fullscreen renderer canvas — 모든 카드 위에 오버레이, pointer는 카드로 통과 */
+  #sharedCanvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 100;
+  }
+</style>
+</head>
+<body>
+  <canvas id="sharedCanvas"></canvas>
+
+  <h1>🪴 Decoration Preview</h1>
+  <p class="subtitle">26종 데코레이션 GLB 모델 미리보기. 카드 위에서 드래그로 회전. 단일 WebGL 컨텍스트로 모든 카드를 동시 렌더.</p>
+
+  <div id="protocolWarning" style="display:none; background:#5a1818; border:1px solid #ff6b6b; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:13px; line-height:1.6;">
+    ⚠️ <strong>file:// 프로토콜로 열렸습니다.</strong> 브라우저 보안 정책 때문에 GLB 로드가 실패합니다.<br>
+    터미널에서 <code style="background:#000;padding:2px 6px;border-radius:4px;">npm run dev</code> 실행 후
+    <code style="background:#000;padding:2px 6px;border-radius:4px;">http://localhost:5173/decoration-preview.html</code> 로 접속하세요.
+  </div>
+
+  <div class="toolbar">
+    <button onclick="toggleAutoRotate()">⟳ 자동회전 ON/OFF</button>
+    <button onclick="resetAll()">↺ 회전 리셋</button>
+  </div>
+
+  <div id="root"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const CATALOG = [
+  { type: 'plant', items: [
+    { id: 'seagrass', name: '바다 잔디' },
+    { id: 'kelp', name: '다시마' },
+    { id: 'coral_branch', name: '가지 산호' },
+    { id: 'coral_brain', name: '뇌 산호' },
+    { id: 'anemone', name: '말미잘' },
+    { id: 'bamboo_water', name: '수중 대나무' },
+    { id: 'fern_aquatic', name: '수중 양치' },
+    { id: 'moss_ball', name: '모스볼' },
+  ]},
+  { type: 'rock', items: [
+    { id: 'pebble_pile', name: '자갈 더미' },
+    { id: 'boulder_dark', name: '검은 바위' },
+    { id: 'lava_rock', name: '용암석' },
+    { id: 'slate_flat', name: '슬레이트' },
+    { id: 'crystal_blue', name: '청수정' },
+    { id: 'geode_purple', name: '자수정 정동' },
+  ]},
+  { type: 'driftwood', items: [
+    { id: 'branch_straight', name: '곧은 가지' },
+    { id: 'root_twisted', name: '뒤틀린 뿌리' },
+    { id: 'log_hollow', name: '빈 통나무' },
+    { id: 'stick_small', name: '작은 막대' },
+  ]},
+  { type: 'ornament', items: [
+    { id: 'treasure_chest', name: '보물상자' },
+    { id: 'pirate_ship', name: '난파선' },
+    { id: 'clay_pot', name: '도자기 항아리' },
+    { id: 'ship_wheel', name: '배 키' },
+    { id: 'pearl_shell', name: '진주 조개' },
+    { id: 'roman_pillar', name: '로마 기둥' },
+    { id: 'arch_ring', name: '아치' },
+    { id: 'bubble_chimney', name: '거품 굴뚝' },
+  ]},
+];
+
+const TYPE_LABEL = {
+  plant: '🌿 수초 (8)',
+  rock: '🪨 바위 (6)',
+  driftwood: '🪵 유목 (4)',
+  ornament: '🎁 장식 (8)',
+};
+
+// 단일 공유 renderer
+const sharedCanvas = document.getElementById('sharedCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas: sharedCanvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+renderer.setScissorTest(true);
+
+function resizeShared() {
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+}
+resizeShared();
+window.addEventListener('resize', resizeShared);
+
+const loader = new GLTFLoader();
+const slots = [];  // {slot, scene, camera, group, maxDim}
+let autoRotate = true;
+
+window.toggleAutoRotate = () => { autoRotate = !autoRotate; };
+window.resetAll = () => { slots.forEach(s => s.group.rotation.set(0, 0, 0)); };
+
+function setupSceneForGLB(glb) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+
+  const box = new THREE.Box3().setFromObject(glb);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  const dist = maxDim * 2.4;
+
+  const group = new THREE.Group();
+  glb.position.sub(center);
+  glb.position.y += size.y / 2;
+  group.add(glb);
+  scene.add(group);
+
+  camera.position.set(dist * 0.7, dist * 0.55, dist * 0.7);
+  camera.lookAt(0, size.y / 2, 0);
+
+  scene.add(new THREE.AmbientLight(0x6688aa, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+  sun.position.set(2, 4, 3);
+  scene.add(sun);
+  const fill = new THREE.PointLight(0x4488ff, 0.5, 10);
+  fill.position.set(-2, 1, -1);
+  scene.add(fill);
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(maxDim * 1.1, 32),
+    new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.9 }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  scene.add(floor);
+
+  return { scene, camera, group, maxDim };
+}
+
+function bindDrag(slot, group) {
+  let dragging = false, lastX = 0, lastY = 0;
+  slot.addEventListener('pointerdown', e => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    slot.setPointerCapture(e.pointerId);
+  });
+  slot.addEventListener('pointerup', e => {
+    dragging = false;
+    try { slot.releasePointerCapture(e.pointerId); } catch {}
+  });
+  slot.addEventListener('pointercancel', () => { dragging = false; });
+  slot.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    group.rotation.y += dx * 0.01;
+    group.rotation.x = Math.max(-1, Math.min(1, group.rotation.x + dy * 0.01));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+}
+
+async function loadOne(item, parentEl) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const slot = document.createElement('div');
+  slot.className = 'slot';
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = '로딩...';
+  slot.appendChild(loadingEl);
+  card.appendChild(slot);
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.innerHTML = `<span class="name">${item.name}</span><span class="id">${item.id}</span>`;
+  card.appendChild(label);
+  parentEl.appendChild(card);
+
+  try {
+    const gltf = await new Promise((resolve, reject) => {
+      loader.load(`models/decoration/${item.id}.glb`, resolve, undefined, reject);
+    });
+    loadingEl.remove();
+    const ctx = setupSceneForGLB(gltf.scene);
+    bindDrag(slot, ctx.group);
+    slots.push({ slot, ...ctx });
+  } catch (err) {
+    const msg = err?.message || err?.toString() || 'unknown';
+    loadingEl.innerHTML = `<div style="padding:8px;text-align:center;font-size:10px;line-height:1.4;">
+      ❌ <strong>${item.id}</strong><br>
+      <span style="color:#ff9c9c;word-break:break-all;">${msg.slice(0, 120)}</span>
+    </div>`;
+    loadingEl.style.color = '#f44336';
+    console.error('load failed', item.id, err);
+  }
+}
+
+const root = document.getElementById('root');
+for (const cat of CATALOG) {
+  const section = document.createElement('div');
+  section.className = 'category-section';
+  const title = document.createElement('div');
+  title.className = 'category-title';
+  title.textContent = TYPE_LABEL[cat.type];
+  section.appendChild(title);
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  section.appendChild(grid);
+  root.appendChild(section);
+  for (const item of cat.items) {
+    loadOne(item, grid);
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.setClearColor(0x000000, 0);
+  renderer.clear();
+
+  const dpr = renderer.getPixelRatio();
+  for (const s of slots) {
+    if (autoRotate) s.group.rotation.y += 0.005;
+    const rect = s.slot.getBoundingClientRect();
+    // 화면 밖 카드는 스킵
+    if (rect.bottom < 0 || rect.top > window.innerHeight ||
+        rect.right < 0 || rect.left > window.innerWidth) continue;
+    const w = rect.width;
+    const h = rect.height;
+    // WebGL 좌표계: 좌하단 (0,0)
+    const left = rect.left;
+    const bottom = window.innerHeight - rect.bottom;
+    renderer.setViewport(left, bottom, w, h);
+    renderer.setScissor(left, bottom, w, h);
+    s.camera.aspect = w / h;
+    s.camera.updateProjectionMatrix();
+    renderer.render(s.scene, s.camera);
+  }
+}
+animate();
+
+// file:// 감지 → 경고 배너 표시
+if (location.protocol === 'file:') {
+  document.getElementById('protocolWarning').style.display = 'block';
+}
+</script>
+</body>
+</html>

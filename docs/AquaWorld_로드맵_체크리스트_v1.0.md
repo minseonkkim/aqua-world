@@ -116,11 +116,12 @@
 ### 1-2. 3D 렌더링 PoC
 
 - [x] 🔴 3D 수조 씬 기본 렌더링 구현 (평면, 조명, 카메라)
-- [-] 🔴 물고기 더미 모델(GLB) 임포트 및 애니메이션 재생 확인 (플레이스홀더 메시 구현, 실 GLB는 3D 아티스트 필요)
+- [x] 🔴 물고기 더미 모델(GLB) 임포트 및 애니메이션 재생 확인 (절차적 생성 GLB 10종 임포트 동작, 실 아티스트 GLB로 추후 교체 가능)
 - [x] 🔴 자유 카메라 컨트롤 구현 (DOM 이벤트 기반)
   - [x] 마우스 드래그 / 터치 드래그 회전
   - [x] 마우스 휠 / 핀치 줌인/줌아웃
   - [x] 더블클릭 / 더블탭 시점 리셋
+  - [x] 꾸미기 모드 진입 시 카메라 잠금/재개 (`setEnabled`)
 - [x] 🔴 기초 물 셰이더 구현 (물결, 투명도, 코스틱스 shimmer)
 - [x] 🟡 ResizeObserver 기반 캔버스 반응형 리사이즈
 - [-] 🟡 Boids 알고리즘 기초 프로토타입 (단순 bounding bounce 구현, 완전 Boids는 Phase 2)
@@ -192,9 +193,9 @@
   - [x] 한국 강 환경
   - [x] 아마존 환경
   - [x] 우주 환경
-- [-] 🔴 물고기 3D 모델 제작 및 임포트 (MVP 10종) — 플레이스홀더 메시 구현 완료
-  - [ ] 각 종별 GLB 모델 최적화 (500~1,500 폴리곤/마리)
-  - [ ] 유영 애니메이션 (Idle, Eat, Swim)
+- [x] 🔴 물고기 3D 모델 제작 및 임포트 (MVP 10종) — 절차적 GLB 10종 (`scripts/generate-fish-models.mjs`)
+  - [x] 각 종별 GLB 모델 (현재 절차적; 실제 폴리곤 ~500~2000)
+  - [ ] 유영 애니메이션 (Idle, Eat, Swim) — 현재는 코드 기반 swim sway만
   - [ ] LOD(Level of Detail) 적용
   - [ ] Texture Atlas 적용 (draw call 최소화)
 - [-] 🔴 Boids 알고리즘 적용 (bounding bounce 기초 구현 완료, 완전 Boids 미완)
@@ -208,7 +209,8 @@
   - [ ] 수동 조명 모드 선택 UI
 - [x] 🔴 물고기 터치/클릭 인터랙션
   - [x] 클릭 시 이름/정보 카드 팝업
-  - [ ] 먹이 뿌리기 클릭 인터랙션
+  - [x] 정보 카드에서 개별 먹이주기 (FishInfoCard 버튼)
+  - [ ] 먹이 뿌리기 클릭 인터랙션 (수면 클릭 → 먹이 파티클)
 - [ ] 🟡 Instanced Mesh 최적화 (수초 등 반복 오브젝트)
 - [ ] 🟡 저사양 모드 (30fps 제한, 셰이더 단순화)
 
@@ -241,15 +243,19 @@
 
 ### 2-4. 꾸미기 & 도감 & UI (Week 7~8)
 
-- [ ] 🔴 꾸미기 시스템
-  - [ ] 3D 드래그 배치 인터랙션 (위치 + 회전 조정)
-  - [ ] 배치 가능 오브젝트 MVP 구현
-    - [ ] 수초 8종
-    - [ ] 바위 6종
-    - [ ] 유목 4종
-    - [ ] 장식품 8종
+- [-] 🔴 꾸미기 시스템 (단계 1 완료: 카탈로그+렌더링+드래그 배치)
+  - [x] 3D 드래그 배치 인터랙션 (바닥 평면 raycaster + 카메라 잠금)
+  - [x] 회전/스케일/삭제 (DecorationModePanel 우측 버튼)
+  - [x] 선택 하이라이트 (펄스 링)
+  - [x] 배치 가능 오브젝트 MVP 구현 — **절차적 GLB 26종**
+    - [x] 수초 8종 (seagrass, kelp, coral_branch, coral_brain, anemone, bamboo_water, fern_aquatic, moss_ball)
+    - [x] 바위 6종 (pebble_pile, boulder_dark, lava_rock, slate_flat, crystal_blue, geode_purple)
+    - [x] 유목 4종 (branch_straight, root_twisted, log_hollow, stick_small)
+    - [x] 장식품 8종 (treasure_chest, pirate_ship, clay_pot, ship_wheel, pearl_shell, roman_pillar, arch_ring, bubble_chimney)
+  - [x] 데코 GLB 생성기 (`scripts/generate-decoration-models.mjs`) + 로더 (`decorationModelLoader.ts`)
+  - [x] 데코 프리뷰 페이지 (`public/decoration-preview.html` — 단일 WebGL 컨텍스트로 26종 동시 렌더)
   - [ ] 꾸미기 프리셋 저장 (수조별 3개 슬롯)
-  - [ ] 꾸미기 모드 진입/종료 UI
+  - [x] 꾸미기 모드 진입/종료 UI (TankPage 🪴 버튼 → DecorationModePanel)
 - [x] 🔴 도감 시스템
   - [x] 전체 종 목록 화면 (잠금/잠금해제 상태)
   - [x] 잠금 상태: ❓ 표시
@@ -267,7 +273,7 @@
 - [x] 🔴 상점 화면
   - [x] 알 구매 섹션
   - [x] Star Coral 충전 패키지 (5종)
-  - [ ] 꾸미기 아이템 섹션
+  - [-] 꾸미기 아이템 섹션 (현재는 꾸미기 모드 내 카탈로그에서 Pearl 직접 차감으로 통합; 상점 탭 분리는 미구현)
 - [ ] 🟡 알림 화면 (성장 완료, 부화 완료, 일일 보상)
 - [x] 🟡 설정 화면 (사운드 ON/OFF, 알림 설정, 계정, 도움말)
 

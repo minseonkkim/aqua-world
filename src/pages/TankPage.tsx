@@ -5,10 +5,12 @@ import IncubatorPanel from '@/components/IncubatorPanel';
 import FishInfoCard from '@/components/FishInfoCard';
 import HatchAnimationModal from '@/components/HatchAnimationModal';
 import TutorialOverlay, { TutorialAction } from '@/components/TutorialOverlay';
+import DecorationModePanel from '@/components/DecorationModePanel';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
-import { Fish, TankEnvironment, EggTier } from '@/types';
+import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
+import { getDecorationMeta } from '@/utils/decorationModels';
 
 interface PendingHatch {
   speciesId: string;
@@ -26,15 +28,25 @@ export default function TankPage() {
     addEggToInventory,
     setTutorialStep,
   } = useUserStore();
-  const { tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth } = useTankStore();
+  const {
+    tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth,
+    addDecoration, removeDecoration, updateDecoration,
+  } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const [toast, setToast] = useState('');
   const [selectedFishId, setSelectedFishId] = useState<string | null>(null);
   const [pendingHatch, setPendingHatch] = useState<PendingHatch | null>(null);
+  const [decorationMode, setDecorationMode] = useState(false);
+  const [selectedDecoId, setSelectedDecoId] = useState<string | null>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
   const environment: TankEnvironment = activeTank?.environment ?? 'coral_reef';
   const fishInTank = activeTank?.fish ?? [];
+  const decorationsInTank = activeTank?.decorations ?? [];
+  const selectedDecoration = useMemo(
+    () => decorationsInTank.find(d => d.id === selectedDecoId) ?? null,
+    [decorationsInTank, selectedDecoId],
+  );
 
   const selectedFish = useMemo(
     () => fishInTank.find(f => f.id === selectedFishId) ?? null,
@@ -173,13 +185,77 @@ export default function TankPage() {
 
   const remaining = 3 - (user?.feedCountToday ?? 0);
 
+  // ===== 꾸미기 모드 핸들러 =====
+  const handleAddDecoration = useCallback((modelId: string) => {
+    if (!activeTankId) return;
+    const meta = getDecorationMeta(modelId);
+    if (!meta) return;
+    const price = meta.price;
+    if (!user || user.pearl < price) {
+      showToast(`🪙 Pearl ${price - (user?.pearl ?? 0)} 부족`);
+      return;
+    }
+    useUserStore.getState().addPearl(-price);
+    const id = `deco_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newDeco: TankDecoration = {
+      id,
+      type: meta.type,
+      modelId,
+      position: { x: 0, y: -3, z: 0 }, // 바닥 중앙
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: meta.defaultScale,
+    };
+    addDecoration(activeTankId, newDeco);
+    setSelectedDecoId(id);
+    showToast(`✨ ${meta.name} 배치 · 드래그로 이동`);
+  }, [activeTankId, user, addDecoration]);
+
+  const handleMoveDecoration = useCallback((id: string, pos: { x: number; y: number; z: number }) => {
+    if (!activeTankId) return;
+    updateDecoration(activeTankId, id, { position: pos });
+  }, [activeTankId, updateDecoration]);
+
+  const handleDeleteDecoration = useCallback((id: string) => {
+    if (!activeTankId) return;
+    removeDecoration(activeTankId, id);
+    setSelectedDecoId(null);
+    showToast('🗑 데코 삭제');
+  }, [activeTankId, removeDecoration]);
+
+  const handleRotateDecoration = useCallback((id: string, deltaY: number) => {
+    if (!activeTankId) return;
+    const deco = decorationsInTank.find(d => d.id === id);
+    if (!deco) return;
+    updateDecoration(activeTankId, id, {
+      rotation: { ...deco.rotation, y: deco.rotation.y + deltaY },
+    });
+  }, [activeTankId, decorationsInTank, updateDecoration]);
+
+  const handleScaleDecoration = useCallback((id: string, delta: number) => {
+    if (!activeTankId) return;
+    const deco = decorationsInTank.find(d => d.id === id);
+    if (!deco) return;
+    const next = Math.max(0.3, Math.min(2.5, deco.scale + delta));
+    updateDecoration(activeTankId, id, { scale: next });
+  }, [activeTankId, decorationsInTank, updateDecoration]);
+
+  const handleExitDecorationMode = useCallback(() => {
+    setDecorationMode(false);
+    setSelectedDecoId(null);
+  }, []);
+
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden', background: '#000' }}>
       {/* 3D 수조 */}
       <TankScene
         environment={environment}
         fish={fishInTank}
+        decorations={decorationsInTank}
         onFishClick={handleFishClick}
+        decorationMode={decorationMode}
+        selectedDecorationId={selectedDecoId}
+        onDecorationSelect={setSelectedDecoId}
+        onDecorationMove={handleMoveDecoration}
         style={{ position: 'absolute', inset: 0 }}
       />
 
@@ -206,27 +282,41 @@ export default function TankPage() {
         </div>
       </div>
 
-      {/* 인큐베이터 패널 (왼쪽 하단) */}
-      <IncubatorPanel onCollect={handleHatchCollect} />
+      {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기 모드 중에는 숨김 */}
+      {!decorationMode && <IncubatorPanel onCollect={handleHatchCollect} />}
 
-      {/* 우측 액션 버튼 */}
-      <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {[
-          { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
-          { icon: '🪴', label: '꾸미기', action: () => showToast('Phase 2에서 오픈 예정!') },
-          { icon: '📷', label: '포토', action: () => showToast('Phase 2에서 오픈 예정!') },
-        ].map(btn => (
-          <button key={btn.icon} onClick={btn.action} style={{
-            background: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: '8px 12px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            border: '1px solid rgba(255,255,255,0.15)', minWidth: 60, color: '#fff',
-            fontSize: 10, whiteSpace: 'pre-line', textAlign: 'center',
-          }}>
-            <span style={{ fontSize: 22 }}>{btn.icon}</span>
-            {btn.label}
-          </button>
-        ))}
-      </div>
+      {/* 우측 액션 버튼 — 꾸미기 모드 중에는 숨김 */}
+      {!decorationMode && (
+        <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[
+            { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
+            { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
+            { icon: '📷', label: '포토', action: () => showToast('Phase 2에서 오픈 예정!') },
+          ].map(btn => (
+            <button key={btn.icon} onClick={btn.action} style={{
+              background: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: '8px 12px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+              border: '1px solid rgba(255,255,255,0.15)', minWidth: 60, color: '#fff',
+              fontSize: 10, whiteSpace: 'pre-line', textAlign: 'center',
+            }}>
+              <span style={{ fontSize: 22 }}>{btn.icon}</span>
+              {btn.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 꾸미기 모드 패널 */}
+      {decorationMode && (
+        <DecorationModePanel
+          selectedDecoration={selectedDecoration}
+          onAdd={handleAddDecoration}
+          onExit={handleExitDecorationMode}
+          onDelete={handleDeleteDecoration}
+          onRotate={handleRotateDecoration}
+          onScale={handleScaleDecoration}
+        />
+      )}
 
       {/* 빈 수조 안내 — 알도 없고 튜토리얼도 끝났을 때만 */}
       {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && (
