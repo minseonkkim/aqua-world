@@ -43,9 +43,6 @@ const TANK_HALF_Z = 3.5;
 const BUBBLE_COUNT = 35;
 const FOOD_LIFETIME_MS = 8000;
 
-// 플레이스홀더 물고기 색상 (수조에 물고기가 없을 때 / GLB 로드 전)
-const DEFAULT_FISH_COLORS = [0xff6b35, 0xffd700, 0x4ecdc4, 0xff6b9d, 0x95e1d3];
-
 interface BubbleData {
   speed: number;
   wobbleAmp: number;
@@ -156,23 +153,14 @@ export default function TankScene({
     fishMeshesRef.current = [];
     fishDataRef.current = [];
 
-    if (currentFish.length > 0) {
-      currentFish.forEach((f, i) => {
-        const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
-        const obj = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
-        obj.position.set(f.position.x, f.position.y, f.position.z);
-        scene.add(obj);
-        fishMeshesRef.current.push(obj);
-        fishDataRef.current.push(f);
-      });
-    } else {
-      DEFAULT_FISH_COLORS.forEach((color, i) => {
-        const obj = buildFishObject(i, null, 1, color);
-        scene.add(obj);
-        fishMeshesRef.current.push(obj);
-        fishDataRef.current.push(null);
-      });
-    }
+    currentFish.forEach((f, i) => {
+      const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
+      const obj = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
+      obj.position.set(f.position.x, f.position.y, f.position.z);
+      scene.add(obj);
+      fishMeshesRef.current.push(obj);
+      fishDataRef.current.push(f);
+    });
   }, [buildFishObject]);
 
   // 데코레이션 메시 diff 동기화 (추가/제거/transform 업데이트)

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
+import { useTankStore } from '@/store/useTankStore';
 import { signOut } from '@/services/firebase/auth';
 
 export default function SettingsPage() {
   const { user, setUser } = useUserStore();
+  const { setTanks } = useTankStore();
   const [sound, setSound] = useState(true);
   const [bgm, setBgm] = useState(true);
   const [notif, setNotif] = useState(true);
@@ -12,6 +14,7 @@ export default function SettingsPage() {
     if (!confirm('로그아웃 하시겠습니까?')) return;
     await signOut();
     setUser(null);
+    setTanks([]);
   };
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (

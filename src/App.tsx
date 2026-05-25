@@ -51,6 +51,7 @@ export default function App() {
       const { isAuthenticated: auth, user } = useUserStore.getState();
       if (auth && user && !user.id.startsWith('guest_')) {
         useUserStore.getState().setUser(null);
+        useTankStore.getState().setTanks([]);
       }
     });
     return unsubscribe;
