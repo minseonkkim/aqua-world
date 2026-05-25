@@ -8,6 +8,7 @@ import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
 import Modal from '@/components/Modal';
+import PWAPrompts from '@/components/PWAPrompts';
 
 function createDefaultTank() {
   return {
@@ -82,6 +83,7 @@ export default function App() {
         </Routes>
       </HashRouter>
       <Modal />
+      <PWAPrompts />
     </div>
   );
 }

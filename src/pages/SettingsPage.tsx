@@ -75,6 +75,17 @@ export default function SettingsPage() {
         <Row label="푸시 알림"><Toggle value={notif} onChange={setNotif} /></Row>
       </div>
 
+      <Section title="앱" />
+      <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
+        <div
+          onClick={() => window.dispatchEvent(new Event('aquaworld:show-install'))}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
+        >
+          <span style={{ fontSize: 15 }}>홈 화면에 설치</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
+        </div>
+      </div>
+
       <Section title="정보" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
         <Row label="버전"><span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>1.0.0</span></Row>

@@ -4,7 +4,7 @@
     "target": "ES2020",
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "vite-plugin-pwa/react", "vite-plugin-pwa/client"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
