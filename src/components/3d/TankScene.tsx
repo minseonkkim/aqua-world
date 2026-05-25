@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { createWaterMaterial } from './WaterShader';
 import { useCameraControls } from '@/hooks/useCameraControls';
@@ -42,6 +42,17 @@ const TANK_HALF_X = 4.5;
 const TANK_HALF_Z = 3.5;
 const BUBBLE_COUNT = 35;
 const FOOD_LIFETIME_MS = 8000;
+
+const LOADING_MESSAGES = [
+  '🐠 물고기들 수조로 입장 중...',
+  '🪸 산호 위치 잡는 중...',
+  '🌊 물 온도 맞추는 중...',
+  '💧 거품기 켜는 중...',
+  '✨ 수조 광내는 중...',
+  '🐚 조개껍데기 정리 중...',
+  '🌿 수초 다듬는 중...',
+  '🐟 물고기들 점호 중...',
+];
 
 interface BubbleData {
   speed: number;
@@ -93,6 +104,10 @@ export default function TankScene({
 
   const { bindCanvas, apply, setEnabled } = useCameraControls(cameraRef);
   const env = ENV[environment];
+
+  // 모델 프리로드 중 표시할 오버레이 — 마운트 시 한 번 랜덤 선택
+  const [loading, setLoading] = useState(true);
+  const loadingMsgRef = useRef(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
 
   // 최신 값을 ref로 보관 (이벤트 핸들러 안에서 stale closure 방지)
   const fishRef = useRef<Fish[]>(fish);
@@ -356,15 +371,15 @@ export default function TankScene({
     syncHighlight(scene);
   }, [selectedDecorationId, decorationMode, syncHighlight]);
 
-  // 마운트 시 GLB 프리로드 — 물고기/데코 병렬
+  // 마운트 시 GLB 프리로드 — 물고기/데코 병렬, 둘 다 끝나면 로딩 오버레이 숨김
   useEffect(() => {
     let cancelled = false;
-    preloadFishModels().then(() => {
+    const fishLoad = preloadFishModels().then(() => {
       if (cancelled) return;
       const scene = sceneRef.current;
       if (scene) syncFishMeshes(scene);
     });
-    preloadDecorationModels().then(() => {
+    const decoLoad = preloadDecorationModels().then(() => {
       if (cancelled) return;
       const scene = sceneRef.current;
       if (!scene) return;
@@ -372,6 +387,9 @@ export default function TankScene({
       decoMeshesRef.current.forEach((mesh) => scene.remove(mesh));
       decoMeshesRef.current.clear();
       syncDecorationMeshes(scene);
+    });
+    Promise.all([fishLoad, decoLoad]).then(() => {
+      if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
   }, [syncFishMeshes, syncDecorationMeshes]);
@@ -712,9 +730,34 @@ export default function TankScene({
   }, [init, animate, bindCanvas, handlePointerDown, handlePointerMove, handlePointerUp]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none', ...style }}
-    />
+    <div style={{ position: 'relative', overflow: 'hidden', ...style }}>
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none' }}
+      />
+      <div
+        style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 16,
+          background: `linear-gradient(180deg, ${env.bg} 0%, #000 100%)`,
+          color: '#fff', fontSize: 15, fontWeight: 500,
+          opacity: loading ? 1 : 0,
+          pointerEvents: loading ? 'auto' : 'none',
+          transition: 'opacity 600ms ease',
+        }}
+      >
+        <div
+          style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: '3px solid rgba(255,255,255,0.15)',
+            borderTopColor: '#4dd0e1',
+            animation: 'tankscene-spin 0.9s linear infinite',
+          }}
+        />
+        <div style={{ opacity: 0.9, letterSpacing: 0.3 }}>{loadingMsgRef.current}</div>
+        <style>{`@keyframes tankscene-spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    </div>
   );
 }
