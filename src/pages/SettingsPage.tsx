@@ -53,7 +53,7 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="page" style={{ display: 'flex', flexDirection: 'column' }}>
+    <div className="page">
       <div className="page-header">설정</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12 }}>
