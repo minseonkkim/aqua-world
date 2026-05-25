@@ -36,7 +36,7 @@ export default function TankPage() {
   const {
     tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
-    savePreset, loadPreset, deletePreset,
+    savePreset, loadPreset, deletePreset, setLightMode,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const [toast, setToast] = useState('');
@@ -45,6 +45,7 @@ export default function TankPage() {
   const [decorationMode, setDecorationMode] = useState(false);
   const [selectedDecoId, setSelectedDecoId] = useState<string | null>(null);
   const [photoMode, setPhotoMode] = useState(false);
+  const [lightPopupOpen, setLightPopupOpen] = useState(false);
   const tankSceneRef = useRef<TankSceneHandle>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
@@ -368,17 +369,62 @@ export default function TankPage() {
             { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
             { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
             { icon: '📷', label: '포토', action: () => setPhotoMode(true) },
+            {
+              icon: LIGHT_MODE_ICON[activeTank?.lightMode ?? 'auto'],
+              label: '조명',
+              action: () => setLightPopupOpen(v => !v),
+              active: lightPopupOpen,
+            },
           ].map(btn => (
             <button key={btn.icon} onClick={btn.action} style={{
-              background: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: '8px 12px',
+              background: btn.active ? 'rgba(77, 208, 225, 0.25)' : 'rgba(0,0,0,0.6)',
+              borderRadius: 12, padding: '8px 12px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-              border: '1px solid rgba(255,255,255,0.15)', minWidth: 60, color: '#fff',
+              border: `1px solid ${btn.active ? 'rgba(77, 208, 225, 0.7)' : 'rgba(255,255,255,0.15)'}`,
+              minWidth: 60, color: '#fff',
               fontSize: 10, whiteSpace: 'pre-line', textAlign: 'center',
             }}>
               <span style={{ fontSize: 22 }}>{btn.icon}</span>
               {btn.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* 조명 모드 팝업 — ☀️ 버튼 좌측에 배치 */}
+      {lightPopupOpen && !decorationMode && !photoMode && activeTankId && (
+        <div style={{
+          position: 'absolute', right: 84, bottom: 80,
+          display: 'flex', flexDirection: 'column', gap: 4,
+          background: 'rgba(10, 22, 40, 0.95)', borderRadius: 12, padding: 6,
+          border: '1px solid rgba(77, 208, 225, 0.4)',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+          zIndex: 60,
+        }}>
+          {(['auto', 'day', 'sunset', 'night'] as const).map(mode => {
+            const isActive = (activeTank?.lightMode ?? 'auto') === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => {
+                  setLightMode(activeTankId, mode);
+                  setLightPopupOpen(false);
+                  showToast(`${LIGHT_MODE_ICON[mode]} ${LIGHT_MODE_LABEL[mode]} 모드`);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: isActive ? 'rgba(77, 208, 225, 0.25)' : 'transparent',
+                  border: `1px solid ${isActive ? 'rgba(77, 208, 225, 0.6)' : 'transparent'}`,
+                  borderRadius: 8, padding: '6px 12px',
+                  color: '#fff', fontSize: 12, fontWeight: isActive ? 700 : 500,
+                  cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 100,
+                }}
+              >
+                <span style={{ fontSize: 18 }}>{LIGHT_MODE_ICON[mode]}</span>
+                <span>{LIGHT_MODE_LABEL[mode]}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -471,3 +517,11 @@ function stageLabel(stage: string): string {
     default: return stage;
   }
 }
+
+const LIGHT_MODE_ICON: Record<'auto' | 'day' | 'sunset' | 'night', string> = {
+  auto: '🌗', day: '☀️', sunset: '🌅', night: '🌙',
+};
+
+const LIGHT_MODE_LABEL: Record<'auto' | 'day' | 'sunset' | 'night', string> = {
+  auto: '자동 (시간)', day: '낮', sunset: '노을', night: '밤',
+};

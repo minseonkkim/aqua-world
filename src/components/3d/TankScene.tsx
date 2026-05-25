@@ -102,8 +102,14 @@ function TankSceneImpl({
   const draggingDecoRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
 
   // 최신 lightMode/onSurfaceFeed를 ref로 보관 (animate/handler 안에서 최신 값 참조)
+  // lightMode는 ref 갱신 후 즉시 applyDayNight 호출 — 5초 throttle 우회
   const lightModeRef = useRef<LightMode>(lightMode);
-  useEffect(() => { lightModeRef.current = lightMode; }, [lightMode]);
+  const applyDayNightRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    lightModeRef.current = lightMode;
+    applyDayNightRef.current?.();
+    lastLightTickRef.current = performance.now(); // 다음 throttled tick 리셋
+  }, [lightMode]);
   const onSurfaceFeedRef = useRef(onSurfaceFeed);
   useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
 
@@ -613,6 +619,9 @@ function TankSceneImpl({
     renderer.setClearColor(currentBg, 1);
     if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(currentBg);
   }, [computeDayFactor, env.bg]);
+
+  // applyDayNight ref 동기화 — lightMode 변경 시 즉시 호출 가능하도록
+  useEffect(() => { applyDayNightRef.current = applyDayNight; }, [applyDayNight]);
 
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
