@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import TankScene from '@/components/3d/TankScene';
+import TankScene, { TankSceneHandle } from '@/components/3d/TankScene';
 import DailyRewardModal from '@/components/DailyRewardModal';
 import IncubatorPanel from '@/components/IncubatorPanel';
 import FishInfoCard from '@/components/FishInfoCard';
 import HatchAnimationModal from '@/components/HatchAnimationModal';
 import TutorialOverlay, { TutorialAction } from '@/components/TutorialOverlay';
 import DecorationModePanel from '@/components/DecorationModePanel';
+import PhotoModeOverlay from '@/components/PhotoModeOverlay';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
@@ -43,6 +44,8 @@ export default function TankPage() {
   const [pendingHatch, setPendingHatch] = useState<PendingHatch | null>(null);
   const [decorationMode, setDecorationMode] = useState(false);
   const [selectedDecoId, setSelectedDecoId] = useState<string | null>(null);
+  const [photoMode, setPhotoMode] = useState(false);
+  const tankSceneRef = useRef<TankSceneHandle>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
   const environment: TankEnvironment = activeTank?.environment ?? 'coral_reef';
@@ -314,22 +317,24 @@ export default function TankPage() {
 
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden', background: '#000' }}>
-      {/* 3D 수조 */}
+      {/* 3D 수조 — 포토 모드 중에는 인터랙션(클릭/먹이) 비활성, 카메라 컨트롤은 유지 */}
       <TankScene
+        ref={tankSceneRef}
         environment={environment}
         fish={fishInTank}
         decorations={decorationsInTank}
-        onFishClick={handleFishClick}
+        onFishClick={photoMode ? undefined : handleFishClick}
         decorationMode={decorationMode}
         selectedDecorationId={selectedDecoId}
         onDecorationSelect={setSelectedDecoId}
         onDecorationMove={handleMoveDecoration}
         lightMode={activeTank?.lightMode ?? 'auto'}
-        onSurfaceFeed={handleSurfaceFeed}
+        onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
         style={{ position: 'absolute', inset: 0 }}
       />
 
-      {/* 상단 HUD */}
+      {/* 상단 HUD — 포토 모드 중에는 숨김 */}
+      {!photoMode && (
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         padding: 'calc(var(--safe-top) + 12px) 12px 8px',
@@ -351,17 +356,18 @@ export default function TankPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기 모드 중에는 숨김 */}
-      {!decorationMode && <IncubatorPanel onCollect={handleHatchCollect} />}
+      {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기/포토 모드 중에는 숨김 */}
+      {!decorationMode && !photoMode && <IncubatorPanel onCollect={handleHatchCollect} />}
 
-      {/* 우측 액션 버튼 — 꾸미기 모드 중에는 숨김 */}
-      {!decorationMode && (
+      {/* 우측 액션 버튼 — 꾸미기/포토 모드 중에는 숨김 */}
+      {!decorationMode && !photoMode && (
         <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
             { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
-            { icon: '📷', label: '포토', action: () => showToast('Phase 2에서 오픈 예정!') },
+            { icon: '📷', label: '포토', action: () => setPhotoMode(true) },
           ].map(btn => (
             <button key={btn.icon} onClick={btn.action} style={{
               background: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: '8px 12px',
@@ -393,8 +399,17 @@ export default function TankPage() {
         />
       )}
 
+      {/* 포토 모드 오버레이 */}
+      {photoMode && (
+        <PhotoModeOverlay
+          onCapture={() => tankSceneRef.current?.captureFrame() ?? null}
+          onExit={() => setPhotoMode(false)}
+          onToast={showToast}
+        />
+      )}
+
       {/* 빈 수조 안내 — 알도 없고 튜토리얼도 끝났을 때만 */}
-      {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && (
+      {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && !photoMode && (
         <div style={{
           position: 'absolute', bottom: 140, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.65)', borderRadius: 16, padding: '12px 20px',

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 import { createWaterMaterial } from './WaterShader';
 import { useCameraControls } from '@/hooks/useCameraControls';
@@ -9,6 +9,11 @@ import { buildDecorationMesh, getDecorationMeta } from '@/utils/decorationModels
 import { preloadDecorationModels } from '@/utils/decorationModelLoader';
 
 export type LightMode = 'auto' | 'day' | 'night' | 'sunset';
+
+export interface TankSceneHandle {
+  /** 현재 프레임을 강제 렌더 후 PNG dataURL로 반환. 실패 시 null. */
+  captureFrame: () => string | null;
+}
 
 interface Props {
   environment: TankEnvironment;
@@ -69,12 +74,12 @@ interface FoodParticle {
   eaten: boolean;
 }
 
-export default function TankScene({
+function TankSceneImpl({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
   onDecorationSelect, onDecorationMove,
   lightMode = 'auto', onSurfaceFeed, style,
-}: Props) {
+}: Props, ref: React.Ref<TankSceneHandle>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -104,6 +109,19 @@ export default function TankScene({
 
   const { bindCanvas, apply, setEnabled } = useCameraControls(cameraRef);
   const env = ENV[environment];
+
+  // 부모에서 호출 가능한 캡처 — preserveDrawingBuffer 없이도 같은 task에서 render+toDataURL 연속 호출 시 동작
+  useImperativeHandle(ref, () => ({
+    captureFrame: () => {
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!renderer || !scene || !camera || !canvas) return null;
+      renderer.render(scene, camera);
+      return canvas.toDataURL('image/png');
+    },
+  }), []);
 
   // 모델 프리로드 중 표시할 오버레이 — 마운트 시 한 번 랜덤 선택
   const [loading, setLoading] = useState(true);
@@ -761,3 +779,6 @@ export default function TankScene({
     </div>
   );
 }
+
+const TankScene = forwardRef<TankSceneHandle, Props>(TankSceneImpl);
+export default TankScene;
