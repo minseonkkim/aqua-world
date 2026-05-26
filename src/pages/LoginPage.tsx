@@ -101,6 +101,11 @@ export default function LoginPage() {
 
       claimDailyLogin();
     } catch (err) {
+      const code = (err as { code?: string })?.code;
+      const SILENT_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/popup-blocked'];
+      if (code && SILENT_CODES.includes(code)) {
+        return;
+      }
       console.error('[Google Login]', err);
       const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       await useModalStore.getState().alert({
