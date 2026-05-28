@@ -126,7 +126,7 @@
   - [x] 꾸미기 모드 진입 시 카메라 잠금/재개 (`setEnabled`)
 - [x] 🔴 기초 물 셰이더 구현 (물결, 투명도, 코스틱스 shimmer)
 - [x] 🟡 ResizeObserver 기반 캔버스 반응형 리사이즈
-- [-] 🟡 Boids 알고리즘 기초 프로토타입 (단순 bounding bounce 구현, 완전 Boids는 Phase 2)
+- [x] 🟡 Boids 알고리즘 기초 프로토타입 (Phase 2에서 완전 Boids로 고도화 완료)
 - [ ] 🟡 파티클 시스템 기초 (거품 효과)
 
 ### 1-3. 성능 벤치마크
@@ -201,7 +201,7 @@
   - [ ] 유영 애니메이션 (Idle, Eat, Swim) — 현재는 코드 기반 swim sway만
   - [ ] LOD(Level of Detail) 적용
   - [ ] Texture Atlas 적용 (draw call 최소화)
-- [-] 🔴 Boids 알고리즘 적용 (bounding bounce 기초 구현 완료, 완전 Boids 미완)
+- [x] 🔴 Boids 알고리즘 적용 (분리·정렬·응집 3원칙 구현, 같은 종 스쿨링 + 경계 회피 조향, 먹이 추적 우선)
 - [x] 🔴 물 셰이더 완성
   - [x] 수면 물결 효과
   - [x] 빛의 굴절 (코스틱스 shimmer)

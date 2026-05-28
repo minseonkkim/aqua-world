@@ -44,9 +44,29 @@ const ENV: Record<TankEnvironment, { water: number; ambient: number; bg: string 
 const FLOOR_Y = -3;
 const WATER_Y = 2.9;
 const TANK_HALF_X = 4.5;
+const TANK_HALF_Y = 2.5;
 const TANK_HALF_Z = 3.5;
 const BUBBLE_COUNT = 35;
 const FOOD_LIFETIME_MS = 8000;
+
+// ===== Boids 무리 행동 파라미터 =====
+const BOID_PERCEPTION = 1.8;      // 같은 종 이웃 인지 반경 (정렬/응집)
+const BOID_SEPARATION = 0.65;     // 충돌 회피 반경 (전 종)
+const BOID_MAX_SPEED = 0.028;     // 프레임당 최대 이동량
+const BOID_MIN_SPEED = 0.006;     // 정지 방지 최소 속도
+const BOID_MAX_FORCE = 0.0016;    // 조향력 한계 (급회전 방지)
+const BOID_W_ALIGN = 0.9;
+const BOID_W_COHESION = 0.7;
+const BOID_W_SEPARATION = 1.8;
+const BOID_BOUND_FORCE = 0.0012;  // 벽 근처에서 중심 쪽으로 미는 힘
+const BOID_BOUND_MARGIN = 0.7;    // 벽으로부터 이 거리 안에서 조향 시작
+
+// 벡터 길이를 max로 제한 (in-place)
+function limitVec(v: THREE.Vector3, max: number): THREE.Vector3 {
+  const len = v.length();
+  if (len > max && len > 0) v.multiplyScalar(max / len);
+  return v;
+}
 
 const LOADING_MESSAGES = [
   '🐠 물고기들 수조로 입장 중...',
@@ -181,6 +201,7 @@ function TankSceneImpl({
       );
       wrapper.userData.phase = Math.random() * Math.PI * 2;
       wrapper.userData.fishIndex = index;
+      wrapper.userData.speciesId = speciesId;
       return wrapper;
     },
     [buildPlaceholderMesh],
@@ -650,41 +671,112 @@ function TankSceneImpl({
       }
     }
 
-    fishMeshesRef.current.forEach(f => {
+    // ===== Boids 무리 행동 + 먹이 추적 =====
+    // 프레임당 한 번만 생성하는 스크래치 벡터 (GC 부담 최소화)
+    const align = new THREE.Vector3();
+    const cohesion = new THREE.Vector3();
+    const separation = new THREE.Vector3();
+    const accel = new THREE.Vector3();
+    const tmp = new THREE.Vector3();
+    const meshes = fishMeshesRef.current;
+
+    for (let i = 0; i < meshes.length; i++) {
+      const f = meshes[i];
       const vel = f.userData.vel as THREE.Vector3;
-      // 가까운 먹이 추적
+      const speciesId = f.userData.speciesId as string | null;
+
+      // 1) 가까운 먹이 추적 — 있으면 무리 행동보다 우선
       let nearestFood: FoodParticle | null = null;
       let nearestDist = 2.2;
       for (const fp of foods) {
         if (fp.eaten) continue;
-        const dx = fp.mesh.position.x - f.position.x;
-        const dy = fp.mesh.position.y - f.position.y;
-        const dz = fp.mesh.position.z - f.position.z;
-        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const d = fp.mesh.position.distanceTo(f.position);
         if (d < nearestDist) { nearestDist = d; nearestFood = fp; }
       }
+
       if (nearestFood) {
-        const dir = nearestFood.mesh.position.clone().sub(f.position).normalize().multiplyScalar(0.025);
-        // 부드럽게 vel 보간
-        vel.lerp(dir, 0.15);
+        tmp.copy(nearestFood.mesh.position).sub(f.position).normalize().multiplyScalar(BOID_MAX_SPEED);
+        vel.lerp(tmp, 0.18);
         if (nearestDist < 0.25) {
           nearestFood.eaten = true;
-          const scene = sceneRef.current;
-          scene?.remove(nearestFood.mesh);
+          sceneRef.current?.remove(nearestFood.mesh);
           nearestFood.mesh.geometry.dispose();
           const idx = foods.indexOf(nearestFood);
           if (idx >= 0) foods.splice(idx, 1);
         }
+      } else {
+        // 2) Boids 3원칙 — 같은 종끼리 정렬·응집, 모든 종과 분리
+        align.set(0, 0, 0);
+        cohesion.set(0, 0, 0);
+        separation.set(0, 0, 0);
+        accel.set(0, 0, 0);
+        let flockCount = 0;
+        let sepCount = 0;
+        for (let j = 0; j < meshes.length; j++) {
+          if (j === i) continue;
+          const o = meshes[j];
+          const d = f.position.distanceTo(o.position);
+          if (d < 1e-4) continue;
+          if (d < BOID_SEPARATION) {
+            // 거리 제곱 반비례로 가까울수록 강하게 밀어냄
+            tmp.copy(f.position).sub(o.position).divideScalar(d * d);
+            separation.add(tmp);
+            sepCount++;
+          }
+          if (d < BOID_PERCEPTION && o.userData.speciesId === speciesId) {
+            align.add(o.userData.vel as THREE.Vector3);
+            cohesion.add(o.position);
+            flockCount++;
+          }
+        }
+
+        if (flockCount > 0) {
+          // 정렬: 이웃 평균 속도 방향으로
+          align.divideScalar(flockCount).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          accel.addScaledVector(limitVec(align, BOID_MAX_FORCE), BOID_W_ALIGN);
+          // 응집: 이웃 무게중심 쪽으로
+          cohesion.divideScalar(flockCount).sub(f.position).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          accel.addScaledVector(limitVec(cohesion, BOID_MAX_FORCE), BOID_W_COHESION);
+        }
+        if (sepCount > 0) {
+          separation.divideScalar(sepCount).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          accel.addScaledVector(limitVec(separation, BOID_MAX_FORCE), BOID_W_SEPARATION);
+        }
+        vel.add(accel);
       }
 
+      // 3) 경계 회피 — 벽 근처에서 중심 쪽으로 부드럽게 조향
+      const m = BOID_BOUND_MARGIN;
+      if (f.position.x >  TANK_HALF_X - m) vel.x -= BOID_BOUND_FORCE;
+      else if (f.position.x < -TANK_HALF_X + m) vel.x += BOID_BOUND_FORCE;
+      if (f.position.y >  TANK_HALF_Y - m) vel.y -= BOID_BOUND_FORCE;
+      else if (f.position.y < -TANK_HALF_Y + m) vel.y += BOID_BOUND_FORCE;
+      if (f.position.z >  TANK_HALF_Z - m) vel.z -= BOID_BOUND_FORCE;
+      else if (f.position.z < -TANK_HALF_Z + m) vel.z += BOID_BOUND_FORCE;
+
+      // 4) 속도 제한 (최소/최대)
+      const speed = vel.length();
+      if (speed > BOID_MAX_SPEED) vel.multiplyScalar(BOID_MAX_SPEED / speed);
+      else if (speed > 1e-5 && speed < BOID_MIN_SPEED) vel.multiplyScalar(BOID_MIN_SPEED / speed);
+
+      // 5) 위치 갱신 + 수직 미세 흔들림
       f.position.x += vel.x;
-      f.position.y += vel.y + Math.sin(t * 1.5 + f.userData.phase) * 0.003;
+      f.position.y += vel.y + Math.sin(t * 1.5 + f.userData.phase) * 0.002;
       f.position.z += vel.z;
-      if (Math.abs(f.position.x) > 4.5) vel.x *= -1;
-      if (Math.abs(f.position.y) > 2.5) vel.y *= -1;
-      if (Math.abs(f.position.z) > 3.5) vel.z *= -1;
-      if (vel.length() > 0.001) f.rotation.y = Math.atan2(vel.x, vel.z);
-    });
+
+      // 6) 하드 클램프 — 수조 밖 이탈 방지 (안전망)
+      f.position.x = THREE.MathUtils.clamp(f.position.x, -TANK_HALF_X, TANK_HALF_X);
+      f.position.y = THREE.MathUtils.clamp(f.position.y, -TANK_HALF_Y, TANK_HALF_Y);
+      f.position.z = THREE.MathUtils.clamp(f.position.z, -TANK_HALF_Z, TANK_HALF_Z);
+
+      // 7) 진행 방향으로 부드럽게 회전 (최단 각도 보간)
+      if (vel.lengthSq() > 1e-6) {
+        const targetYaw = Math.atan2(vel.x, vel.z);
+        let delta = targetYaw - f.rotation.y;
+        delta = Math.atan2(Math.sin(delta), Math.cos(delta));
+        f.rotation.y += delta * 0.12;
+      }
+    }
 
     // 거품 상승 + 좌우 흔들림 + 수면 도달 시 리셋
     bubblesRef.current.forEach(b => {
