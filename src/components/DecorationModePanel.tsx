@@ -49,18 +49,21 @@ export default function DecorationModePanel({
       <div style={{
         position: 'absolute', top: 'calc(var(--safe-top) + 56px)', left: '50%',
         transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8,
+        flexWrap: 'nowrap', whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 16px)',
         background: 'rgba(20, 30, 50, 0.85)', borderRadius: 24, padding: '6px 14px',
         border: '1px solid rgba(77, 208, 225, 0.5)', backdropFilter: 'blur(8px)',
         zIndex: 50,
       }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#4dd0e1' }}>🪴 꾸미기 모드</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#4dd0e1', whiteSpace: 'nowrap', flexShrink: 0 }}>🪴 꾸미기 모드</span>
         <button onClick={() => setPresetsOpen(v => !v)} style={{
           background: presetsOpen ? 'rgba(77, 208, 225, 0.3)' : 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 16,
           padding: '4px 12px', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          whiteSpace: 'nowrap', flexShrink: 0,
         }}>💾 프리셋</button>
         <button onClick={onExit} style={{
           background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 16,
           padding: '4px 12px', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          whiteSpace: 'nowrap', flexShrink: 0,
         }}>완료</button>
       </div>
 
