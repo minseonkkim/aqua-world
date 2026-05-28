@@ -11,24 +11,16 @@ import { isConfigured } from '@/services/firebase/config';
 
 const DEBOUNCE_MS = 2000;
 
-let reverting = false;
-
 async function revertFromServer(uid: string) {
-  if (reverting) return;
-  reverting = true;
   try {
     const [serverUser, serverTanks] = await Promise.all([
       loadUserFromFirestore(uid),
       loadUserTanks(uid),
     ]);
-    // 서버 값을 Zustand(=localStorage)에 먼저 기록한 뒤 리로드해서
-    // 3D 씬 등 명령형 렌더링 화면까지 전부 서버 진실값으로 다시 그린다.
     if (serverUser) useUserStore.getState().setUser(serverUser);
-    useTankStore.getState().setTanks(serverTanks);
-    console.warn('[Sync] 서버 규칙 위반 감지 — 서버 값으로 복원 후 새로고침합니다.');
-    window.location.reload();
+    if (serverTanks.length > 0) useTankStore.getState().setTanks(serverTanks);
+    console.warn('[Sync] 서버 규칙 위반 감지 — 로컬 상태를 서버 값으로 복원했습니다.');
   } catch (err) {
-    reverting = false;
     console.error('[Sync] 서버 복원 실패:', err);
   }
 }
