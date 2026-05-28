@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ──────────────────────────────────────────────────────────────────
+    // 헬퍼
+    // ──────────────────────────────────────────────────────────────────
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // users/{uid}
+    //  - 본인만 읽기
+    //  - 본인만 쓰기 + 값 검증 (콘솔 조작 차단)
+    // ──────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      // 신규 가입: 초기값 강제
+      allow create: if isOwner(uid)
+        && request.resource.data.id == uid
+        && request.resource.data.pearl is number
+        && request.resource.data.pearl <= 5000
+        && request.resource.data.starCoral is number
+        && request.resource.data.starCoral <= 500
+        && request.resource.data.level == 1
+        && request.resource.data.experience == 0
+        && request.resource.data.collectedSpecies is list
+        && request.resource.data.collectedSpecies.size() == 0
+        && request.resource.data.inventory is list
+        && request.resource.data.inventory.size() <= 3;
+
+      // 업데이트: 변경 폭 검증
+      allow update: if isOwner(uid)
+        && request.resource.data.id == resource.data.id
+
+        // ── 재화: 절대 캡 (9_999_999 차단)
+        && request.resource.data.pearl is number
+        && request.resource.data.pearl >= 0
+        && request.resource.data.pearl <= 1000000
+        && request.resource.data.starCoral is number
+        && request.resource.data.starCoral >= 0
+        && request.resource.data.starCoral <= 100000
+        // 한 번에 얻을 수 있는 양 제한 (debounce 2s 안에서)
+        && (request.resource.data.pearl - resource.data.pearl) <= 100000
+        && (request.resource.data.starCoral - resource.data.starCoral) <= 10000
+
+        // ── 레벨: 99 캡, 한 번에 +5까지만, 절대 내려갈 수 없음
+        && request.resource.data.level is number
+        && request.resource.data.level >= resource.data.level
+        && request.resource.data.level - resource.data.level <= 5
+        && request.resource.data.level <= 99
+
+        // ── 경험치
+        && request.resource.data.experience is number
+        && request.resource.data.experience >= 0
+
+        // ── 타임스탬프: 단조 증가만 (= 0 으로 리셋 차단)
+        && request.resource.data.lastLoginAt >= resource.data.lastLoginAt
+        && request.resource.data.lastFeedResetAt >= resource.data.lastFeedResetAt
+
+        // ── feedCountToday: 같은 날이면 줄어들 수 없음
+        && (request.resource.data.lastFeedResetAt > resource.data.lastFeedResetAt
+            || request.resource.data.feedCountToday >= resource.data.feedCountToday)
+
+        // ── 도감: append-only (배열을 통째로 갈아끼우는 치트 차단)
+        && request.resource.data.collectedSpecies is list
+        && request.resource.data.collectedSpecies.size() >= resource.data.collectedSpecies.size()
+        && (request.resource.data.collectedSpecies.size() - resource.data.collectedSpecies.size()) <= 3
+
+        // ── 마일스톤: append-only (= 0 으로 리셋 차단)
+        && request.resource.data.get('claimedCompendiumMilestones', []) is list
+        && request.resource.data.get('claimedCompendiumMilestones', []).size()
+           >= resource.data.get('claimedCompendiumMilestones', []).size()
+
+        // ── 인벤토리(알): 한 번에 +5 까지, 총 50 개 캡 (20 개 즉시 부화 치트 차단)
+        && request.resource.data.inventory is list
+        && request.resource.data.inventory.size() <= 50
+        && (request.resource.data.inventory.size() - resource.data.inventory.size()) <= 5
+
+        // ── 튜토리얼: 0~10 범위 (999 같은 이상값 차단)
+        && (!('tutorialStep' in request.resource.data)
+            || (request.resource.data.tutorialStep is int
+                && request.resource.data.tutorialStep >= -1
+                && request.resource.data.tutorialStep <= 10));
+
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // tanks/{tankId}
+    //  - 본인 어항만 읽기/쓰기 + 검증
+    // ──────────────────────────────────────────────────────────────────
+    match /tanks/{tankId} {
+      allow read: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.fish is list
+        && request.resource.data.fish.size() <= 10
+        && request.resource.data.decorations is list
+        && request.resource.data.decorations.size() <= 50;
+
+      allow update: if request.auth != null
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+
+        // ── 물고기: 한 번에 ±3 마리까지 (10마리 즉시 추가 치트 차단)
+        && request.resource.data.fish is list
+        && request.resource.data.fish.size() <= 30
+        && (request.resource.data.fish.size() - resource.data.fish.size()) <= 3
+        && (resource.data.fish.size() - request.resource.data.fish.size()) <= 3
+
+        // ── 데코: 배치 작업 고려해서 ±20
+        && request.resource.data.decorations is list
+        && request.resource.data.decorations.size() <= 100
+        && (request.resource.data.decorations.size() - resource.data.decorations.size()) <= 20
+        && (resource.data.decorations.size() - request.resource.data.decorations.size()) <= 20
+
+        // ── 청결도: 0~100
+        && request.resource.data.cleanliness is number
+        && request.resource.data.cleanliness >= 0
+        && request.resource.data.cleanliness <= 100;
+
+      allow delete: if false;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 그 외 경로 전부 차단
+    // ──────────────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
