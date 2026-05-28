@@ -8,9 +8,15 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 button { cursor: pointer; border: none; background: none; color: inherit; font: inherit; }
-input, textarea { font: inherit; }
+input, textarea {
+  font: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
 img { display: block; max-width: 100%; }
 
 /* ── App shell: mobile-width centered ── */
