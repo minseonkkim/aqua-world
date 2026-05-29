@@ -181,6 +181,15 @@
     - [x] fish (Tank.fish 임베디드 배열로 저장)
     - [x] inventory (User.inventory 임베디드 배열로 저장)
     - [x] eggs (User.inventory 임베디드 배열로 저장)
+  - [x] Cloud Functions 서버 권위 경제 로직 (v2, asia-northeast3) — 재화·아이템·뽑기 변경은 서버에서만 실행, Firestore 직접 쓰기는 보안 규칙 차단
+    - [x] bootstrapUser (신규 유저+기본 수조 생성)
+    - [x] claimDailyReward (일일 보상, 트랜잭션 + 날짜 검증)
+    - [x] purchaseEgg / startHatching / hatchEgg (서버 종 추첨 rollSpecies, 도감 자동 등록)
+    - [x] feedFish / sprinkleFeed (일일 제한 + 성장 가속 + Pearl 보상)
+    - [x] exchangePearl / purchaseStarCoral / purchaseDecoration (재화 검증·차감)
+    - [x] claimMilestone (도감 진행도 서버 재계산 후 보상)
+    - [ ] purchaseStarCoral 실제 결제(IAP) 영수증 검증 (현재 검증 없이 지급)
+  - [x] 서버 경제 동작에 낙관적 UI 적용 (요청 즉시 UI 반영, 실패 시 롤백 — 체감 지연 제거)
   - [-] Firebase Storage 설정 (SDK init 완료, 업/다운로드 로직 미구현)
 - [x] 🔴 라우팅 구조 구현 (React Router v6)
   - [x] HashRouter (온보딩, 로그인)
@@ -277,7 +286,10 @@
   - [x] 알 구매 섹션
   - [x] Star Coral 충전 패키지 (5종)
   - [x] 꾸미기 아이템 섹션 (ShopPage 알/꾸미기/Star Coral 3탭, ?tab=decoration URL 동기화, 미보유 클릭 시 자동 라우팅)
-- [ ] 🟡 알림 화면 (성장 완료, 부화 완료, 일일 보상)
+- [x] 🟡 인앱 알림 센터 (성장 완료, 부화 완료, 일일 보상)
+  - [x] useNotificationStore (persist, 최대 50건, id 기반 중복 방지)
+  - [x] NotificationPanel UI (TankPage 🔔 버튼 + 안읽음 배지, 모두읽음/삭제/전체삭제)
+  - [x] 성장·부화·일일 보상 이벤트 발생 시 인앱 알림 자동 적재
 - [x] 🟡 설정 화면 (사운드 ON/OFF, 알림 설정, 계정, 도움말)
 
 ### 2-5. 외부 SDK 연동 & 마무리 (Week 9~10)
@@ -297,11 +309,15 @@
   - [x] 프레임 3종 구현 (없음/폴라로이드/그라데이션)
   - [x] 앱 워터마크 자동 삽입 (🐟 AquaWorld)
   - [x] Web Share API로 공유 (+ 다운로드 폴백)
-- [ ] 🔴 웹 푸시 알림 (Web Push API + FCM)
-  - [ ] 부화 완료 알림
-  - [ ] 물고기 성장 완료 알림
-  - [ ] 일일 보상 리마인더
-  - [ ] iOS 16.4+ 웹 푸시 지원 확인
+- [-] 🔴 웹 푸시 알림 (Web Push API + FCM)
+  - [x] FCM 전용 SW(firebase-messaging-sw.js) 별도 스코프 등록 (Workbox SW와 충돌 회피)
+  - [x] 권한 요청 → 토큰 발급 → 서버 등록 플로우 (registerPushToken / unregisterPushToken)
+  - [x] 설정 화면 푸시 알림 ON/OFF 토글 (SettingsPage)
+  - [x] 포그라운드 메시지 → 인앱 알림함 적재 (onMessage)
+  - [x] 부화 완료 알림 (notifyReadyHatches 스케줄러 1분 주기, nextHatchAt 인덱스 + 무효 토큰 정리) — ⚠️ Blaze 요금제 필요
+  - [ ] 물고기 성장 완료 알림 (백그라운드 푸시 — 현재 인앱 알림만)
+  - [ ] 일일 보상 리마인더 (백그라운드 푸시 — 현재 인앱 알림만)
+  - [ ] iOS 16.4+ 웹 푸시 실기기 지원 확인 (isSupported 가드만 적용, 실기기 미검증)
 - [ ] 🔴 분석 및 모니터링 SDK 연동
   - [ ] Firebase Analytics 이벤트 정의 및 구현 (핵심 20개 이벤트)
   - [ ] Amplitude 코호트 분석 세팅
