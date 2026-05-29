@@ -8,9 +8,11 @@ import HatchAnimationModal from '@/components/HatchAnimationModal';
 import TutorialOverlay, { TutorialAction } from '@/components/TutorialOverlay';
 import DecorationModePanel from '@/components/DecorationModePanel';
 import PhotoModeOverlay from '@/components/PhotoModeOverlay';
+import NotificationPanel from '@/components/NotificationPanel';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import {
@@ -45,6 +47,9 @@ export default function TankPage() {
     savePreset, loadPreset, deletePreset, setLightMode,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
+  const pushNotification = useNotificationStore(s => s.push);
+  const unreadCount = useNotificationStore(s => s.notifications.filter(n => !n.read).length);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [toast, setToast] = useState('');
   const [selectedFishId, setSelectedFishId] = useState<string | null>(null);
   const [pendingHatch, setPendingHatch] = useState<PendingHatch | null>(null);
@@ -75,23 +80,67 @@ export default function TankPage() {
 
   const handleFishClick = useCallback((f: Fish) => setSelectedFishId(f.id), []);
 
-  // 주기적 성장 틱 (30초마다)
+  // 주기적 성장 틱 (30초마다) — 성장/부화 완료 시 토스트 + 알림 생성
   useEffect(() => {
     if (!activeTankId) return;
     const tick = () => {
       const advancedIds = tickFishGrowth(activeTankId);
       if (advancedIds.length > 0) {
-        const names = advancedIds
-          .map(id => fishInTank.find(f => f.id === id)?.name)
-          .filter(Boolean)
-          .join(', ');
-        if (names) showToast(`🌱 ${names} 성장!`);
+        const updated = useTankStore.getState().tanks.find(t => t.id === activeTankId)?.fish ?? [];
+        const names: string[] = [];
+        advancedIds.forEach(id => {
+          const f = updated.find(x => x.id === id);
+          if (!f) return;
+          names.push(f.name);
+          pushNotification({
+            id: `growth_${id}_${f.growthStage}`,
+            type: 'growth',
+            emoji: '🌱',
+            title: `${f.name} 성장!`,
+            body: `${stageLabel(f.growthStage)} 단계가 되었어요`,
+          });
+        });
+        if (names.length) showToast(`🌱 ${names.join(', ')} 성장!`);
       }
+
+      // 부화 완료 감지 — 수확 가능 상태가 된 알에 1회 알림
+      const inv = useUserStore.getState().user?.inventory ?? [];
+      const now = Date.now();
+      inv.forEach(egg => {
+        if (!egg.isHatching) return;
+        const elapsed = (now - egg.startedAt) / 1000;
+        if (elapsed < egg.hatchDuration) return;
+        pushNotification({
+          id: `hatch_${egg.id}`,
+          type: 'hatch',
+          emoji: '🐣',
+          title: '부화 완료!',
+          body: '알이 부화했어요 · 인큐베이터에서 수확하세요',
+        });
+      });
     };
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, [activeTankId, tickFishGrowth, fishInTank]);
+  }, [activeTankId, tickFishGrowth, pushNotification]);
+
+  // 일일 보상 수령 시 알림 생성 (로컬·클라우드 모두 pendingDailyReward를 거침)
+  useEffect(() => {
+    if (!pendingDailyReward) return;
+    const r = pendingDailyReward;
+    const body =
+      r.type === 'egg'
+        ? `${TIER_LABELS[r.tier ?? 'basic']} 지급`
+        : `${r.amount ?? 0} ${r.type === 'pearl' ? 'Pearl' : 'Star Coral'} 지급`;
+    const dateKey = new Date().toISOString().slice(0, 10);
+    pushNotification({
+      id: `daily_${dateKey}_${r.day}`,
+      type: 'daily',
+      emoji: '🎁',
+      title: `${r.day}일 연속 출석 보상`,
+      body,
+    });
+  }, [pendingDailyReward, pushNotification]);
 
   // ===== 튜토리얼 =====
   const tutorialStep = user?.tutorialStep ?? -1;
@@ -422,6 +471,28 @@ export default function TankPage() {
           <div className="currency-pill" style={{ color: 'var(--color-accent)' }}>
             Lv.{user?.level ?? 1}
           </div>
+          <button
+            onClick={() => setNotifOpen(o => !o)}
+            style={{
+              position: 'relative', pointerEvents: 'auto',
+              background: 'rgba(0,0,0,0.5)', borderRadius: 20,
+              width: 34, height: 34, fontSize: 16,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span style={{
+                position: 'absolute', top: -2, right: -2,
+                minWidth: 16, height: 16, padding: '0 4px',
+                borderRadius: 8, background: 'var(--color-error)',
+                color: '#fff', fontSize: 10, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
       )}
@@ -545,6 +616,9 @@ export default function TankPage() {
         </div>
       )}
 
+      {/* 알림 패널 */}
+      {notifOpen && !photoMode && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+
       {/* 일일 보상 팝업 */}
       {pendingDailyReward && <DailyRewardModal reward={pendingDailyReward} />}
 
@@ -584,6 +658,10 @@ function stageLabel(stage: string): string {
     default: return stage;
   }
 }
+
+const TIER_LABELS: Record<string, string> = {
+  basic: '기본 알', rare: '희귀 알', legendary: '전설 알',
+};
 
 const LIGHT_MODE_ICON: Record<'auto' | 'day' | 'sunset' | 'night', string> = {
   auto: '🌗', day: '☀️', sunset: '🌅', night: '🌙',
