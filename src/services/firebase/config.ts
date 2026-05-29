@@ -16,6 +16,9 @@ const firebaseConfig = {
 
 const isConfigured = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'your_api_key_here';
 
+/** 웹 푸시(FCM) VAPID 공개키. Firebase 콘솔 → 프로젝트 설정 → Cloud Messaging → 웹 푸시 인증서. */
+const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY ?? '';
+
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
@@ -36,4 +39,4 @@ if (isConfigured) {
   console.warn('[Firebase] .env 파일에 실제 Firebase 설정값을 입력해주세요. 현재 게스트 모드로 동작합니다.');
 }
 
-export { app, auth, db, storage, functions, isConfigured };
+export { app, auth, db, storage, functions, isConfigured, firebaseConfig, vapidKey };

@@ -7,6 +7,7 @@ import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { claimDailyReward } from '@/services/firebase/functions';
 import { loadUserFromFirestore, loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
+import { isPushSupported, listenForeground, pushPermission } from '@/services/firebase/messaging';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -30,6 +31,12 @@ function createDefaultTank() {
 export default function App() {
   const { isAuthenticated, isLoading, setLoading } = useUserStore();
   useFirestoreSync();
+
+  // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결
+  useEffect(() => {
+    if (pushPermission() !== 'granted') return;
+    isPushSupported().then(ok => { if (ok) listenForeground(); });
+  }, []);
 
   useEffect(() => {
     // Firebase 미설정: 게스트 전용 환경. 로컬 캐시로 복원된 게스트만 처리.

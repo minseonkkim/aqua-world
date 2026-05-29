@@ -1,15 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
 import { signOut } from '@/services/firebase/auth';
+import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
 
 export default function SettingsPage() {
   const { user, setUser } = useUserStore();
   const { setTanks } = useTankStore();
   const [sound, setSound] = useState(true);
   const [bgm, setBgm] = useState(true);
-  const [notif, setNotif] = useState(true);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushOn, setPushOn] = useState(pushPermission() === 'granted');
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    isPushSupported().then(setPushSupported);
+  }, []);
+
+  const handlePushToggle = async (next: boolean) => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (next) {
+        const token = await enablePush();
+        if (token) {
+          setPushOn(true);
+        } else {
+          await useModalStore.getState().alert({
+            emoji: '🔕',
+            title: '푸시 알림을 켤 수 없어요',
+            message: '브라우저 알림 권한이 거부되었거나 지원되지 않는 환경입니다. iOS는 16.4+ & 홈 화면 설치 시에만 지원됩니다.',
+          });
+          setPushOn(false);
+        }
+      } else {
+        await disablePush();
+        setPushOn(false);
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const handleLogout = async () => {
     const ok = await useModalStore.getState().confirm({
@@ -72,7 +104,13 @@ export default function SettingsPage() {
 
       <Section title="알림" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
-        <Row label="푸시 알림"><Toggle value={notif} onChange={setNotif} /></Row>
+        <Row label="푸시 알림 (부화 완료 등)">
+          {pushSupported ? (
+            <Toggle value={pushOn} onChange={handlePushToggle} />
+          ) : (
+            <span style={{ color: 'var(--color-text-disabled)', fontSize: 13 }}>미지원</span>
+          )}
+        </Row>
       </div>
 
       <Section title="앱" />

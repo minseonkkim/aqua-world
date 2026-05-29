@@ -6,8 +6,10 @@
  * Admin SDK 는 보안 규칙을 우회하므로 실제 쓰기는 이 함수들만 가능하다.
  */
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const { FieldValue } = require("firebase-admin/firestore");
 
 const G = require("./gameData");
 const { applyGrowthAdvance } = require("./growth");
@@ -47,6 +49,20 @@ function makeEgg(tier) {
     startedAt: 0,
     isHatching: false,
   };
+}
+
+/**
+ * 부화 중이고 아직 푸시를 보내지 않은 알들 중 가장 빠른 완료 시각(ms)을 반환.
+ * 없으면 0. 스케줄러가 `nextHatchAt <= now` 로 효율적으로 조회하기 위한 인덱스 필드.
+ */
+function computeNextHatchAt(user) {
+  let next = 0;
+  for (const e of user.inventory || []) {
+    if (!e.isHatching || e.hatchNotified) continue;
+    const readyAt = e.startedAt + e.hatchDuration * 1000;
+    if (next === 0 || readyAt < next) next = readyAt;
+  }
+  return next;
 }
 
 function rollSpecies(tier) {
@@ -201,8 +217,9 @@ exports.startHatching = onCall(async (request) => {
     if (egg.isHatching) return { user };
 
     user.inventory = user.inventory.map((e) =>
-      e.id === eggId ? { ...e, startedAt: Date.now(), isHatching: true } : e
+      e.id === eggId ? { ...e, startedAt: Date.now(), isHatching: true, hatchNotified: false } : e
     );
+    user.nextHatchAt = computeNextHatchAt(user);
     tx.set(userRef(uid), user);
     return { user };
   });
@@ -251,6 +268,7 @@ exports.hatchEgg = onCall(async (request) => {
     };
 
     user.inventory = user.inventory.filter((e) => e.id !== eggId);
+    user.nextHatchAt = computeNextHatchAt(user);
     if (!user.collectedSpecies.includes(speciesId)) {
       user.collectedSpecies = [...user.collectedSpecies, speciesId];
     }
@@ -423,4 +441,85 @@ exports.claimMilestone = onCall(async (request) => {
     tx.set(userRef(uid), user);
     return { user, reward };
   });
+});
+
+// ─── 웹 푸시(FCM) 토큰 등록 / 해제 ───────────────────────────────────────────
+
+exports.registerPushToken = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const token = request.data && request.data.token;
+  if (!token || typeof token !== "string") {
+    throw new HttpsError("invalid-argument", "토큰 필요");
+  }
+  await userRef(uid).set({ fcmTokens: FieldValue.arrayUnion(token) }, { merge: true });
+  return { ok: true };
+});
+
+exports.unregisterPushToken = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const token = request.data && request.data.token;
+  if (!token || typeof token !== "string") {
+    throw new HttpsError("invalid-argument", "토큰 필요");
+  }
+  await userRef(uid).set({ fcmTokens: FieldValue.arrayRemove(token) }, { merge: true });
+  return { ok: true };
+});
+
+// ─── 부화 완료 백그라운드 푸시 (1분 주기 스케줄) ─────────────────────────────
+// ⚠️ Cloud Scheduler 사용 — Blaze(종량제) 요금제 + `firebase deploy` 필요.
+
+exports.notifyReadyHatches = onSchedule("every 1 minutes", async () => {
+  const now = Date.now();
+  const snap = await db
+    .collection("users")
+    .where("nextHatchAt", ">", 0)
+    .where("nextHatchAt", "<=", now)
+    .limit(200)
+    .get();
+
+  for (const docSnap of snap.docs) {
+    const user = docSnap.data();
+    const ready = (user.inventory || []).filter(
+      (e) => e.isHatching && !e.hatchNotified && e.startedAt + e.hatchDuration * 1000 <= now,
+    );
+    if (ready.length === 0) {
+      // nextHatchAt 이 부정확했던 경우 재정렬만 하고 넘어감
+      await docSnap.ref.set({ nextHatchAt: computeNextHatchAt(user) }, { merge: true });
+      continue;
+    }
+
+    const tokens = (user.fcmTokens || []).filter(Boolean);
+    if (tokens.length > 0) {
+      const title = ready.length > 1 ? `🐣 알 ${ready.length}개 부화 완료!` : "🐣 부화 완료!";
+      const body = "수조로 돌아와 새 친구를 만나보세요";
+      const res = await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: { title, body },
+        data: { type: "hatch", emoji: "🐣", tag: "hatch" },
+        webpush: { fcmOptions: { link: "/" } },
+      });
+      // 무효 토큰 정리
+      const invalid = [];
+      res.responses.forEach((r, i) => {
+        if (!r.success) invalid.push(tokens[i]);
+      });
+      if (invalid.length > 0) {
+        await docSnap.ref.set(
+          { fcmTokens: FieldValue.arrayRemove(...invalid) },
+          { merge: true },
+        );
+      }
+    }
+
+    // 발송 여부와 무관하게 알림 처리 표시 (재발송 방지)
+    const readyIds = new Set(ready.map((e) => e.id));
+    user.inventory = (user.inventory || []).map((e) =>
+      readyIds.has(e.id) ? { ...e, hatchNotified: true } : e,
+    );
+    user.nextHatchAt = computeNextHatchAt(user);
+    await docSnap.ref.set(
+      { inventory: user.inventory, nextHatchAt: user.nextHatchAt },
+      { merge: true },
+    );
+  }
 });

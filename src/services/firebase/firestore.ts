@@ -32,6 +32,8 @@ const USER_SERVER_OWNED_FIELDS = [
   'feedCountToday',
   'lastFeedResetAt',
   'claimedCompendiumMilestones',
+  'fcmTokens',
+  'nextHatchAt',
 ] as const;
 
 export async function saveUserToFirestore(user: User): Promise<void> {
