@@ -137,9 +137,14 @@ export default function TankPage() {
 
   const handleFeed = () => {
     if (isCloudUser()) {
-      sprinkleFeed()
-        .then(() => showToast('+10 🪙 Pearl 획득!'))
-        .catch(() => showToast('오늘 먹이주기를 모두 사용했습니다 🐟'));
+      const prevUser = useUserStore.getState().user;
+      if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
+      addPearl(10);
+      showToast('+10 🪙 Pearl 획득!');
+      sprinkleFeed().catch(() => {
+        useUserStore.getState().setUser(prevUser);
+        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      });
       return;
     }
     if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
@@ -150,10 +155,17 @@ export default function TankPage() {
   // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
   const handleSurfaceFeed = useCallback((): boolean => {
     if (isCloudUser()) {
-      // 한도는 서버가 최종 판정. 파티클은 낙관적으로 표시.
-      sprinkleFeed()
-        .then(() => showToast('🍤 먹이 뿌리기 · +10 🪙'))
-        .catch(() => showToast('오늘 먹이주기를 모두 사용했습니다 🐟'));
+      const prevUser = useUserStore.getState().user;
+      if (!recordFeed()) {
+        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+        return false;
+      }
+      addPearl(10);
+      showToast('🍤 먹이 뿌리기 · +10 🪙');
+      sprinkleFeed().catch(() => {
+        useUserStore.getState().setUser(prevUser);
+        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      });
       return true;
     }
     if (!recordFeed()) {
@@ -172,13 +184,21 @@ export default function TankPage() {
       return;
     }
     if (isCloudUser()) {
-      try {
-        const res = await feedFishServer({ tankId: activeTankId, fishId: fish.id });
-        if (res.newStage) showToast(`🌱 ${fish.name} → ${stageLabel(res.newStage)} 성장!`);
-        else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
-      } catch {
+      const prevUser = useUserStore.getState().user;
+      const prevTanks = useTankStore.getState().tanks;
+      if (!recordFeed()) {
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+        return;
       }
+      addPearl(10);
+      const result = feedFish(activeTankId, fish.id);
+      if (result?.newStage) showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
+      else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+      feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(() => {
+        useUserStore.getState().setUser(prevUser);
+        useTankStore.getState().setTanks(prevTanks);
+        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      });
       return;
     }
     if (!recordFeed()) {

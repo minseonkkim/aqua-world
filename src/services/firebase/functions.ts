@@ -30,6 +30,27 @@ interface ServerResult {
   tank?: Tank;
 }
 
+/**
+ * 낙관적 UI 헬퍼.
+ * 1) apply(): 로컬 상태를 즉시 변경해 화면이 바로 반응한다.
+ * 2) server(): 백그라운드로 서버 호출 — 성공 시 권위 상태로 자동 재조정(setUser/applyServerTank).
+ * 3) 실패 시 호출 직전 user/tank 스냅샷으로 롤백 + onError.
+ */
+export function optimistic(
+  apply: () => void,
+  server: () => Promise<unknown>,
+  onError?: () => void,
+): void {
+  const prevUser = useUserStore.getState().user;
+  const prevTanks = useTankStore.getState().tanks;
+  apply();
+  server().catch(() => {
+    useUserStore.getState().setUser(prevUser);
+    useTankStore.getState().setTanks(prevTanks);
+    onError?.();
+  });
+}
+
 function call<TData, TResult extends ServerResult>(name: string) {
   return async (data?: TData): Promise<TResult> => {
     if (!functions) throw new FunctionsUnavailableError();

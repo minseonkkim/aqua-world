@@ -7,6 +7,7 @@ import { EggTier } from '@/types';
 import { DECORATION_CATALOG } from '@/utils/decorationModels';
 import {
   isCloudUser,
+  optimistic,
   purchaseEgg,
   exchangePearl,
   purchaseStarCoral,
@@ -118,12 +119,14 @@ export default function ShopPage() {
     });
     if (!ok) return;
     if (isCloudUser()) {
-      try {
-        await purchaseStarCoral({ pkgId: pkg.id });
-        showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
-      } catch {
-        showToast('구매에 실패했습니다');
-      }
+      optimistic(
+        () => {
+          addStarCoral(pkg.amount + pkg.bonus);
+          showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
+        },
+        () => purchaseStarCoral({ pkgId: pkg.id }),
+        () => showToast('구매에 실패했습니다'),
+      );
       return;
     }
     addStarCoral(pkg.amount + pkg.bonus);
@@ -144,12 +147,15 @@ export default function ShopPage() {
     });
     if (!ok) return;
     if (isCloudUser()) {
-      try {
-        await exchangePearl({ pkgId: pkg.id });
-        showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
-      } catch {
-        showToast('교환에 실패했습니다');
-      }
+      optimistic(
+        () => {
+          spendStarCoral(pkg.starCoral);
+          addPearl(total);
+          showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
+        },
+        () => exchangePearl({ pkgId: pkg.id }),
+        () => showToast('교환에 실패했습니다'),
+      );
       return;
     }
     if (!spendStarCoral(pkg.starCoral)) return;
@@ -164,12 +170,16 @@ export default function ShopPage() {
       return;
     }
     if (isCloudUser()) {
-      try {
-        await purchaseEgg({ tier: item.tier });
-        showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
-      } catch {
-        showToast(`❌ ${item.currency === 'pearl' ? 'Pearl' : 'Star Coral'}이 부족합니다`);
-      }
+      optimistic(
+        () => {
+          if (item.currency === 'pearl') spendPearl(item.price);
+          else spendStarCoral(item.price);
+          addEggToInventory(item.tier);
+          showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
+        },
+        () => purchaseEgg({ tier: item.tier }),
+        () => showToast('구매에 실패했습니다'),
+      );
       return;
     }
     const ok = item.currency === 'pearl' ? spendPearl(item.price) : spendStarCoral(item.price);
@@ -184,12 +194,15 @@ export default function ShopPage() {
       return;
     }
     if (isCloudUser()) {
-      try {
-        await purchaseDecoration({ modelId });
-        showToast(`${emoji} ${name} 인벤토리 +1 · 수조에서 배치하세요`);
-      } catch {
-        showToast('구매에 실패했습니다');
-      }
+      optimistic(
+        () => {
+          spendPearl(price);
+          addDecorationInventory(modelId, 1);
+          showToast(`${emoji} ${name} 인벤토리 +1 · 수조에서 배치하세요`);
+        },
+        () => purchaseDecoration({ modelId }),
+        () => showToast('구매에 실패했습니다'),
+      );
       return;
     }
     if (!spendPearl(price)) return;
