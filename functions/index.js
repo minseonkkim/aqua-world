@@ -1,0 +1,426 @@
+/**
+ * AquaWorld 서버 권위 로직 (Cloud Functions v2, asia-northeast3).
+ *
+ * 원칙: 재화·아이템·뽑기 결과를 바꾸는 모든 연산은 여기(서버)에서만 실행한다.
+ * 클라이언트는 요청만 보내고, Firestore 직접 쓰기는 보안 규칙으로 차단된다.
+ * Admin SDK 는 보안 규칙을 우회하므로 실제 쓰기는 이 함수들만 가능하다.
+ */
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { setGlobalOptions } = require("firebase-functions/v2");
+const admin = require("firebase-admin");
+
+const G = require("./gameData");
+const { applyGrowthAdvance } = require("./growth");
+
+admin.initializeApp();
+const db = admin.firestore();
+
+setGlobalOptions({ region: "asia-northeast3", maxInstances: 10 });
+
+// ─── 헬퍼 ──────────────────────────────────────────────────────────────────
+
+function requireAuth(request) {
+  const uid = request.auth && request.auth.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
+  return uid;
+}
+
+function genId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function isNewDay(lastMs, nowMs) {
+  const a = new Date(lastMs);
+  const b = new Date(nowMs);
+  return (
+    a.getDate() !== b.getDate() ||
+    a.getMonth() !== b.getMonth() ||
+    a.getFullYear() !== b.getFullYear()
+  );
+}
+
+function makeEgg(tier) {
+  return {
+    id: genId("egg"),
+    tier,
+    hatchDuration: G.EGG_HATCH_TIME[tier],
+    startedAt: 0,
+    isHatching: false,
+  };
+}
+
+function rollSpecies(tier) {
+  const rarityPool = G.RARITY_BY_EGG[tier];
+  const rarity = rarityPool[Math.floor(Math.random() * rarityPool.length)];
+  const pool = G.SPECIES_BY_RARITY[rarity];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+/** 보상 1건을 user 객체(가변 복사본)에 적용 */
+function applyReward(user, reward) {
+  if (reward.type === "pearl") user.pearl += reward.amount;
+  else if (reward.type === "star_coral") user.starCoral += reward.amount;
+  else if (reward.type === "egg") user.inventory = [...user.inventory, makeEgg(reward.tier)];
+}
+
+const userRef = (uid) => db.doc(`users/${uid}`);
+const tankRef = (tankId) => db.doc(`tanks/${tankId}`);
+
+/** tank 문서를 읽고 소유권을 검증. ownerId 는 Tank 타입에 없는 Firestore 전용 필드. */
+async function readOwnedTank(tx, uid, tankId) {
+  const snap = await tx.get(tankRef(tankId));
+  if (!snap.exists) throw new HttpsError("not-found", "수조를 찾을 수 없습니다.");
+  const data = snap.data();
+  if (data.ownerId !== uid) throw new HttpsError("permission-denied", "본인 수조가 아닙니다.");
+  return data;
+}
+
+/** tank 에서 ownerId 제거(클라 Tank 타입과 일치) */
+function stripTank(tankWithOwner) {
+  const { ownerId, ...tank } = tankWithOwner;
+  void ownerId;
+  return tank;
+}
+
+// ─── 신규 유저 부트스트랩 ────────────────────────────────────────────────────
+
+exports.bootstrapUser = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const uRef = userRef(uid);
+  const existing = await uRef.get();
+  if (existing.exists) {
+    return { user: existing.data(), created: false };
+  }
+
+  const now = Date.now();
+  const auth = request.auth.token || {};
+  const user = {
+    id: uid,
+    displayName: auth.name || "AquaWorld 유저",
+    email: auth.email || "",
+    photoURL: auth.picture || undefined,
+    pearl: G.START_PEARL,
+    starCoral: G.START_STAR_CORAL,
+    level: 1,
+    experience: 0,
+    loginStreak: 0,
+    lastLoginAt: 0,
+    createdAt: now,
+    tanks: [],
+    inventory: [],
+    collectedSpecies: [],
+    feedCountToday: 0,
+    lastFeedResetAt: now,
+    tutorialStep: 0,
+  };
+  const tankId = `tank_${uid}`;
+  const tank = {
+    id: tankId,
+    name: "나의 수조",
+    environment: "coral_reef",
+    fish: [],
+    decorations: [],
+    cleanliness: 100,
+    lightMode: "auto",
+    createdAt: now,
+    updatedAt: now,
+  };
+  user.tanks = [tankId];
+
+  const batch = db.batch();
+  batch.set(uRef, user);
+  batch.set(tankRef(tankId), { ...tank, ownerId: uid });
+  await batch.commit();
+
+  return { user, tank, created: true };
+});
+
+// ─── 일일 로그인 보상 ────────────────────────────────────────────────────────
+
+exports.claimDailyReward = onCall(async (request) => {
+  const uid = requireAuth(request);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    const now = Date.now();
+
+    if (!isNewDay(user.lastLoginAt, now)) {
+      return { user, reward: null };
+    }
+    const streak = (user.loginStreak % 7) + 1;
+    const def = G.DAILY_LOGIN_REWARDS[streak - 1];
+    applyReward(user, def);
+    user.loginStreak = streak;
+    user.lastLoginAt = now;
+
+    tx.set(userRef(uid), user);
+    return {
+      user,
+      reward: { type: def.type, amount: def.amount, tier: def.tier, day: streak },
+    };
+  });
+});
+
+// ─── 알 구매 ─────────────────────────────────────────────────────────────────
+
+exports.purchaseEgg = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tier = request.data && request.data.tier;
+  const def = G.EGG_PRICES[tier];
+  if (!def) throw new HttpsError("invalid-argument", "잘못된 알 종류");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+
+    const field = def.currency === "pearl" ? "pearl" : "starCoral";
+    if ((user[field] || 0) < def.price) {
+      throw new HttpsError("failed-precondition", "재화가 부족합니다.");
+    }
+    user[field] -= def.price;
+    user.inventory = [...user.inventory, makeEgg(tier)];
+
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── 부화 시작 ───────────────────────────────────────────────────────────────
+
+exports.startHatching = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const eggId = request.data && request.data.eggId;
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    const egg = user.inventory.find((e) => e.id === eggId);
+    if (!egg) throw new HttpsError("not-found", "알을 찾을 수 없습니다.");
+    if (egg.isHatching) return { user };
+
+    user.inventory = user.inventory.map((e) =>
+      e.id === eggId ? { ...e, startedAt: Date.now(), isHatching: true } : e
+    );
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── 부화 수확 (RNG + 물고기 생성 + 도감 등록) ───────────────────────────────
+
+exports.hatchEgg = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const eggId = request.data && request.data.eggId;
+  const tankId = request.data && request.data.tankId;
+  if (!tankId) throw new HttpsError("invalid-argument", "수조 ID 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const egg = user.inventory.find((e) => e.id === eggId);
+    if (!egg || !egg.isHatching) throw new HttpsError("failed-precondition", "부화 중인 알이 아닙니다.");
+    const elapsed = (Date.now() - egg.startedAt) / 1000;
+    if (elapsed < egg.hatchDuration) throw new HttpsError("failed-precondition", "아직 부화 중입니다.");
+
+    // ★ 종 추첨은 반드시 서버에서
+    const speciesId = rollSpecies(egg.tier);
+    const species = G.SPECIES[speciesId];
+    const now = Date.now();
+    const fish = {
+      id: genId("fish"),
+      speciesId,
+      name: species ? species.name : "???",
+      growthStage: "fry",
+      growthProgress: 0,
+      mood: "happy",
+      feedCount: 0,
+      lastFedAt: 0,
+      acquiredAt: now,
+      stageStartedAt: now,
+      growthBoostSeconds: 0,
+      position: {
+        x: (Math.random() - 0.5) * 8,
+        y: (Math.random() - 0.5) * 4,
+        z: (Math.random() - 0.5) * 6,
+      },
+    };
+
+    user.inventory = user.inventory.filter((e) => e.id !== eggId);
+    if (!user.collectedSpecies.includes(speciesId)) {
+      user.collectedSpecies = [...user.collectedSpecies, speciesId];
+    }
+    const fishList = [...(tankData.fish || []), fish];
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
+    return { user, tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }), speciesId, fish };
+  });
+});
+
+// ─── 먹이 주기 (일일 제한 + 성장 가속 + 진주 보상) ──────────────────────────
+
+exports.feedFish = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  const fishId = request.data && request.data.fishId;
+  if (!tankId || !fishId) throw new HttpsError("invalid-argument", "tankId/fishId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const target = (tankData.fish || []).find((f) => f.id === fishId);
+    if (!target) throw new HttpsError("not-found", "물고기 없음");
+    if (target.growthStage === "large") throw new HttpsError("failed-precondition", "이미 최대 성장");
+
+    const now = Date.now();
+    // 일일 먹이 제한
+    const lastReset = user.lastFeedResetAt || 0;
+    const newDay = isNewDay(lastReset, now);
+    const count = newDay ? 0 : user.feedCountToday || 0;
+    if (count >= G.FEED_MAX_PER_DAY) throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+
+    // 성장 가속 적용
+    const boosted = {
+      ...target,
+      feedCount: (target.feedCount || 0) + 1,
+      lastFedAt: now,
+      mood: "happy",
+      growthBoostSeconds: (target.growthBoostSeconds || 0) + G.FEED_GROWTH_BOOST_SECONDS,
+    };
+    const advanced = applyGrowthAdvance(boosted, now);
+    const finalFish = advanced || boosted;
+    const fishList = (tankData.fish || []).map((f) => (f.id === fishId ? finalFish : f));
+
+    // 재화·카운트 갱신
+    user.pearl = (user.pearl || 0) + G.FEED_PEARL_REWARD;
+    user.feedCountToday = count + 1;
+    user.lastFeedResetAt = newDay ? now : lastReset;
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
+    return {
+      user,
+      tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }),
+      newStage: advanced ? advanced.growthStage : null,
+    };
+  });
+});
+
+// ─── 먹이 뿌리기 (특정 물고기 없이 일일 제한 + 진주 보상만) ──────────────────
+
+exports.sprinkleFeed = onCall(async (request) => {
+  const uid = requireAuth(request);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    const now = Date.now();
+    const lastReset = user.lastFeedResetAt || 0;
+    const newDay = isNewDay(lastReset, now);
+    const count = newDay ? 0 : user.feedCountToday || 0;
+    if (count >= G.FEED_MAX_PER_DAY) throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+
+    user.pearl = (user.pearl || 0) + G.FEED_PEARL_REWARD;
+    user.feedCountToday = count + 1;
+    user.lastFeedResetAt = newDay ? now : lastReset;
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── Star Coral → Pearl 환전 ────────────────────────────────────────────────
+
+exports.exchangePearl = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const pkgId = request.data && request.data.pkgId;
+  const pkg = G.PEARL_PACKAGES[pkgId];
+  if (!pkg) throw new HttpsError("invalid-argument", "잘못된 패키지");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    if ((user.starCoral || 0) < pkg.starCoral) {
+      throw new HttpsError("failed-precondition", "Star Coral 부족");
+    }
+    user.starCoral -= pkg.starCoral;
+    user.pearl = (user.pearl || 0) + pkg.pearl + pkg.bonus;
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── Star Coral 구매 (KRW) ──────────────────────────────────────────────────
+// ⚠️ 현재는 실제 결제 검증이 없음(기존 동작 유지). 실서비스 시 IAP 영수증 검증 필요.
+
+exports.purchaseStarCoral = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const pkgId = request.data && request.data.pkgId;
+  const pkg = G.STAR_CORAL_PACKAGES[pkgId];
+  if (!pkg) throw new HttpsError("invalid-argument", "잘못된 패키지");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    user.starCoral = (user.starCoral || 0) + pkg.amount + pkg.bonus;
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── 데코 구매 (진주 차감만 서버 검증; 인벤토리 소비/배치는 Phase 2) ────────
+
+exports.purchaseDecoration = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const modelId = request.data && request.data.modelId;
+  const price = G.DECORATION_PRICES[modelId];
+  if (price == null) throw new HttpsError("invalid-argument", "잘못된 데코");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    if ((user.pearl || 0) < price) throw new HttpsError("failed-precondition", "Pearl 부족");
+    user.pearl -= price;
+    const inv = { ...(user.decorationInventory || {}) };
+    inv[modelId] = (inv[modelId] || 0) + 1;
+    user.decorationInventory = inv;
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── 도감 마일스톤 청구 ──────────────────────────────────────────────────────
+
+exports.claimMilestone = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const pct = request.data && request.data.pct;
+  const reward = G.COMPENDIUM_REWARDS[pct];
+  if (!reward) throw new HttpsError("invalid-argument", "잘못된 마일스톤");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    const claimed = user.claimedCompendiumMilestones || [];
+    if (claimed.includes(pct)) throw new HttpsError("failed-precondition", "이미 청구함");
+
+    // ★ 진행도를 서버 데이터로 재계산
+    const actualPct = Math.floor(((user.collectedSpecies || []).length / G.SPECIES_COUNT) * 100);
+    if (actualPct < pct) throw new HttpsError("failed-precondition", "조건 미달");
+
+    applyReward(user, reward);
+    user.claimedCompendiumMilestones = [...claimed, pct];
+    tx.set(userRef(uid), user);
+    return { user, reward };
+  });
+});

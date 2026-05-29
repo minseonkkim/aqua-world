@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useUserStore } from '@/store/useUserStore';
+import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { onAuthChanged } from '@/services/firebase/auth';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
+import { isCloudUser, claimDailyReward } from '@/services/firebase/functions';
+import { loadUserTanks } from '@/services/firebase/firestore';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -42,7 +44,22 @@ export default function App() {
       addTank(createDefaultTank());
     }
 
-    claimDailyLogin();
+    if (isCloudUser()) {
+      // 권위 데이터를 서버에서 갱신 (로컬 캐시 위변조 방지)
+      const uid = useUserStore.getState().user!.id;
+      loadUserTanks(uid)
+        .then(t => { if (t.length) useTankStore.getState().setTanks(t); })
+        .catch(() => {});
+      claimDailyReward()
+        .then(res => {
+          if (res.reward) {
+            useUserStore.getState().setPendingReward(res.reward as DailyRewardResult);
+          }
+        })
+        .catch(() => {});
+    } else {
+      claimDailyLogin();
+    }
     setLoading(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

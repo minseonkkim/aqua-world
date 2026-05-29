@@ -12,6 +12,9 @@ interface TankState {
   setActiveTank: (tankId: string) => void;
   getActiveTank: () => Tank | null;
 
+  /** 서버 함수가 반환한 tank로 동일 id 항목을 통째 교체(없으면 추가) */
+  applyServerTank: (tank: Tank) => void;
+
   addTank: (tank: Tank) => void;
   updateTank: (tankId: string, updates: Partial<Tank>) => void;
 
@@ -53,6 +56,14 @@ export const useTankStore = create<TankState>()(
         const { tanks, activeTankId } = get();
         return tanks.find(t => t.id === activeTankId) ?? null;
       },
+
+      applyServerTank: tank =>
+        set(state => ({
+          tanks: state.tanks.some(t => t.id === tank.id)
+            ? state.tanks.map(t => (t.id === tank.id ? tank : t))
+            : [...state.tanks, tank],
+          activeTankId: state.activeTankId ?? tank.id,
+        })),
 
       addTank: tank =>
         set(state => ({

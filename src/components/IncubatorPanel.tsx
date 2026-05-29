@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { Egg, EggTier } from '@/types';
+import { isCloudUser, startHatching as startHatchingServer } from '@/services/firebase/functions';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -119,6 +120,14 @@ export default function IncubatorPanel({ onCollect }: Props) {
   const [open, setOpen] = useState(false);
   const { user, startHatching } = useUserStore();
 
+  const handleStart = (eggId: string) => {
+    if (isCloudUser()) {
+      startHatchingServer({ eggId }).catch(() => {});
+      return;
+    }
+    startHatching(eggId);
+  };
+
   const inventory = user?.inventory ?? [];
 
   if (inventory.length === 0) return null;
@@ -159,7 +168,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
               <EggCard
                 key={egg.id}
                 egg={egg}
-                onStart={() => startHatching(egg.id)}
+                onStart={() => handleStart(egg.id)}
                 onCollect={() => {
                   onCollect(egg.id, egg.tier);
                   if (inventory.length <= 1) setOpen(false);

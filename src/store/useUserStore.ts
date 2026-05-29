@@ -27,6 +27,7 @@ interface UserState {
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
   clearPendingReward: () => void;
+  setPendingReward: (reward: DailyRewardResult | null) => void;
 
   addPearl: (amount: number) => void;
   spendPearl: (amount: number) => boolean;
@@ -79,6 +80,8 @@ export const useUserStore = create<UserState>()(
       setLoading: isLoading => set({ isLoading }),
 
       clearPendingReward: () => set({ pendingDailyReward: null }),
+
+      setPendingReward: reward => set({ pendingDailyReward: reward }),
 
       addPearl: amount =>
         set(state => ({

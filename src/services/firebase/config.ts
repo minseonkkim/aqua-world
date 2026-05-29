@@ -2,6 +2,7 @@ import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { getFunctions, Functions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
@@ -19,6 +20,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
+let functions: Functions | null = null;
 
 if (isConfigured) {
   const alreadyInitialized = getApps().length > 0;
@@ -29,8 +31,9 @@ if (isConfigured) {
     ? getFirestore(app)
     : initializeFirestore(app, { ignoreUndefinedProperties: true });
   storage = getStorage(app);
+  functions = getFunctions(app, 'asia-northeast3');
 } else {
   console.warn('[Firebase] .env 파일에 실제 Firebase 설정값을 입력해주세요. 현재 게스트 모드로 동작합니다.');
 }
 
-export { app, auth, db, storage, isConfigured };
+export { app, auth, db, storage, functions, isConfigured };

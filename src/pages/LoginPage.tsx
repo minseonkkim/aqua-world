@@ -3,8 +3,10 @@ import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle } from '@/services/firebase/auth';
-import { loadUserFromFirestore, loadUserTanks, saveUserToFirestore, saveTankToFirestore } from '@/services/firebase/firestore';
+import { loadUserFromFirestore, loadUserTanks } from '@/services/firebase/firestore';
+import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
 import { Tank } from '@/types';
+import { DailyRewardResult } from '@/store/useUserStore';
 
 const AppleLogo = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -43,7 +45,7 @@ function createDefaultTank(): Tank {
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const { setUser, claimDailyLogin } = useUserStore();
+  const { setUser, claimDailyLogin, setPendingReward } = useUserStore();
   const { tanks, addTank, setTanks } = useTankStore();
 
   const handleGoogleLogin = async () => {
@@ -62,44 +64,17 @@ export default function LoginPage() {
         setUser(firestoreUser);
         if (firestoreTanks.length > 0) {
           setTanks(firestoreTanks);
-        } else if (tanks.length === 0) {
-          const defaultTank = createDefaultTank();
-          addTank(defaultTank);
-          await saveTankToFirestore(defaultTank, firebaseUser.uid);
         }
       } else {
-        // 신규 유저: 기본값으로 생성 후 Firestore에 저장
-        const newUser = {
-          id: firebaseUser.uid,
-          displayName: firebaseUser.displayName ?? 'AquaWorld 유저',
-          email: firebaseUser.email ?? '',
-          photoURL: firebaseUser.photoURL ?? undefined,
-          pearl: 200,
-          starCoral: 20,
-          level: 1,
-          experience: 0,
-          loginStreak: 0,
-          lastLoginAt: 0,
-          createdAt: Date.now(),
-          tanks: [],
-          inventory: [],
-          collectedSpecies: [],
-          feedCountToday: 0,
-          lastFeedResetAt: Date.now(),
-          tutorialStep: 0,
-        };
-        const defaultTank = createDefaultTank();
-
-        setUser(newUser);
-        addTank(defaultTank);
-
-        await Promise.all([
-          saveUserToFirestore(newUser),
-          saveTankToFirestore(defaultTank, firebaseUser.uid),
-        ]);
+        // 신규 유저: 서버(Cloud Functions)에서 생성 — 시작 재화·수조를 서버가 고정
+        const res = await bootstrapUser();
+        setUser(res.user);
+        if (res.tank) setTanks([res.tank]);
       }
 
-      claimDailyLogin();
+      // 일일 로그인 보상 (서버 검증)
+      const daily = await claimDailyReward();
+      if (daily.reward) setPendingReward(daily.reward as DailyRewardResult);
     } catch (err) {
       const code = (err as { code?: string })?.code;
       const SILENT_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/popup-blocked'];

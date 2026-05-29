@@ -13,6 +13,12 @@ import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
+import {
+  isCloudUser,
+  sprinkleFeed,
+  feedFish as feedFishServer,
+  hatchEgg as hatchEggServer,
+} from '@/services/firebase/functions';
 
 interface PendingHatch {
   speciesId: string;
@@ -130,6 +136,12 @@ export default function TankPage() {
   // =====================
 
   const handleFeed = () => {
+    if (isCloudUser()) {
+      sprinkleFeed()
+        .then(() => showToast('+10 🪙 Pearl 획득!'))
+        .catch(() => showToast('오늘 먹이주기를 모두 사용했습니다 🐟'));
+      return;
+    }
     if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
     showToast('+10 🪙 Pearl 획득!');
@@ -137,6 +149,13 @@ export default function TankPage() {
 
   // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
   const handleSurfaceFeed = useCallback((): boolean => {
+    if (isCloudUser()) {
+      // 한도는 서버가 최종 판정. 파티클은 낙관적으로 표시.
+      sprinkleFeed()
+        .then(() => showToast('🍤 먹이 뿌리기 · +10 🪙'))
+        .catch(() => showToast('오늘 먹이주기를 모두 사용했습니다 🐟'));
+      return true;
+    }
     if (!recordFeed()) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       return false;
@@ -146,10 +165,20 @@ export default function TankPage() {
     return true;
   }, [recordFeed, addPearl]);
 
-  const handleFeedFish = (fish: Fish) => {
+  const handleFeedFish = async (fish: Fish) => {
     if (!activeTankId) return;
     if (fish.growthStage === 'large') {
       showToast('이미 최대 성장 단계입니다');
+      return;
+    }
+    if (isCloudUser()) {
+      try {
+        const res = await feedFishServer({ tankId: activeTankId, fishId: fish.id });
+        if (res.newStage) showToast(`🌱 ${fish.name} → ${stageLabel(res.newStage)} 성장!`);
+        else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+      } catch {
+        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
+      }
       return;
     }
     if (!recordFeed()) {
@@ -165,7 +194,17 @@ export default function TankPage() {
     }
   };
 
-  const handleHatchCollect = (eggId: string, eggTier: EggTier) => {
+  const handleHatchCollect = async (eggId: string, eggTier: EggTier) => {
+    if (isCloudUser()) {
+      if (!activeTankId) return;
+      try {
+        const res = await hatchEggServer({ eggId, tankId: activeTankId });
+        setPendingHatch({ speciesId: res.speciesId, eggTier });
+      } catch {
+        showToast('아직 부화하지 않았습니다');
+      }
+      return;
+    }
     const speciesId = collectHatchedEgg(eggId);
     if (!speciesId) return;
     setPendingHatch({ speciesId, eggTier });
@@ -178,6 +217,14 @@ export default function TankPage() {
     }
     const species = getSpeciesById(pendingHatch.speciesId);
     const name = species?.name ?? '???';
+
+    // 클라우드 유저는 서버 hatchEgg가 이미 물고기 생성·도감 등록을 마침
+    if (isCloudUser()) {
+      setPendingHatch(null);
+      showToast(`✨ ${name} 획득!`);
+      return;
+    }
+
     const now = Date.now();
     const newFish: Fish = {
       id: `fish_${now}_${Math.random().toString(36).slice(2)}`,

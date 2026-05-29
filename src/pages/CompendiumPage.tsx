@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useFishStore } from '@/store/useFishStore';
 import { useUserStore } from '@/store/useUserStore';
 import { COMPENDIUM_MILESTONES, COMPENDIUM_REWARDS, CompendiumReward } from '@/constants';
+import { isCloudUser, claimMilestone } from '@/services/firebase/functions';
 
 const RARITY_COLOR: Record<string, string> = {
   common: 'var(--color-rarity-common)', rare: 'var(--color-rarity-rare)',
@@ -28,7 +29,16 @@ export default function CompendiumPage() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const handleClaim = (milestone: number) => {
+  const handleClaim = async (milestone: number) => {
+    if (isCloudUser()) {
+      try {
+        const res = await claimMilestone({ pct: milestone });
+        showToast(`🎉 ${milestone}% 보상 획득 · ${rewardLabel(res.reward as CompendiumReward)}`);
+      } catch {
+        showToast('아직 청구할 수 없습니다');
+      }
+      return;
+    }
     const reward = claimCompendiumMilestone(milestone, collected.length, allSpecies.length);
     if (!reward) {
       showToast('아직 청구할 수 없습니다');
