@@ -431,9 +431,8 @@ export default function ShopPage() {
             const total = pkg.pearl + pkg.bonus;
             const canAfford = (user?.starCoral ?? 0) >= pkg.starCoral;
             return (
-              <button
+              <div
                 key={pkg.id}
-                onClick={() => buyPearl(pkg)}
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -445,7 +444,6 @@ export default function ShopPage() {
                   textAlign: 'left',
                   border: '1px solid rgba(255,255,255,0.08)',
                   opacity: canAfford ? 1 : 0.6,
-                  cursor: 'pointer',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -463,11 +461,12 @@ export default function ShopPage() {
                     </div>
                   </div>
                 </div>
-                <span
+                <button
+                  onClick={() => buyPearl(pkg)}
                   style={{
                     background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
                     color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
-                    padding: '6px 12px',
+                    padding: '8px 14px',
                     borderRadius: 8,
                     fontSize: 13,
                     fontWeight: 700,
@@ -475,11 +474,13 @@ export default function ShopPage() {
                     alignItems: 'center',
                     gap: 4,
                     whiteSpace: 'nowrap',
+                    border: 'none',
+                    cursor: 'pointer',
                   }}
                 >
                   🌸 {pkg.starCoral}
-                </span>
-              </button>
+                </button>
+              </div>
             );
           })}
         </div>
@@ -488,9 +489,8 @@ export default function ShopPage() {
       {tab === 'star_coral' && (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {CURRENCY.STAR_CORAL_PACKAGES.map(pkg => (
-            <button
+            <div
               key={pkg.id}
-              onClick={() => buyStarCoral(pkg)}
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -517,19 +517,22 @@ export default function ShopPage() {
                   </div>
                 </div>
               </div>
-              <span
+              <button
+                onClick={() => buyStarCoral(pkg)}
                 style={{
                   background: 'var(--color-accent)',
                   color: '#0a1628',
-                  padding: '6px 12px',
+                  padding: '8px 14px',
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 ₩{pkg.priceKRW.toLocaleString()}
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       )}
