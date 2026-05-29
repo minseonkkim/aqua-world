@@ -169,6 +169,13 @@ export default function ShopPage() {
       showToast(`❌ ${item.currency === 'pearl' ? 'Pearl' : 'Star Coral'}이 부족합니다`);
       return;
     }
+    const confirmed = await useModalStore.getState().confirm({
+      emoji: item.emoji,
+      title: `${item.name} 구매`,
+      message: `${CURRENCY_ICON[item.currency]} ${item.price} 로 ${item.name}을(를) 구매할까요?`,
+      confirmText: '구매',
+    });
+    if (!confirmed) return;
     if (isCloudUser()) {
       optimistic(
         () => {
@@ -193,6 +200,13 @@ export default function ShopPage() {
       showToast(`🪙 Pearl ${price - (user?.pearl ?? 0)} 부족`);
       return;
     }
+    const confirmed = await useModalStore.getState().confirm({
+      emoji,
+      title: `${name} 구매`,
+      message: `🪙 ${price} 로 ${name}을(를) 구매할까요?`,
+      confirmText: '구매',
+    });
+    if (!confirmed) return;
     if (isCloudUser()) {
       optimistic(
         () => {
@@ -262,9 +276,8 @@ export default function ShopPage() {
       {tab === 'egg' && (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {EGG_ITEMS.map(item => (
-            <button
+            <div
               key={item.tier}
-              onClick={() => buyEgg(item)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -291,11 +304,12 @@ export default function ShopPage() {
                   </div>
                 </div>
               </div>
-              <span
+              <button
+                onClick={() => buyEgg(item)}
                 style={{
                   background: RARITY_BG[item.tier],
                   color: '#fff',
-                  padding: '6px 12px',
+                  padding: '8px 14px',
                   borderRadius: 8,
                   fontSize: 13,
                   fontWeight: 700,
@@ -303,11 +317,13 @@ export default function ShopPage() {
                   alignItems: 'center',
                   gap: 4,
                   whiteSpace: 'nowrap',
+                  border: 'none',
+                  cursor: 'pointer',
                 }}
               >
                 {CURRENCY_ICON[item.currency]} {item.price}
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -342,9 +358,8 @@ export default function ShopPage() {
               const owned = inventory[item.modelId] ?? 0;
               const canAfford = (user?.pearl ?? 0) >= item.price;
               return (
-                <button
+                <div
                   key={item.modelId}
-                  onClick={() => buyDecoration(item.modelId, item.name, item.price, item.emoji)}
                   style={{
                     background: 'var(--color-surface)',
                     borderRadius: 12,
@@ -353,7 +368,6 @@ export default function ShopPage() {
                     textAlign: 'left',
                     border: '1px solid rgba(255,255,255,0.08)',
                     opacity: canAfford ? 1 : 0.6,
-                    cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 4,
@@ -388,20 +402,23 @@ export default function ShopPage() {
                       </div>
                     </div>
                   </div>
-                  <span
+                  <button
+                    onClick={() => buyDecoration(item.modelId, item.name, item.price, item.emoji)}
                     style={{
                       alignSelf: 'flex-end',
                       background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
                       color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
-                      padding: '4px 10px',
+                      padding: '6px 12px',
                       borderRadius: 8,
                       fontSize: 12,
                       fontWeight: 700,
+                      border: 'none',
+                      cursor: 'pointer',
                     }}
                   >
                     🪙 {item.price}
-                  </span>
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>
