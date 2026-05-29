@@ -4,8 +4,9 @@ import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { onAuthChanged } from '@/services/firebase/auth';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
-import { isCloudUser, claimDailyReward } from '@/services/firebase/functions';
-import { loadUserTanks } from '@/services/firebase/firestore';
+import { claimDailyReward } from '@/services/firebase/functions';
+import { loadUserFromFirestore, loadUserTanks } from '@/services/firebase/firestore';
+import { isConfigured } from '@/services/firebase/config';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -27,54 +28,54 @@ function createDefaultTank() {
 }
 
 export default function App() {
-  const { isAuthenticated, isLoading, setLoading, claimDailyLogin } = useUserStore();
+  const { isAuthenticated, isLoading, setLoading } = useUserStore();
   useFirestoreSync();
 
   useEffect(() => {
-    const { isAuthenticated: auth } = useUserStore.getState();
-
-    if (!auth) {
+    // Firebase 미설정: 게스트 전용 환경. 로컬 캐시로 복원된 게스트만 처리.
+    if (!isConfigured) {
+      const store = useUserStore.getState();
+      if (store.user) store.claimDailyLogin();
       setLoading(false);
       return;
     }
 
-    // 재방문 유저: 수조 없으면 생성
-    const { tanks, addTank } = useTankStore.getState();
-    if (tanks.length === 0) {
-      addTank(createDefaultTank());
-    }
+    // 클라우드 유저는 localStorage에 남지 않으므로, Firebase 세션을 기준으로 복원한다.
+    const unsubscribe = onAuthChanged(async firebaseUser => {
+      const store = useUserStore.getState();
+      const current = store.user;
 
-    if (isCloudUser()) {
-      // 권위 데이터를 서버에서 갱신 (로컬 캐시 위변조 방지)
-      const uid = useUserStore.getState().user!.id;
-      loadUserTanks(uid)
-        .then(t => { if (t.length) useTankStore.getState().setTanks(t); })
-        .catch(() => {});
-      claimDailyReward()
-        .then(res => {
-          if (res.reward) {
-            useUserStore.getState().setPendingReward(res.reward as DailyRewardResult);
+      if (firebaseUser) {
+        // 새로고침 등으로 스토어가 비어있으면 서버(Firestore)에서 권위 데이터 복원
+        if (!current || current.id !== firebaseUser.uid) {
+          try {
+            const [fsUser, fsTanks] = await Promise.all([
+              loadUserFromFirestore(firebaseUser.uid),
+              loadUserTanks(firebaseUser.uid),
+            ]);
+            if (fsUser) {
+              store.setUser(fsUser);
+              useTankStore.getState().setTanks(fsTanks.length ? fsTanks : [createDefaultTank()]);
+              const daily = await claimDailyReward();
+              if (daily.reward) store.setPendingReward(daily.reward as DailyRewardResult);
+            }
+          } catch {
+            // 네트워크 오류 시 로그인 화면 유지
           }
-        })
-        .catch(() => {});
-    } else {
-      claimDailyLogin();
-    }
-    setLoading(false);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Firebase 세션 만료/로그아웃 감지 — 소셜 로그인 유저만 처리
-  useEffect(() => {
-    const unsubscribe = onAuthChanged(firebaseUser => {
-      if (firebaseUser) return;
-      const { isAuthenticated: auth, user } = useUserStore.getState();
-      if (auth && user && !user.id.startsWith('guest_')) {
-        useUserStore.getState().setUser(null);
+        }
+      } else if (current && !current.id.startsWith('guest_')) {
+        // 클라우드 유저 로그아웃/세션 만료 → 클리어
+        store.setUser(null);
         useTankStore.getState().setTanks([]);
+      } else if (current) {
+        // 게스트: 로컬 유지 + 일일 보상 체크
+        store.claimDailyLogin();
       }
+
+      setLoading(false);
     });
     return unsubscribe;
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (

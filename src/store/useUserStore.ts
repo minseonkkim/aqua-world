@@ -280,10 +280,14 @@ export const useUserStore = create<UserState>()(
     }),
     {
       name: 'aquaworld-user',
-      partialize: state => ({
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
+      // 게스트만 로컬 캐시. 클라우드(로그인) 유저는 서버가 권위 — localStorage에 남기지 않는다.
+      partialize: state => {
+        const u = state.user;
+        const isGuest = !u || u.id.startsWith('guest_');
+        return isGuest
+          ? { user: state.user, isAuthenticated: state.isAuthenticated }
+          : { user: null, isAuthenticated: false };
+      },
     },
   ),
 );

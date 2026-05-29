@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage, DecorationPreset } from '../types';
 import { FEED_GROWTH_BOOST_SECONDS } from '../constants';
 import { applyGrowthAdvance } from '../utils/growth';
+import { useUserStore } from './useUserStore';
 
 interface TankState {
   tanks: Tank[];
@@ -254,6 +255,16 @@ export const useTankStore = create<TankState>()(
         return advancedIds;
       },
     }),
-    { name: 'aquaworld-tank' },
+    {
+      name: 'aquaworld-tank',
+      // 게스트만 로컬 캐시. 클라우드 유저의 수조는 서버에서 복원한다.
+      partialize: state => {
+        const u = useUserStore.getState().user;
+        const isGuest = !u || u.id.startsWith('guest_');
+        return isGuest
+          ? { tanks: state.tanks, activeTankId: state.activeTankId }
+          : { tanks: [], activeTankId: null };
+      },
+    },
   ),
 );
