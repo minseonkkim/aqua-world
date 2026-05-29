@@ -8,3 +8,8 @@ build/
 .env.production
 ios/
 android/
+
+# Firebase CLI 자동생성물 (agent skills)
+.agents/
+skills-lock.json
+firebase-debug.log
