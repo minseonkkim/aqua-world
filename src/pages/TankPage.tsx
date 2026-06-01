@@ -657,7 +657,10 @@ export default function TankPage() {
         <div style={{
           position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '10px 20px',
-          borderRadius: 20, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', pointerEvents: 'none',
+          borderRadius: 20, fontSize: 14, fontWeight: 600,
+          maxWidth: 'min(360px, calc(100vw - 32px))',
+          textAlign: 'center', lineHeight: 1.4, wordBreak: 'keep-all',
+          pointerEvents: 'none',
           zIndex: 100,
         }}>
           {toast}
