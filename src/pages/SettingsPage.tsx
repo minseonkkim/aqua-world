@@ -162,7 +162,7 @@ export default function SettingsPage() {
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
         >
           <span style={{ fontSize: 15 }}>홈 화면에 설치</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
       </div>
 
@@ -174,21 +174,21 @@ export default function SettingsPage() {
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
           <span style={{ fontSize: 15 }}>개인정보 처리방침</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
         <div
           onClick={() => navigate('/terms')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
           <span style={{ fontSize: 15 }}>이용약관</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
         <div
           onClick={() => navigate('/licenses')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
         >
           <span style={{ fontSize: 15 }}>오픈소스 라이선스</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
       </div>
 

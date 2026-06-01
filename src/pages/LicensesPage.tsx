@@ -44,7 +44,8 @@ export default function LicensesPage() {
           onClick={() => navigate(-1)}
           style={{
             background: 'transparent', border: 'none', color: '#fff',
-            fontSize: 20, cursor: 'pointer', padding: '0 4px',
+            fontSize: 32, lineHeight: 1, cursor: 'pointer',
+            padding: '0 8px 0 0', marginLeft: -8,
           }}
           aria-label="뒤로"
         >
