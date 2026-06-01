@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import TankPage from './TankPage';
 import CompendiumPage from './CompendiumPage';
 import ShopPage from './ShopPage';
 import FriendsPage from './FriendsPage';
 import SettingsPage from './SettingsPage';
+// LicensesPage는 130KB 라이선스 JSON을 import하므로 lazy load
+const LicensesPage = lazy(() => import('./LicensesPage'));
 
 const TABS = [
   { path: '/tank', label: '수조', icon: '🐠' },
@@ -27,6 +29,11 @@ export default function MainLayout() {
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/licenses" element={
+            <Suspense fallback={<div className="page"><div className="page-header">오픈소스 라이선스</div></div>}>
+              <LicensesPage />
+            </Suspense>
+          } />
           <Route path="*" element={<Navigate to="/tank" replace />} />
         </Routes>
       </div>

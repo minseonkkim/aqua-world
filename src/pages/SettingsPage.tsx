@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
@@ -8,6 +9,7 @@ import { signOut } from '@/services/firebase/auth';
 import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { user, setUser } = useUserStore();
   const { setTanks } = useTankStore();
   const { sfxEnabled, bgmEnabled, setSfx, setBgm } = useAudioStore();
@@ -134,9 +136,13 @@ export default function SettingsPage() {
         <Row label="이용약관">
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
         </Row>
-        <Row label="오픈소스 라이선스">
+        <div
+          onClick={() => navigate('/licenses')}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
+        >
+          <span style={{ fontSize: 15 }}>오픈소스 라이선스</span>
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
-        </Row>
+        </div>
       </div>
 
       <Section title="계정" />
