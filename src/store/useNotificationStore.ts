@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { playSFX } from '@/services/audio';
 
 export type NotificationType = 'growth' | 'hatch' | 'daily';
 
@@ -35,6 +36,7 @@ export const useNotificationStore = create<NotificationState>()(
         set(state => ({
           notifications: [entry, ...state.notifications].slice(0, MAX_NOTIFICATIONS),
         }));
+        playSFX('notify');
       },
 
       markAllRead: () =>

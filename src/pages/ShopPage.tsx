@@ -13,6 +13,7 @@ import {
   purchaseStarCoral,
   purchaseDecoration,
 } from '@/services/firebase/functions';
+import { playSFX } from '@/services/audio';
 
 type ShopTab = 'egg' | 'decoration' | 'pearl' | 'star_coral';
 
@@ -122,20 +123,23 @@ export default function ShopPage() {
       optimistic(
         () => {
           addStarCoral(pkg.amount + pkg.bonus);
+          playSFX('coin');
           showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
         },
         () => purchaseStarCoral({ pkgId: pkg.id }),
-        () => showToast('구매에 실패했습니다'),
+        () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
       return;
     }
     addStarCoral(pkg.amount + pkg.bonus);
+    playSFX('coin');
     showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
   };
 
   const buyPearl = async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {
     const total = pkg.pearl + pkg.bonus;
     if ((user?.starCoral ?? 0) < pkg.starCoral) {
+      playSFX('error');
       showToast(`🌸 Star Coral ${pkg.starCoral - (user?.starCoral ?? 0)} 부족`);
       return;
     }
@@ -151,21 +155,24 @@ export default function ShopPage() {
         () => {
           spendStarCoral(pkg.starCoral);
           addPearl(total);
+          playSFX('coin');
           showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
         },
         () => exchangePearl({ pkgId: pkg.id }),
-        () => showToast('교환에 실패했습니다'),
+        () => { playSFX('error'); showToast('교환에 실패했습니다'); },
       );
       return;
     }
     if (!spendStarCoral(pkg.starCoral)) return;
     addPearl(total);
+    playSFX('coin');
     showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
   };
 
   const buyEgg = async (item: (typeof EGG_ITEMS)[number]) => {
     const balance = item.currency === 'pearl' ? (user?.pearl ?? 0) : (user?.starCoral ?? 0);
     if (balance < item.price) {
+      playSFX('error');
       showToast(`❌ ${item.currency === 'pearl' ? 'Pearl' : 'Star Coral'}이 부족합니다`);
       return;
     }
@@ -182,21 +189,24 @@ export default function ShopPage() {
           if (item.currency === 'pearl') spendPearl(item.price);
           else spendStarCoral(item.price);
           addEggToInventory(item.tier);
+          playSFX('coin');
           showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
         },
         () => purchaseEgg({ tier: item.tier }),
-        () => showToast('구매에 실패했습니다'),
+        () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
       return;
     }
     const ok = item.currency === 'pearl' ? spendPearl(item.price) : spendStarCoral(item.price);
     if (!ok) return;
     addEggToInventory(item.tier);
+    playSFX('coin');
     showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
   };
 
   const buyDecoration = async (modelId: string, name: string, price: number, emoji: string) => {
     if ((user?.pearl ?? 0) < price) {
+      playSFX('error');
       showToast(`🪙 Pearl ${price - (user?.pearl ?? 0)} 부족`);
       return;
     }
@@ -212,15 +222,17 @@ export default function ShopPage() {
         () => {
           spendPearl(price);
           addDecorationInventory(modelId, 1);
+          playSFX('coin');
           showToast(`${emoji} ${name} 인벤토리 +1 · 수조에서 배치하세요`);
         },
         () => purchaseDecoration({ modelId }),
-        () => showToast('구매에 실패했습니다'),
+        () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
       return;
     }
     if (!spendPearl(price)) return;
     addDecorationInventory(modelId, 1);
+    playSFX('coin');
     showToast(`${emoji} ${name} 인벤토리 +1 · 수조에서 배치하세요`);
   };
 

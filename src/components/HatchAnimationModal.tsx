@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { EggTier } from '@/types';
 import { useFishStore } from '@/store/useFishStore';
+import { playSFX } from '@/services/audio';
 
 type Phase = 'shake' | 'crack' | 'flash' | 'reveal';
 
@@ -45,7 +46,10 @@ export default function HatchAnimationModal({ speciesId, eggTier, onComplete }: 
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase('crack'), 1200);
-    const t2 = setTimeout(() => setPhase('flash'), 2100);
+    const t2 = setTimeout(() => {
+      setPhase('flash');
+      playSFX('hatch');
+    }, 2100);
     const t3 = setTimeout(() => setPhase('reveal'), 2500);
     return () => {
       clearTimeout(t1);

@@ -13,6 +13,8 @@ import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
 import Modal from '@/components/Modal';
 import PWAPrompts from '@/components/PWAPrompts';
+import { unlockAudio } from '@/services/audio';
+import '@/store/useAudioStore'; // 영속 설정 복원 (rehydrate)
 
 function createDefaultTank() {
   return {
@@ -36,6 +38,24 @@ export default function App() {
   useEffect(() => {
     if (pushPermission() !== 'granted') return;
     isPushSupported().then(ok => { if (ok) listenForeground(); });
+  }, []);
+
+  // 첫 사용자 입력에서 오디오 unlock + BGM 시작 (iOS/Android 자동재생 정책)
+  useEffect(() => {
+    const onGesture = () => {
+      unlockAudio();
+      window.removeEventListener('pointerdown', onGesture);
+      window.removeEventListener('keydown', onGesture);
+      window.removeEventListener('touchstart', onGesture);
+    };
+    window.addEventListener('pointerdown', onGesture);
+    window.addEventListener('keydown', onGesture);
+    window.addEventListener('touchstart', onGesture);
+    return () => {
+      window.removeEventListener('pointerdown', onGesture);
+      window.removeEventListener('keydown', onGesture);
+      window.removeEventListener('touchstart', onGesture);
+    };
   }, []);
 
   useEffect(() => {

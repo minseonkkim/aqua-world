@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useModalStore, ModalTone } from '@/store/useModalStore';
+import { playSFX } from '@/services/audio';
 
 const TONE_COLOR: Record<ModalTone, string> = {
   default: 'var(--color-primary)',
@@ -14,6 +15,8 @@ export default function Modal() {
 
   useEffect(() => {
     if (!top) return;
+    const sfx = top.tone === 'danger' ? 'error' : 'modal_open';
+    playSFX(sfx);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') resolveTop(false);
       else if (e.key === 'Enter') resolveTop(true);
@@ -31,7 +34,7 @@ export default function Modal() {
 
   return (
     <div
-      onClick={() => isConfirm && resolveTop(false)}
+      onClick={() => isConfirm && (playSFX('modal_close'), resolveTop(false))}
       style={{
         position: 'fixed', inset: 0, zIndex: 2000,
         background: 'rgba(0,0,0,0.7)',
@@ -73,7 +76,7 @@ export default function Modal() {
             <button
               className="btn btn-ghost"
               style={{ flex: 1 }}
-              onClick={() => resolveTop(false)}
+              onClick={() => { playSFX('modal_close'); resolveTop(false); }}
             >
               {cancelText}
             </button>
@@ -85,7 +88,7 @@ export default function Modal() {
               background: TONE_COLOR[tone],
               color: tone === 'default' ? '#fff' : '#fff',
             }}
-            onClick={() => resolveTop(true)}
+            onClick={() => { playSFX('confirm'); resolveTop(true); }}
             autoFocus
           >
             {confirmText}

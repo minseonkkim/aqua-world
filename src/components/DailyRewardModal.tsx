@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
+import { playSFX } from '@/services/audio';
 
 const REWARD_ICONS: Record<DailyRewardResult['type'], string> = {
   pearl: '🪙',
@@ -19,6 +20,10 @@ interface Props {
 
 export default function DailyRewardModal({ reward }: Props) {
   const { clearPendingReward } = useUserStore();
+
+  useEffect(() => {
+    playSFX('reward');
+  }, []);
 
   const icon = REWARD_ICONS[reward.type];
   let rewardText = '';

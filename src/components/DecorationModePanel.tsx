@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { DECORATION_CATALOG, DecorationMeta } from '@/utils/decorationModels';
 import { TankDecoration, DecorationPreset } from '@/types';
 import { useUserStore } from '@/store/useUserStore';
+import { playSFX } from '@/services/audio';
 
 type CategoryFilter = 'all' | 'plant' | 'rock' | 'driftwood' | 'ornament';
 
@@ -164,7 +165,7 @@ export default function DecorationModePanel({
             return (
               <button
                 key={item.modelId}
-                onClick={owned ? () => onAdd(item.modelId) : onShopRedirect}
+                onClick={owned ? () => { playSFX('place'); onAdd(item.modelId); } : onShopRedirect}
                 style={{
                   flex: '0 0 auto', width: 76, height: 96, position: 'relative',
                   background: owned ? 'rgba(77, 208, 225, 0.08)' : 'rgba(255,255,255,0.04)',

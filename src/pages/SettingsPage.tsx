@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
+import { useAudioStore } from '@/store/useAudioStore';
+import { playSFX } from '@/services/audio';
 import { signOut } from '@/services/firebase/auth';
 import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
 
 export default function SettingsPage() {
   const { user, setUser } = useUserStore();
   const { setTanks } = useTankStore();
-  const [sound, setSound] = useState(true);
-  const [bgm, setBgm] = useState(true);
+  const { sfxEnabled, bgmEnabled, setSfx, setBgm } = useAudioStore();
   const [pushSupported, setPushSupported] = useState(false);
   const [pushOn, setPushOn] = useState(pushPermission() === 'granted');
   const [pushBusy, setPushBusy] = useState(false);
@@ -59,7 +60,7 @@ export default function SettingsPage() {
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
     <div
-      onClick={() => onChange(!value)}
+      onClick={() => { onChange(!value); playSFX('click'); }}
       style={{
         width: 44, height: 24, borderRadius: 12,
         background: value ? 'var(--color-accent)' : 'var(--color-surface)',
@@ -98,8 +99,8 @@ export default function SettingsPage() {
 
       <Section title="사운드" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
-        <Row label="효과음"><Toggle value={sound} onChange={setSound} /></Row>
-        <Row label="배경음악 (BGM)"><Toggle value={bgm} onChange={setBgm} /></Row>
+        <Row label="효과음"><Toggle value={sfxEnabled} onChange={setSfx} /></Row>
+        <Row label="배경음악 (BGM)"><Toggle value={bgmEnabled} onChange={setBgm} /></Row>
       </div>
 
       <Section title="알림" />

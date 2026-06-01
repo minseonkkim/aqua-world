@@ -3,7 +3,7 @@
 > **전체 기간:** 12개월 (Phase 0 ~ Phase 7)
 > **기준 문서:** AquaWorld 기획서 v1.0
 > **플랫폼:** React + Vite + PWA (iOS / Android / Desktop Web)
-> **최종 업데이트:** 2026년 5월
+> **최종 업데이트:** 2026년 6월
 
 ---
 
@@ -291,6 +291,15 @@
   - [x] NotificationPanel UI (TankPage 🔔 버튼 + 안읽음 배지, 모두읽음/삭제/전체삭제)
   - [x] 성장·부화·일일 보상 이벤트 발생 시 인앱 알림 자동 적재
 - [x] 🟡 설정 화면 (사운드 ON/OFF, 알림 설정, 계정, 도움말)
+- [x] 🟡 사운드 시스템 (BGM + SFX)
+  - [x] howler.js 기반 오디오 매니저 (`src/services/audio.ts`) — BGM 페이드 인/아웃, SFX Howl 캐싱, 키별 게인 보정
+  - [x] useAudioStore (BGM/SFX ON/OFF, localStorage 영속, 리하이드레이트 시 상태 동기화)
+  - [x] 첫 user gesture에서 자동재생 정책 unlock (pointerdown/keydown/touchstart)
+  - [x] visibilitychange로 탭 백그라운드 시 BGM 자동 일시정지 (배터리 절약)
+  - [x] BGM main 트랙 1개 (`public/audio/bgm/main.mp3`, 24kbps 룹)
+  - [x] SFX 11종 (`public/audio/sfx/`): click·tab·modal_open·modal_close·confirm·hatch·reward·notify·shutter·place·error·coin
+  - [x] 핵심 트리거 연결 — 모달 열기/닫기/확정, 부화 완료, 일일보상 등장, 인앱 알림 push, 포토 셔터, 데코 배치, 상점 구매 성공/실패
+  - [x] 설정 토글이 즉시 반영 (BGM 페이드, SFX 즉각 ON/OFF)
 
 ### 2-5. 외부 SDK 연동 & 마무리 (Week 9~10)
 

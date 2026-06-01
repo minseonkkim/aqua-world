@@ -3,6 +3,7 @@ import {
   PhotoFilter, PhotoFrame, FILTER_LABELS, FRAME_LABELS,
   composePhoto, sharePhoto, downloadPhoto,
 } from '@/utils/photoCompose';
+import { playSFX } from '@/services/audio';
 
 interface Props {
   /** 부모에서 TankScene의 captureFrame을 호출해 PNG dataURL을 반환 */
@@ -45,6 +46,7 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
       onToast('캡처 실패 — 잠시 후 다시 시도해주세요');
       return;
     }
+    playSFX('shutter');
     setStage('processing');
     try {
       const { blob, dataUrl } = await composePhoto({ dataUrl: raw, filter, frame });
