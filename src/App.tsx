@@ -11,6 +11,8 @@ import { isPushSupported, listenForeground, pushPermission } from '@/services/fi
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
+import PrivacyPage from '@/pages/PrivacyPage';
+import TermsPage from '@/pages/TermsPage';
 import Modal from '@/components/Modal';
 import PWAPrompts from '@/components/PWAPrompts';
 import { unlockAudio } from '@/services/audio';
@@ -122,6 +124,8 @@ export default function App() {
             <>
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
               <Route path="*" element={<Navigate to="/onboarding" replace />} />
             </>
           )}

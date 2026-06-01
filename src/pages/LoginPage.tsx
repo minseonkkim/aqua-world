@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
@@ -44,6 +45,7 @@ function createDefaultTank(): Tank {
 }
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { setUser, claimDailyLogin, setPendingReward } = useUserStore();
   const { tanks, addTank, setTanks } = useTankStore();
@@ -161,9 +163,29 @@ export default function LoginPage() {
 
       <p style={{ textAlign: 'center', color: 'var(--color-text-disabled)', fontSize: 12, lineHeight: 1.6 }}>
         계속 진행하면{' '}
-        <span style={{ color: 'var(--color-primary-light)', textDecoration: 'underline' }}>이용약관</span>
+        <button
+          type="button"
+          onClick={() => navigate('/terms')}
+          style={{
+            background: 'transparent', border: 'none', padding: 0,
+            color: 'var(--color-primary-light)', textDecoration: 'underline',
+            fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          이용약관
+        </button>
         {' 및 '}
-        <span style={{ color: 'var(--color-primary-light)', textDecoration: 'underline' }}>개인정보처리방침</span>
+        <button
+          type="button"
+          onClick={() => navigate('/privacy')}
+          style={{
+            background: 'transparent', border: 'none', padding: 0,
+            color: 'var(--color-primary-light)', textDecoration: 'underline',
+            fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          개인정보처리방침
+        </button>
         에 동의합니다.
       </p>
     </div>
