@@ -4,8 +4,8 @@ import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { onAuthChanged } from '@/services/firebase/auth';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
-import { claimDailyReward } from '@/services/firebase/functions';
-import { loadUserFromFirestore, loadUserTanks } from '@/services/firebase/firestore';
+import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
+import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, pushPermission } from '@/services/firebase/messaging';
 import MainLayout from '@/pages/MainLayout';
@@ -75,19 +75,20 @@ export default function App() {
       const current = store.user;
 
       if (firebaseUser) {
-        // 새로고침 등으로 스토어가 비어있으면 서버(Firestore)에서 권위 데이터 복원
+        // 새로고침 등으로 스토어가 비어있으면 서버(권위)에서 복원
         if (!current || current.id !== firebaseUser.uid) {
           try {
-            const [fsUser, fsTanks] = await Promise.all([
-              loadUserFromFirestore(firebaseUser.uid),
+            const [res, fsTanks] = await Promise.all([
+              bootstrapUser(),
               loadUserTanks(firebaseUser.uid),
             ]);
-            if (fsUser) {
-              store.setUser(fsUser);
-              useTankStore.getState().setTanks(fsTanks.length ? fsTanks : [createDefaultTank()]);
-              const daily = await claimDailyReward();
-              if (daily.reward) store.setPendingReward(daily.reward as DailyRewardResult);
-            }
+            store.setUser(res.user);
+            const tanks = fsTanks.length
+              ? fsTanks
+              : res.tank ? [res.tank] : [createDefaultTank()];
+            useTankStore.getState().setTanks(tanks);
+            const daily = await claimDailyReward();
+            if (daily.reward) store.setPendingReward(daily.reward as DailyRewardResult);
           } catch {
             // 네트워크 오류 시 로그인 화면 유지
           }

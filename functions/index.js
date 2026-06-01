@@ -51,6 +51,16 @@ function makeEgg(tier) {
   };
 }
 
+function makeTutorialEgg() {
+  return {
+    id: genId("egg"),
+    tier: "basic",
+    hatchDuration: 10,
+    startedAt: 0,
+    isHatching: false,
+  };
+}
+
 /**
  * 부화 중이고 아직 푸시를 보내지 않은 알들 중 가장 빠른 완료 시각(ms)을 반환.
  * 없으면 0. 스케줄러가 `nextHatchAt <= now` 로 효율적으로 조회하기 위한 인덱스 필드.
@@ -105,7 +115,14 @@ exports.bootstrapUser = onCall(async (request) => {
   const uRef = userRef(uid);
   const existing = await uRef.get();
   if (existing.exists) {
-    return { user: existing.data(), created: false };
+    const data = existing.data();
+    // 튜토리얼 알 미발급 계정에는 한 번 지급 (idempotent — 기존 유저 호환)
+    if (!data.tutorialEggGranted) {
+      data.inventory = [...(data.inventory || []), makeTutorialEgg()];
+      data.tutorialEggGranted = true;
+      await uRef.set(data);
+    }
+    return { user: data, created: false };
   }
 
   const now = Date.now();
@@ -114,7 +131,6 @@ exports.bootstrapUser = onCall(async (request) => {
     id: uid,
     displayName: auth.name || "AquaWorld 유저",
     email: auth.email || "",
-    photoURL: auth.picture || undefined,
     pearl: G.START_PEARL,
     starCoral: G.START_STAR_CORAL,
     level: 1,
@@ -123,12 +139,14 @@ exports.bootstrapUser = onCall(async (request) => {
     lastLoginAt: 0,
     createdAt: now,
     tanks: [],
-    inventory: [],
+    inventory: [makeTutorialEgg()],
+    tutorialEggGranted: true,
     collectedSpecies: [],
     feedCountToday: 0,
     lastFeedResetAt: now,
     tutorialStep: 0,
   };
+  if (auth.picture) user.photoURL = auth.picture;
   const tankId = `tank_${uid}`;
   const tank = {
     id: tankId,

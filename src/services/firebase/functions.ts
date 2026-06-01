@@ -57,7 +57,14 @@ function call<TData, TResult extends ServerResult>(name: string) {
     const fn = httpsCallable<TData, TResult>(functions, name);
     const res = await fn(data as TData);
     const result = res.data;
-    if (result.user) useUserStore.getState().setUser(result.user);
+    if (result.user) {
+      // tutorialStep / decorationInventory 는 클라 UI 권위 — 서버 응답의 stale 값으로 덮어쓰지 않는다.
+      const prev = useUserStore.getState().user;
+      const next = prev
+        ? { ...result.user, tutorialStep: prev.tutorialStep, decorationInventory: prev.decorationInventory }
+        : result.user;
+      useUserStore.getState().setUser(next);
+    }
     if (result.tank) useTankStore.getState().applyServerTank(result.tank);
     return result;
   };

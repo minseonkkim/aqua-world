@@ -38,7 +38,6 @@ export default function TankPage() {
     pendingDailyReward,
     collectHatchedEgg,
     addCollectedSpecies,
-    addEggToInventory,
     setTutorialStep,
     consumeDecorationInventory,
     addDecorationInventory,
@@ -181,7 +180,7 @@ export default function TankPage() {
       return;
     }
     if (action.type === 'gift_egg') {
-      addEggToInventory('basic', 10); // 10초 부화 튜토리얼 알
+      // 튜토리얼 알은 bootstrapUser가 가입 시 inventory에 미리 발급함.
       showToast('🎁 튜토리얼 알 지급! (10초 부화)');
       setTutorialStep(4);
       return;

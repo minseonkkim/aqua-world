@@ -4,7 +4,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle } from '@/services/firebase/auth';
-import { loadUserFromFirestore, loadUserTanks } from '@/services/firebase/firestore';
+import { loadUserTanks } from '@/services/firebase/firestore';
 import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
 import { Tank } from '@/types';
 import { DailyRewardResult } from '@/store/useUserStore';
@@ -55,24 +55,15 @@ export default function LoginPage() {
     try {
       const firebaseUser = await signInWithGoogle();
 
-      // 기존 유저인지 Firestore에서 확인
-      const [firestoreUser, firestoreTanks] = await Promise.all([
-        loadUserFromFirestore(firebaseUser.uid),
+      // bootstrapUser는 idempotent — 신규면 생성하고 튜토리얼 알을 발급,
+      // 기존이면 그대로 반환(미발급 계정엔 한 번만 튜토리얼 알 지급).
+      const [res, firestoreTanks] = await Promise.all([
+        bootstrapUser(),
         loadUserTanks(firebaseUser.uid),
       ]);
-
-      if (firestoreUser) {
-        // 기존 유저: Firestore 데이터 복원
-        setUser(firestoreUser);
-        if (firestoreTanks.length > 0) {
-          setTanks(firestoreTanks);
-        }
-      } else {
-        // 신규 유저: 서버(Cloud Functions)에서 생성 — 시작 재화·수조를 서버가 고정
-        const res = await bootstrapUser();
-        setUser(res.user);
-        if (res.tank) setTanks([res.tank]);
-      }
+      setUser(res.user);
+      if (firestoreTanks.length > 0) setTanks(firestoreTanks);
+      else if (res.tank) setTanks([res.tank]);
 
       // 일일 로그인 보상 (서버 검증)
       const daily = await claimDailyReward();
