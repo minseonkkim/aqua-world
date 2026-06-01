@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Fish } from '@/types';
 import { useFishStore } from '@/store/useFishStore';
+import { useTankStore } from '@/store/useTankStore';
 import { computeGrowth, formatRemaining } from '@/utils/growth';
+import { computeFishComfort, comfortToMood } from '@/utils/mood';
 
 const RARITY_COLORS: Record<string, string> = {
   common: 'var(--color-rarity-common)',
@@ -36,6 +38,7 @@ interface Props {
 export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: Props) {
   const { getSpeciesById } = useFishStore();
   const species = getSpeciesById(fish.speciesId);
+  const activeTank = useTankStore(s => s.tanks.find(t => t.id === s.activeTankId) ?? null);
 
   const rarity = species?.rarity ?? 'common';
   const color = RARITY_COLORS[rarity];
@@ -47,6 +50,18 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: P
     const id = setInterval(() => setSnapshot(computeGrowth(fish)), 1000);
     return () => clearInterval(id);
   }, [fish]);
+
+  // 쾌적도 — 카드 열 때 한 번 계산 (tank/fish 의존성으로 갱신)
+  const comfort = useMemo(
+    () => activeTank ? computeFishComfort(fish, activeTank, species?.habitat) : null,
+    [fish, activeTank, species?.habitat],
+  );
+  const displayMood = comfort ? comfortToMood(comfort.total) : fish.mood;
+  const comfortColor =
+    !comfort ? '#888'
+    : comfort.total >= 70 ? '#4caf50'
+    : comfort.total >= 35 ? '#ffb74d'
+    : '#e57373';
 
   const isMax = fish.growthStage === 'large';
   const canFeed = feedRemaining > 0 && !isMax;
@@ -95,8 +110,49 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: P
               {species?.scientificName}
             </div>
           </div>
-          <div style={{ fontSize: 22 }}>{MOOD_EMOJI[fish.mood]}</div>
+          <div style={{ fontSize: 22 }}>{MOOD_EMOJI[displayMood]}</div>
         </div>
+
+        {/* 쾌적도 게이지 */}
+        {comfort && (
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginBottom: 12,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                쾌적도 — <span style={{ color: comfortColor, fontWeight: 700 }}>{comfort.total}</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>/100</span>
+              </div>
+              <div style={{ fontSize: 11, color: comfortColor, fontWeight: 600 }}>
+                {displayMood === 'happy' ? '행복' : displayMood === 'bored' ? '심심함' : '평범'}
+              </div>
+            </div>
+            <div style={{
+              height: 8, borderRadius: 4,
+              background: 'rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: 4,
+                width: `${comfort.total}%`,
+                background: comfortColor,
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+            {comfort.tips.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {comfort.tips.slice(0, 2).map((tip, idx) => (
+                  <div key={idx} style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                    💡 {tip}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 성장 진행도 */}
         <div style={{
@@ -134,7 +190,7 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: P
           {[
             { label: '서식지', value: species?.habitat ?? '-' },
             { label: '먹이 횟수', value: `${fish.feedCount}회` },
-            { label: '기분', value: fish.mood === 'happy' ? '행복' : fish.mood === 'bored' ? '심심함' : '평범' },
+            { label: '기분', value: displayMood === 'happy' ? '행복' : displayMood === 'bored' ? '심심함' : '평범' },
             { label: '성장 가속', value: `+${Math.floor((fish.growthBoostSeconds || 0) / 60)}분` },
           ].map(({ label, value }) => (
             <div key={label} style={{

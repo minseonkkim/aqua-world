@@ -74,6 +74,8 @@ export interface Tank {
   createdAt: number;
   updatedAt: number;
   decorationPresets?: DecorationPreset[];
+  /** 마지막 청결도 감쇠 계산 시각(unix ms). 없으면 updatedAt fallback */
+  lastCleanlinessTickAt?: number;
 }
 
 // ==================== User ====================

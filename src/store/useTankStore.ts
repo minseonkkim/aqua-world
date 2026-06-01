@@ -3,7 +3,14 @@ import { persist } from 'zustand/middleware';
 import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage, DecorationPreset } from '../types';
 import { FEED_GROWTH_BOOST_SECONDS } from '../constants';
 import { applyGrowthAdvance } from '../utils/growth';
+import {
+  computeFishComfort,
+  comfortToMood,
+  decayCleanliness,
+  CLEANLINESS_PER_FEED,
+} from '../utils/mood';
 import { useUserStore } from './useUserStore';
+import { useFishStore } from './useFishStore';
 
 interface TankState {
   tanks: Tank[];
@@ -34,6 +41,13 @@ interface TankState {
   feedFish: (tankId: string, fishId: string) => { newStage: FishGrowthStage | null } | null;
   /** 활성 수조의 모든 물고기 성장 상태를 검사하여 승급 처리. 승급된 fish id 목록 반환. */
   tickFishGrowth: (tankId: string) => string[];
+
+  /** 시간 경과만큼 청결도 감쇠 + 모든 물고기 mood 재계산 */
+  tickMoodAndCleanliness: (tankId: string) => void;
+  /** 청결도를 100으로 복구 (비용 차감은 호출자가 책임) */
+  cleanTank: (tankId: string) => void;
+  /** 먹이 등으로 인한 오염 누적 — 청결도 감소 */
+  contaminate: (tankId: string, amount?: number) => void;
 
   /** 현재 배치를 슬롯에 저장 (덮어쓰기). 저장된 decorations 스냅샷 반환 */
   savePreset: (tankId: string, slot: number) => DecorationPreset | null;
@@ -231,6 +245,62 @@ export const useTankStore = create<TankState>()(
           ),
         }));
       },
+
+      tickMoodAndCleanliness: tankId => {
+        const { tanks } = get();
+        const tank = tanks.find(t => t.id === tankId);
+        if (!tank) return;
+        const now = Date.now();
+        const lastTick = tank.lastCleanlinessTickAt ?? tank.updatedAt ?? now;
+        const nextClean = decayCleanliness(tank.cleanliness, lastTick, now);
+        const species = useFishStore.getState().allSpecies;
+        // mood 계산용 임시 tank (감쇠된 청결도 반영)
+        const tankForCalc: Tank = { ...tank, cleanliness: nextClean };
+        let moodChanged = false;
+        const nextFish = tank.fish.map(f => {
+          const sp = species.find(s => s.id === f.speciesId);
+          const comfort = computeFishComfort(f, tankForCalc, sp?.habitat, now);
+          const mood = comfortToMood(comfort.total);
+          if (mood === f.mood) return f;
+          moodChanged = true;
+          return { ...f, mood };
+        });
+        const cleanlinessChanged = Math.abs(nextClean - tank.cleanliness) > 0.01;
+        if (!moodChanged && !cleanlinessChanged) {
+          // tick 시각만 갱신 — 다음 호출에서 누적 감쇠 폭주 방지
+          set(state => ({
+            tanks: state.tanks.map(t =>
+              t.id === tankId ? { ...t, lastCleanlinessTickAt: now } : t,
+            ),
+          }));
+          return;
+        }
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? { ...t, fish: nextFish, cleanliness: nextClean, lastCleanlinessTickAt: now }
+              : t,
+          ),
+        }));
+      },
+
+      cleanTank: tankId =>
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? { ...t, cleanliness: 100, lastCleanlinessTickAt: Date.now(), updatedAt: Date.now() }
+              : t,
+          ),
+        })),
+
+      contaminate: (tankId, amount = CLEANLINESS_PER_FEED) =>
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? { ...t, cleanliness: Math.max(0, t.cleanliness - amount), updatedAt: Date.now() }
+              : t,
+          ),
+        })),
 
       tickFishGrowth: tankId => {
         const { tanks } = get();

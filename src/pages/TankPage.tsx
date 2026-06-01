@@ -15,6 +15,7 @@ import { useFishStore } from '@/store/useFishStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
+import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
 import {
   isCloudUser,
   sprinkleFeed,
@@ -32,6 +33,7 @@ export default function TankPage() {
   const {
     user,
     addPearl,
+    spendPearl,
     recordFeed,
     pendingDailyReward,
     collectHatchedEgg,
@@ -45,6 +47,7 @@ export default function TankPage() {
     tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
     savePreset, loadPreset, deletePreset, setLightMode,
+    tickMoodAndCleanliness, cleanTank, contaminate,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const pushNotification = useNotificationStore(s => s.push);
@@ -63,6 +66,10 @@ export default function TankPage() {
   const environment: TankEnvironment = activeTank?.environment ?? 'coral_reef';
   const fishInTank = activeTank?.fish ?? [];
   const decorationsInTank = activeTank?.decorations ?? [];
+  const cleanliness = Math.round(activeTank?.cleanliness ?? 100);
+  const happyRatio = fishInTank.length > 0
+    ? Math.round((fishInTank.filter(f => f.mood === 'happy').length / fishInTank.length) * 100)
+    : 0;
   const selectedDecoration = useMemo(
     () => decorationsInTank.find(d => d.id === selectedDecoId) ?? null,
     [decorationsInTank, selectedDecoId],
@@ -80,10 +87,11 @@ export default function TankPage() {
 
   const handleFishClick = useCallback((f: Fish) => setSelectedFishId(f.id), []);
 
-  // 주기적 성장 틱 (30초마다) — 성장/부화 완료 시 토스트 + 알림 생성
+  // 주기적 성장 틱 (30초마다) — 성장/부화 완료 시 토스트 + 알림 생성, mood/청결도 갱신
   useEffect(() => {
     if (!activeTankId) return;
     const tick = () => {
+      tickMoodAndCleanliness(activeTankId);
       const advancedIds = tickFishGrowth(activeTankId);
       if (advancedIds.length > 0) {
         const updated = useTankStore.getState().tanks.find(t => t.id === activeTankId)?.fish ?? [];
@@ -122,7 +130,7 @@ export default function TankPage() {
     tick();
     const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
-  }, [activeTankId, tickFishGrowth, pushNotification]);
+  }, [activeTankId, tickFishGrowth, tickMoodAndCleanliness, pushNotification]);
 
   // 일일 보상 수령 시 알림 생성 (로컬·클라우드 모두 pendingDailyReward를 거침)
   useEffect(() => {
@@ -189,6 +197,7 @@ export default function TankPage() {
       const prevUser = useUserStore.getState().user;
       if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
       addPearl(10);
+      if (activeTankId) contaminate(activeTankId);
       showToast('+10 🪙 Pearl 획득!');
       sprinkleFeed().catch(() => {
         useUserStore.getState().setUser(prevUser);
@@ -198,6 +207,7 @@ export default function TankPage() {
     }
     if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
+    if (activeTankId) contaminate(activeTankId);
     showToast('+10 🪙 Pearl 획득!');
   };
 
@@ -210,6 +220,7 @@ export default function TankPage() {
         return false;
       }
       addPearl(10);
+      if (activeTankId) contaminate(activeTankId);
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       sprinkleFeed().catch(() => {
         useUserStore.getState().setUser(prevUser);
@@ -222,9 +233,10 @@ export default function TankPage() {
       return false;
     }
     addPearl(10);
+    if (activeTankId) contaminate(activeTankId);
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     return true;
-  }, [recordFeed, addPearl]);
+  }, [recordFeed, addPearl, activeTankId, contaminate]);
 
   const handleFeedFish = async (fish: Fish) => {
     if (!activeTankId) return;
@@ -241,6 +253,7 @@ export default function TankPage() {
       }
       addPearl(10);
       const result = feedFish(activeTankId, fish.id);
+      contaminate(activeTankId);
       if (result?.newStage) showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
       else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
       feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(() => {
@@ -256,6 +269,7 @@ export default function TankPage() {
     }
     addPearl(10);
     const result = feedFish(activeTankId, fish.id);
+    contaminate(activeTankId);
     if (result?.newStage) {
       showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
     } else {
@@ -320,6 +334,21 @@ export default function TankPage() {
   };
 
   const remaining = 3 - (user?.feedCountToday ?? 0);
+
+  const handleCleanTank = () => {
+    if (!activeTankId) return;
+    if (cleanliness >= 95) {
+      showToast('이미 깨끗해요 ✨');
+      return;
+    }
+    if (!spendPearl(CLEAN_TANK_COST_PEARL)) {
+      showToast(`Pearl이 부족합니다 (${CLEAN_TANK_COST_PEARL} 🪙 필요)`);
+      return;
+    }
+    cleanTank(activeTankId);
+    tickMoodAndCleanliness(activeTankId);
+    showToast('💧 물을 갈았어요 — 청결도 100%');
+  };
 
   // ===== 꾸미기 모드 핸들러 =====
   const handleAddDecoration = useCallback((modelId: string) => {
@@ -464,9 +493,22 @@ export default function TankPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {fishInTank.length > 0 && (
-            <div className="currency-pill" style={{ color: 'var(--color-secondary)' }}>
-              🐟 {fishInTank.length}
-            </div>
+            <>
+              <div
+                className="currency-pill"
+                title={`수조 청결도 ${cleanliness}%`}
+                style={{ color: cleanliness < 35 ? '#e57373' : cleanliness < 70 ? '#ffb74d' : '#80deea' }}
+              >
+                💧 {cleanliness}%
+              </div>
+              <div
+                className="currency-pill"
+                title={`행복한 물고기 ${happyRatio}%`}
+                style={{ color: happyRatio >= 70 ? '#81c784' : happyRatio >= 35 ? '#ffb74d' : '#e57373' }}
+              >
+                💖 {happyRatio}%
+              </div>
+            </>
           )}
           <div className="currency-pill" style={{ color: 'var(--color-accent)' }}>
             Lv.{user?.level ?? 1}
@@ -505,6 +547,12 @@ export default function TankPage() {
         <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
+            {
+              icon: '💧',
+              label: `청소\n${CLEAN_TANK_COST_PEARL}🪙`,
+              action: handleCleanTank,
+              active: cleanliness < 35,
+            },
             { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
             { icon: '📷', label: '포토', action: () => setPhotoMode(true) },
             {

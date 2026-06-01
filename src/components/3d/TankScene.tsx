@@ -7,6 +7,7 @@ import { STAGE_SCALE } from '@/constants';
 import { cloneFishModel, getFishModel, preloadFishModels } from '@/utils/fishModelLoader';
 import { buildDecorationMesh, getDecorationMeta } from '@/utils/decorationModels';
 import { preloadDecorationModels } from '@/utils/decorationModelLoader';
+import { moodSpeedFactor, moodSinkBias } from '@/utils/mood';
 
 export type LightMode = 'auto' | 'day' | 'night' | 'sunset';
 
@@ -685,7 +686,14 @@ function TankSceneImpl({
       const vel = f.userData.vel as THREE.Vector3;
       const speciesId = f.userData.speciesId as string | null;
 
-      // 1) 가까운 먹이 추적 — 있으면 무리 행동보다 우선
+      // mood 가중치 — happy는 빠르고 활발, bored는 느리고 바닥으로 가라앉음
+      const fishMood = fishDataRef.current[i]?.mood ?? 'normal';
+      const speedScale = moodSpeedFactor(fishMood);
+      const maxSpeed = BOID_MAX_SPEED * speedScale;
+      const minSpeed = BOID_MIN_SPEED * speedScale;
+      const sinkBias = moodSinkBias(fishMood);
+
+      // 1) 가까운 먹이 추적 — 있으면 무리 행동보다 우선 (먹이 앞에선 mood 무시, 항상 최대 가속)
       let nearestFood: FoodParticle | null = null;
       let nearestDist = 2.2;
       for (const fp of foods) {
@@ -732,16 +740,18 @@ function TankSceneImpl({
 
         if (flockCount > 0) {
           // 정렬: 이웃 평균 속도 방향으로
-          align.divideScalar(flockCount).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          align.divideScalar(flockCount).normalize().multiplyScalar(maxSpeed).sub(vel);
           accel.addScaledVector(limitVec(align, BOID_MAX_FORCE), BOID_W_ALIGN);
           // 응집: 이웃 무게중심 쪽으로
-          cohesion.divideScalar(flockCount).sub(f.position).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          cohesion.divideScalar(flockCount).sub(f.position).normalize().multiplyScalar(maxSpeed).sub(vel);
           accel.addScaledVector(limitVec(cohesion, BOID_MAX_FORCE), BOID_W_COHESION);
         }
         if (sepCount > 0) {
-          separation.divideScalar(sepCount).normalize().multiplyScalar(BOID_MAX_SPEED).sub(vel);
+          separation.divideScalar(sepCount).normalize().multiplyScalar(maxSpeed).sub(vel);
           accel.addScaledVector(limitVec(separation, BOID_MAX_FORCE), BOID_W_SEPARATION);
         }
+        // bored 물고기는 천천히 바닥으로 가라앉음
+        if (sinkBias !== 0) vel.y += sinkBias;
         vel.add(accel);
       }
 
@@ -754,10 +764,10 @@ function TankSceneImpl({
       if (f.position.z >  TANK_HALF_Z - m) vel.z -= BOID_BOUND_FORCE;
       else if (f.position.z < -TANK_HALF_Z + m) vel.z += BOID_BOUND_FORCE;
 
-      // 4) 속도 제한 (최소/최대)
+      // 4) 속도 제한 (mood 가중치 반영)
       const speed = vel.length();
-      if (speed > BOID_MAX_SPEED) vel.multiplyScalar(BOID_MAX_SPEED / speed);
-      else if (speed > 1e-5 && speed < BOID_MIN_SPEED) vel.multiplyScalar(BOID_MIN_SPEED / speed);
+      if (speed > maxSpeed) vel.multiplyScalar(maxSpeed / speed);
+      else if (speed > 1e-5 && speed < minSpeed) vel.multiplyScalar(minSpeed / speed);
 
       // 5) 위치 갱신 + 수직 미세 흔들림
       f.position.x += vel.x;
