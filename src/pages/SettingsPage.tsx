@@ -130,12 +130,20 @@ export default function SettingsPage() {
       <Section title="정보" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
         <Row label="버전"><span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>1.0.0</span></Row>
-        <Row label="개인정보처리방침">
+        <div
+          onClick={() => navigate('/privacy')}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+        >
+          <span style={{ fontSize: 15 }}>개인정보 처리방침</span>
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
-        </Row>
-        <Row label="이용약관">
+        </div>
+        <div
+          onClick={() => navigate('/terms')}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+        >
+          <span style={{ fontSize: 15 }}>이용약관</span>
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>›</span>
-        </Row>
+        </div>
         <div
           onClick={() => navigate('/licenses')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}

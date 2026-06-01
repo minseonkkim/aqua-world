@@ -5,6 +5,8 @@ import CompendiumPage from './CompendiumPage';
 import ShopPage from './ShopPage';
 import FriendsPage from './FriendsPage';
 import SettingsPage from './SettingsPage';
+import PrivacyPage from './PrivacyPage';
+import TermsPage from './TermsPage';
 // LicensesPage는 130KB 라이선스 JSON을 import하므로 lazy load
 const LicensesPage = lazy(() => import('./LicensesPage'));
 
@@ -29,6 +31,8 @@ export default function MainLayout() {
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
           <Route path="/licenses" element={
             <Suspense fallback={<div className="page"><div className="page-header">오픈소스 라이선스</div></div>}>
               <LicensesPage />
