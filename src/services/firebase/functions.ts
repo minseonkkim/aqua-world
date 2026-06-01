@@ -101,3 +101,12 @@ export const feedFish = call<
   { tankId: string; fishId: string },
   { user: User; tank: Tank; newStage: FishGrowthStage | null }
 >('feedFish');
+
+// ─── 회원 탈퇴 ─────────────────────────────────────────────────────────────
+// 서버에서 user 문서 + 소유 tanks + Auth 계정까지 영구 삭제한다.
+// 응답에 user/tank 가 없으므로 call 헬퍼를 쓰지 않고 직접 호출한다.
+
+export async function deleteAccount(): Promise<void> {
+  if (!functions) throw new FunctionsUnavailableError();
+  await httpsCallable<void, { ok: boolean }>(functions, 'deleteAccount')();
+}

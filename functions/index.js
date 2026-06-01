@@ -443,6 +443,35 @@ exports.claimMilestone = onCall(async (request) => {
   });
 });
 
+// ─── 회원 탈퇴 (계정 영구 삭제) ──────────────────────────────────────────────
+// users/{uid} 문서 + ownerId==uid 인 모든 tanks 문서 + Auth 계정 자체를 삭제.
+// 처리방침 제7조에 따라 30일 이내 영구 삭제 의무를 즉시 이행한다.
+
+exports.deleteAccount = onCall(async (request) => {
+  const uid = requireAuth(request);
+
+  // 1. 소유 tanks 일괄 삭제 (개수가 적으므로 단일 batch 로 충분)
+  const tanksSnap = await db.collection("tanks").where("ownerId", "==", uid).get();
+  if (!tanksSnap.empty) {
+    const batch = db.batch();
+    tanksSnap.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 2. user 문서 삭제
+  await userRef(uid).delete();
+
+  // 3. Firebase Auth 계정 삭제 (이후 클라이언트의 모든 ID 토큰 무효화)
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (err) {
+    // Auth 계정이 이미 없는 경우(이중 호출 등)는 성공으로 간주
+    if (err && err.code !== "auth/user-not-found") throw err;
+  }
+
+  return { ok: true };
+});
+
 // ─── 웹 푸시(FCM) 토큰 등록 / 해제 ───────────────────────────────────────────
 
 exports.registerPushToken = onCall(async (request) => {

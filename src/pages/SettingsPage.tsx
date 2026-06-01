@@ -6,6 +6,7 @@ import { useModalStore } from '@/store/useModalStore';
 import { useAudioStore } from '@/store/useAudioStore';
 import { playSFX } from '@/services/audio';
 import { signOut } from '@/services/firebase/auth';
+import { deleteAccount } from '@/services/firebase/functions';
 import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
 
 export default function SettingsPage() {
@@ -58,6 +59,44 @@ export default function SettingsPage() {
     await signOut();
     setUser(null);
     setTanks([]);
+  };
+
+  // 게스트 계정(`guest_` prefix)은 서버에 데이터가 없어 탈퇴 대상이 아님
+  const isCloudUser = !!user && !user.id.startsWith('guest_');
+
+  const handleDeleteAccount = async () => {
+    const first = await useModalStore.getState().confirm({
+      emoji: '⚠️',
+      title: '회원 탈퇴',
+      message: '회원 탈퇴 시 어항·물고기·재화·도감 등 모든 데이터가 영구 삭제되며, 복구할 수 없습니다. 계속하시겠습니까?',
+      confirmText: '계속',
+      tone: 'danger',
+    });
+    if (!first) return;
+
+    const final = await useModalStore.getState().confirm({
+      emoji: '🗑️',
+      title: '정말로 삭제하시겠습니까?',
+      message: '이 작업은 되돌릴 수 없습니다. 동일 이메일로 다시 가입하면 새 계정으로 시작합니다.',
+      confirmText: '영구 삭제',
+      tone: 'danger',
+    });
+    if (!final) return;
+
+    try {
+      await deleteAccount();
+      setUser(null);
+      setTanks([]);
+      // Auth 계정도 서버에서 삭제됐으므로 onAuthChanged 가 자동 트리거되어 /onboarding 으로 이동
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await useModalStore.getState().alert({
+        emoji: '⚠️',
+        title: '탈퇴 실패',
+        message: `${msg}\n\n문제가 계속되면 minsun9856@gmail.com 으로 문의해주세요.`,
+        tone: 'danger',
+      });
+    }
   };
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
@@ -155,7 +194,26 @@ export default function SettingsPage() {
 
       <Section title="계정" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
-        <div onClick={handleLogout} style={{ padding: '14px 16px', color: '#ff6b6b', cursor: 'pointer', fontSize: 15 }}>로그아웃</div>
+        <div
+          onClick={handleLogout}
+          style={{
+            padding: '14px 16px', color: '#ff6b6b', cursor: 'pointer', fontSize: 15,
+            borderBottom: isCloudUser ? '1px solid rgba(255,255,255,0.05)' : 'none',
+          }}
+        >
+          로그아웃
+        </div>
+        {isCloudUser && (
+          <div
+            onClick={handleDeleteAccount}
+            style={{ padding: '14px 16px', color: '#ff6b6b', cursor: 'pointer', fontSize: 15 }}
+          >
+            회원 탈퇴
+            <div style={{ fontSize: 11, color: 'var(--color-text-disabled)', marginTop: 2 }}>
+              모든 데이터 영구 삭제 · 복구 불가
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ height: 24 }} />
