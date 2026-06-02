@@ -331,10 +331,10 @@
   - [ ] 물고기 성장 완료 알림 (백그라운드 푸시 — 현재 인앱 알림만)
   - [ ] 일일 보상 리마인더 (백그라운드 푸시 — 현재 인앱 알림만)
   - [ ] iOS 16.4+ 웹 푸시 실기기 지원 확인 (isSupported 가드만 적용, 실기기 미검증)
-- [ ] 🔴 분석 및 모니터링 SDK 연동
-  - [ ] Firebase Analytics 이벤트 정의 및 구현 (핵심 20개 이벤트)
+- [-] 🔴 분석 및 모니터링 SDK 연동
+  - [x] Firebase Analytics 이벤트 정의 및 구현 (핵심 20개 이벤트)
   - [ ] Amplitude 코호트 분석 세팅
-  - [ ] Sentry 크래시 리포팅 연동
+  - [x] Sentry 크래시 리포팅 연동 (@sentry/react + ErrorBoundary, Replay 에러 세션 100%, identifyUser 에 setUser 묶음, @sentry/vite-plugin 소스맵 자동 업로드)
 - [ ] 🔴 전체 기기/브라우저 테스트
   - [ ] iPhone SE (소형 화면, iOS Safari)
   - [ ] iPhone 15 Pro Max (대형 화면, iOS Safari)
