@@ -57,7 +57,7 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontWeight: 600, fontSize: 14 }}>{TIER_LABEL[egg.tier]}</span>
+          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>{TIER_LABEL[egg.tier]}</span>
           <span style={{
             fontSize: 10, padding: '2px 6px', borderRadius: 4,
             background: TIER_COLOR[egg.tier], color: '#fff',
@@ -154,7 +154,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 130,
-          width: 280,
+          width: 300,
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 16,
