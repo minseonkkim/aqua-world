@@ -8,6 +8,14 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
+const { defineSecret } = require("firebase-functions/params");
+
+// 카카오 REST API 키 — `firebase functions:secrets:set KAKAO_REST_API_KEY` 로 주입.
+// 에뮬레이터에서는 functions/.env.local 의 KAKAO_REST_API_KEY 값을 사용한다.
+const kakaoRestKey = defineSecret("KAKAO_REST_API_KEY");
+// 카카오 콘솔 → 보안 → Client Secret 활성화 시 필수.
+// `firebase functions:secrets:set KAKAO_CLIENT_SECRET` 로 주입.
+const kakaoClientSecret = defineSecret("KAKAO_CLIENT_SECRET");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
 
@@ -459,6 +467,123 @@ exports.claimMilestone = onCall(async (request) => {
     tx.set(userRef(uid), user);
     return { user, reward };
   });
+});
+
+// ─── 카카오 로그인 (authorization code → Firebase Custom Token) ────────────
+// Firebase Auth 는 카카오를 기본 제공자로 지원하지 않으므로,
+// 1) 클라가 Kakao.Auth.authorize() 리다이렉트로 받은 `code` 를 보내면
+// 2) 서버가 https://kauth.kakao.com/oauth/token 으로 access_token 을 교환하고
+// 3) /v2/user/me 로 프로필을 조회한 뒤 uid = `kakao:${kakaoId}` 로 Auth 유저를 upsert
+// 4) Custom Token 을 발급해서 돌려준다. 클라는 signInWithCustomToken 으로 진입.
+
+exports.kakaoSignIn = onCall(
+  { secrets: [kakaoRestKey, kakaoClientSecret] },
+  async (request) => {
+  const code = request.data && request.data.code;
+  const redirectUri = request.data && request.data.redirectUri;
+  if (!code || typeof code !== "string") {
+    throw new HttpsError("invalid-argument", "code 필요");
+  }
+  if (!redirectUri || typeof redirectUri !== "string") {
+    throw new HttpsError("invalid-argument", "redirectUri 필요");
+  }
+  const restKey = kakaoRestKey.value();
+  if (!restKey) {
+    throw new HttpsError(
+      "failed-precondition",
+      "KAKAO_REST_API_KEY 시크릿이 설정되지 않았습니다.",
+    );
+  }
+  // client_secret 은 카카오 콘솔 설정에 따라 선택. 미설정이면 빈 문자열.
+  const clientSecret = kakaoClientSecret.value();
+
+  // 1. authorization code → access_token 교환
+  let accessToken;
+  try {
+    const tokenParams = {
+      grant_type: "authorization_code",
+      client_id: restKey,
+      redirect_uri: redirectUri,
+      code,
+    };
+    if (clientSecret) tokenParams.client_secret = clientSecret;
+    const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(tokenParams).toString(),
+    });
+    const tokenBody = await tokenRes.json();
+    if (!tokenRes.ok) {
+      throw new HttpsError(
+        "unauthenticated",
+        `카카오 토큰 교환 실패: ${tokenBody.error_description || tokenBody.error || tokenRes.status}`,
+      );
+    }
+    accessToken = tokenBody.access_token;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", `카카오 토큰 교환 호출 실패: ${err.message || err}`);
+  }
+
+  // 2. 카카오 프로필 조회
+  let profile;
+  try {
+    const res = await fetch("https://kapi.kakao.com/v2/user/me", {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      throw new HttpsError("unauthenticated", `카카오 프로필 조회 실패 (HTTP ${res.status})`);
+    }
+    profile = await res.json();
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", `카카오 API 호출 실패: ${err.message || err}`);
+  }
+
+  const kakaoId = profile && profile.id;
+  if (!kakaoId) {
+    throw new HttpsError("unauthenticated", "카카오 프로필을 가져올 수 없습니다.");
+  }
+
+  const uid = `kakao:${kakaoId}`;
+  const kakaoAccount = profile.kakao_account || {};
+  const profileInfo = kakaoAccount.profile || {};
+  const displayName = profileInfo.nickname || "카카오 유저";
+  const photoURL = profileInfo.profile_image_url || undefined;
+  // 이메일은 카카오 사업자 검수 후에만 받을 수 있어 없을 수 있음
+  const email = kakaoAccount.email || undefined;
+
+  // 3. Firebase Auth 사용자 upsert (StrictMode/연타 동시 호출 시 createUser 가 경쟁할 수 있어 보호)
+  const updateFields = { displayName };
+  if (photoURL) updateFields.photoURL = photoURL;
+  if (email) updateFields.email = email;
+  try {
+    await admin.auth().updateUser(uid, updateFields);
+  } catch (err) {
+    if (err && err.code === "auth/user-not-found") {
+      try {
+        await admin.auth().createUser({ uid, ...updateFields });
+      } catch (err2) {
+        if (err2 && err2.code === "auth/uid-already-exists") {
+          // 다른 인스턴스가 직전에 생성 — 단순히 update 로 다시 진행
+          await admin.auth().updateUser(uid, updateFields);
+        } else {
+          throw err2;
+        }
+      }
+    } else {
+      throw err;
+    }
+  }
+
+  // 4. Custom Token 발급 (bootstrapUser 가 token.name / token.picture 를 읽으므로 클레임으로 동봉)
+  const claims = { provider: "kakao", name: displayName };
+  if (photoURL) claims.picture = photoURL;
+  if (email) claims.email = email;
+  const customToken = await admin.auth().createCustomToken(uid, claims);
+
+  return { customToken, uid };
 });
 
 // ─── 회원 탈퇴 (계정 영구 삭제) ──────────────────────────────────────────────

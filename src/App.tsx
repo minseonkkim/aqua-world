@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
-import { onAuthChanged } from '@/services/firebase/auth';
+import { onAuthChanged, completeKakaoLogin } from '@/services/firebase/auth';
+import { useModalStore } from '@/store/useModalStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
 import { loadUserTanks } from '@/services/firebase/firestore';
@@ -35,6 +36,63 @@ function createDefaultTank() {
 export default function App() {
   const { isAuthenticated, isLoading, setLoading } = useUserStore();
   useFirestoreSync();
+
+  // 카카오 콜백 동기 감지 — 첫 렌더 전에 결정해야 onboarding 깜빡임이 없다.
+  // ?code= 가 URL 에 있으면 토큰 교환 → 인증 완료까지 스플래시를 유지한다.
+  const [kakaoInFlight, setKakaoInFlight] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const p = new URLSearchParams(window.location.search);
+    return p.has('code') || p.has('error');
+  });
+
+  // 인증 완료(=user 스토어 채워짐)되면 자연스럽게 게이트 해제 → MainLayout 으로 라우팅.
+  useEffect(() => {
+    if (kakaoInFlight && isAuthenticated) setKakaoInFlight(false);
+  }, [kakaoInFlight, isAuthenticated]);
+
+  // 카카오 OAuth 콜백 처리.
+  // Kakao 가 ?code=...(+state, error) 를 붙여 redirectUri 로 돌려보내면, 우선 URL 에서 제거하고
+  // 서버에 code 를 보내 access_token 교환 + Custom Token 발급 → signInWithCustomToken.
+  // 이후의 bootstrap / daily reward 는 아래 onAuthChanged 가 자동으로 처리한다.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    const oauthError = url.searchParams.get('error');
+    const errorDesc = url.searchParams.get('error_description');
+    if (!code && !oauthError) return;
+
+    // URL 정리 (StrictMode 더블 마운트 시 두 번째 effect 에서는 code 가 없어 그대로 종료)
+    url.searchParams.delete('code');
+    url.searchParams.delete('state');
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_description');
+    window.history.replaceState({}, '', url.toString());
+
+    if (oauthError) {
+      void useModalStore.getState().alert({
+        emoji: '⚠️',
+        title: '카카오 로그인 취소',
+        message: `${oauthError}: ${errorDesc || '사용자가 동의하지 않았거나 인증이 중단되었습니다.'}`,
+        tone: 'info',
+      });
+      setKakaoInFlight(false);
+      return;
+    }
+
+    setLoading(true);
+    completeKakaoLogin(code!).catch(err => {
+      console.error('[Kakao callback]', err);
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      void useModalStore.getState().alert({
+        emoji: '⚠️',
+        title: '카카오 로그인 실패',
+        message: msg,
+        tone: 'danger',
+      });
+      setLoading(false);
+      setKakaoInFlight(false);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결
   useEffect(() => {
@@ -107,7 +165,7 @@ export default function App() {
     return unsubscribe;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (isLoading) {
+  if (isLoading || kakaoInFlight) {
     return (
       <div className="app-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: 64 }}>🌊</span>

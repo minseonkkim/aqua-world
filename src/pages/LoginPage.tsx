@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
-import { signInWithGoogle } from '@/services/firebase/auth';
+import { signInWithGoogle, startKakaoLogin } from '@/services/firebase/auth';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
 import { Tank } from '@/types';
@@ -50,10 +50,15 @@ export default function LoginPage() {
   const { setUser, claimDailyLogin, setPendingReward } = useUserStore();
   const { tanks, addTank, setTanks } = useTankStore();
 
-  const handleGoogleLogin = async () => {
+  // 소셜 로그인 공통: signIn 콜백으로 Firebase 진입 → bootstrap → tanks 로드 → 일일보상.
+  const handleSocialLogin = async (
+    providerLabel: string,
+    signIn: () => Promise<{ uid: string }>,
+    silentErrorCodes: string[] = [],
+  ) => {
     setLoading(true);
     try {
-      const firebaseUser = await signInWithGoogle();
+      const firebaseUser = await signIn();
 
       // bootstrapUser는 idempotent — 신규면 생성하고 튜토리얼 알을 발급,
       // 기존이면 그대로 반환(미발급 계정엔 한 번만 튜토리얼 알 지급).
@@ -70,20 +75,44 @@ export default function LoginPage() {
       if (daily.reward) setPendingReward(daily.reward as DailyRewardResult);
     } catch (err) {
       const code = (err as { code?: string })?.code;
-      const SILENT_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/popup-blocked'];
-      if (code && SILENT_CODES.includes(code)) {
+      if (code && silentErrorCodes.includes(code)) {
         return;
       }
-      console.error('[Google Login]', err);
+      console.error(`[${providerLabel} Login]`, err);
       const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       await useModalStore.getState().alert({
         emoji: '⚠️',
-        title: 'Google 로그인 실패',
+        title: `${providerLabel} 로그인 실패`,
         message: `${msg}\n\n(DevTools 콘솔에서 자세한 스택을 확인하세요)`,
         tone: 'danger',
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () =>
+    handleSocialLogin('Google', signInWithGoogle, [
+      'auth/popup-closed-by-user',
+      'auth/cancelled-popup-request',
+      'auth/popup-blocked',
+    ]);
+
+  // 카카오는 리다이렉트 흐름 — 즉시 페이지가 카카오로 떠나므로 try/catch 가 의미 없다.
+  // SDK 초기화 실패만 잡아 모달로 보여준다. 콜백 후 토큰 교환은 App.tsx 에서 처리.
+  const handleKakaoLogin = () => {
+    try {
+      setLoading(true);
+      startKakaoLogin();
+    } catch (err) {
+      setLoading(false);
+      const msg = err instanceof Error ? err.message : String(err);
+      void useModalStore.getState().alert({
+        emoji: '⚠️',
+        title: '카카오 로그인 실패',
+        message: msg,
+        tone: 'danger',
+      });
     }
   };
 
@@ -143,7 +172,7 @@ export default function LoginPage() {
           <GoogleLogo />
           Google로 계속하기
         </button>
-        <button className="btn" style={{ background: '#FEE500', color: '#191919', gap: 10 }} onClick={() => comingSoon('카카오')} disabled={loading}>
+        <button className="btn" style={{ background: '#FEE500', color: '#191919', gap: 10 }} onClick={handleKakaoLogin} disabled={loading}>
           <KakaoLogo />
           카카오로 계속하기
         </button>

@@ -171,9 +171,9 @@
   - [x] Toast 알림 (인라인 컴포넌트)
   - [x] Currency Pill (.currency-pill)
 - [-] 🔴 Firebase 풀 연동
-  - [-] Firebase Auth (소셜 로그인)
+  - [x] Firebase Auth (소셜 로그인)
     - [x] Google Sign In
-    - [ ] 카카오 로그인
+    - [x] 카카오 로그인 (Kakao JS SDK + `kakaoSignIn` Cloud Function 으로 access_token 검증 후 Firebase Custom Token 발급, uid `kakao:{id}` upsert)
     - [x] 게스트 로그인 (로컬 상태)
   - [-] Firestore 데이터 모델 설계 및 구현
     - [x] users 컬렉션 (loadUserFromFirestore / saveUserToFirestore)
