@@ -585,13 +585,6 @@ export default function TankPage() {
             <>
               <div
                 className="currency-pill"
-                title={`수조 마릿수 ${fishInTank.length}/${tankCapacity}`}
-                style={{ color: tankFull ? '#e57373' : '#90caf9' }}
-              >
-                🐟 {fishInTank.length}/{tankCapacity}
-              </div>
-              <div
-                className="currency-pill"
                 title={`수조 청결도 ${cleanliness}%`}
                 style={{ color: cleanliness < 35 ? '#e57373' : cleanliness < 70 ? '#ffb74d' : '#80deea' }}
               >

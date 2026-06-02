@@ -121,10 +121,10 @@ img { display: block; max-width: 100%; }
 
 /* ── Currency pill ── */
 .currency-pill {
-  display: flex; align-items: center; gap: 4px;
+  display: flex; align-items: center; gap: 3px;
   background: rgba(0,0,0,0.5);
-  padding: 4px 10px; border-radius: 20px;
-  font-size: 14px; font-weight: 600;
+  padding: 3px 8px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
 }
 
 /* ── Scrollbar hide ── */
