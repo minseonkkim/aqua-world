@@ -7,9 +7,12 @@ build/
 .env.local
 .env.production
 ios/
-android/
 
 # Firebase CLI 자동생성물 (agent skills)
 .agents/
 skills-lock.json
 firebase-debug.log
+
+# Claude Code 로컬 워킹 디렉토리
+.claude/
+.firebase/

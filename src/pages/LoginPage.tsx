@@ -104,11 +104,11 @@ export default function LoginPage() {
 
   // 카카오는 리다이렉트 흐름 — 즉시 페이지가 카카오로 떠나므로 try/catch 가 의미 없다.
   // SDK 초기화 실패만 잡아 모달로 보여준다. 콜백 후 토큰 교환은 App.tsx 에서 처리.
-  const handleKakaoLogin = () => {
+  const handleKakaoLogin = async () => {
     try {
       setLoading(true);
       sessionStorage.setItem('aw:auth_action', 'kakao');
-      startKakaoLogin();
+      await startKakaoLogin();
     } catch (err) {
       sessionStorage.removeItem('aw:auth_action');
       setLoading(false);

@@ -2,8 +2,8 @@
 
 > **전체 기간:** 12개월 (Phase 0 ~ Phase 7)
 > **기준 문서:** AquaWorld 기획서 v1.0
-> **플랫폼:** React + Vite + PWA (iOS / Android / Desktop Web)
-> **최종 업데이트:** 2026년 6월
+> **플랫폼:** React + Vite + PWA + **Capacitor 네이티브 래퍼** (Android / iOS / Desktop Web)
+> **최종 업데이트:** 2026년 6월 — Capacitor 네이티브 전환 반영
 
 ---
 
@@ -304,6 +304,34 @@
   - [x] SFX 11종 (`public/audio/sfx/`): click·tab·modal_open·modal_close·confirm·hatch·reward·notify·shutter·place·error·coin
   - [x] 핵심 트리거 연결 — 모달 열기/닫기/확정, 부화 완료, 일일보상 등장, 인앱 알림 push, 포토 셔터, 데코 배치, 상점 구매 성공/실패
   - [x] 설정 토글이 즉시 반영 (BGM 페이드, SFX 즉각 ON/OFF)
+
+### 2-5-pre. Capacitor 네이티브 래핑 (PWA → Android/iOS 앱)
+
+> 상세 가이드: [`AquaWorld_Capacitor_네이티브_가이드.md`](./AquaWorld_Capacitor_네이티브_가이드.md)
+
+- [x] 🔴 Capacitor 코어 설치 (`@capacitor/core`, `@capacitor/cli`, `@capacitor/android`)
+- [x] 🔴 핵심 플러그인 설치 (`@capacitor/app` 딥링크, `@capacitor/browser` OAuth, `@capacitor/preferences`, `@capacitor/status-bar`, `@capacitor/splash-screen`)
+- [x] 🔴 `capacitor.config.ts` 생성 (appId `app.aquaworld`, webDir `dist`, splash/statusbar 설정)
+- [x] 🔴 `cap:build` / `cap:run:android` / `cap:livereload:android` npm 스크립트 추가
+- [x] 🔴 PWA 서비스워커 Capacitor 빌드 시 자동 비활성화 (`VITE_TARGET=capacitor` 분기)
+- [x] 🔴 카카오 로그인 네이티브 분기 — 외부 브라우저(`@capacitor/browser`) + 커스텀 스킴 딥링크(`app.aquaworld://oauth/kakao`) 콜백
+- [x] 🔴 Google 로그인 네이티브 분기 — `signInWithRedirect` + `getRedirectResult` 부팅 시 회수
+- [x] 🔴 App URL listener 등록 (`@capacitor/app` appUrlOpen → completeKakaoLogin)
+- [ ] 🔴 **(사용자 작업)** JDK 21 + Android Studio 설치
+- [ ] 🔴 **(사용자 작업)** `npx cap add android` 실행 (Android 네이티브 프로젝트 생성)
+- [ ] 🔴 **(사용자 작업)** `AndroidManifest.xml` 에 `app.aquaworld` 커스텀 스킴 intent-filter 추가
+- [x] 🔴 Firebase Hosting OAuth 중계 페이지 (`public-hosting/oauth/kakao.html`) — 카카오 https 제약 우회
+- [ ] 🔴 **(사용자 작업)** `firebase deploy --only hosting` 으로 중계 페이지 배포
+- [ ] 🔴 **(사용자 작업)** Kakao Developer Console 에 네이티브 redirect URI(`https://aquaworld-bf2f4.web.app/oauth/kakao.html`) 등록
+- [ ] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
+- [ ] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
+- [ ] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 웹 광고 SDK 대체 (Phase 2-5의 광고 항목과 합쳐서 처리)
+- [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
+- [ ] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` + 기존 FCM 토큰 흐름 통합
+- [ ] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용
+- [ ] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
+- [ ] 🟢 iOS 빌드 (Mac + Xcode 필요) — `npx cap add ios`, App Store Connect 등록
+- [ ] 🟢 Electron 데스크톱 래퍼 검토 (Phase 7-4 와 통합)
 
 ### 2-5. 외부 SDK 연동 & 마무리 (Week 9~10)
 
@@ -650,6 +678,6 @@
 
 > 본 문서는 기획서 v1.0 기준으로 작성되었으며,
 > 각 Phase 완료 시 리뷰를 통해 다음 Phase 계획을 업데이트합니다.
-> **플랫폼:** React + Vite + PWA (기존 Expo/React Native에서 전환, 2026년 5월)
+> **플랫폼:** React + Vite + PWA + Capacitor 네이티브 래퍼 (Expo/React Native → PWA 전환 2026.5, → Capacitor 네이티브 래핑 2026.6)
 >
 > **— END —**

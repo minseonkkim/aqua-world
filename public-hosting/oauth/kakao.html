@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>AquaWorld — 로그인 완료 중…</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a1628; color: #e7eef7;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", sans-serif; }
+    .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; gap: 18px; text-align: center; padding: 24px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #6ec6ff;
+      animation: pulse 1.1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.3); opacity: 1; } }
+    a { color: #6ec6ff; }
+    .muted { color: #93a3b8; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="dot"></div>
+    <h2>AquaWorld 앱으로 돌아가는 중...</h2>
+    <p class="muted">자동으로 돌아가지 않으면 <a id="manual" href="#">여기를 눌러주세요</a>.</p>
+  </div>
+  <script>
+    (function () {
+      // Kakao 가 ?code=... 또는 ?error=... 로 돌려보낸 쿼리스트링을 그대로 앱 커스텀 스킴으로 전달.
+      var qs = location.search || '';
+      var target = 'app.aquaworld://oauth/kakao' + qs;
+      // 수동 폴백 링크에도 같은 URL 세팅 (일부 in-app 브라우저에서 자동 이동이 막힐 때 대비)
+      var a = document.getElementById('manual');
+      if (a) a.setAttribute('href', target);
+      // 즉시 앱으로 점프 (replace 로 history 오염 방지)
+      try { location.replace(target); }
+      catch (e) { window.location.href = target; }
+    })();
+  </script>
+</body>
+</html>

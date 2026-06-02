@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
-import { onAuthChanged, completeKakaoLogin } from '@/services/firebase/auth';
+import { onAuthChanged, completeKakaoLogin, consumePendingRedirectResult } from '@/services/firebase/auth';
+import { App as CapApp } from '@capacitor/app';
+import { Browser } from '@capacitor/browser';
+import { isNative } from '@/services/platform';
 import { useModalStore } from '@/store/useModalStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
@@ -93,6 +96,43 @@ export default function App() {
       setLoading(false);
       setKakaoInFlight(false);
     });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Capacitor (네이티브) 전용: 딥링크로 돌아온 OAuth code 수신 + Google redirect 결과 회수.
+  useEffect(() => {
+    if (!isNative()) return;
+    void consumePendingRedirectResult();
+    const sub = CapApp.addListener('appUrlOpen', ({ url: deeplink }) => {
+      // 예: app.aquaworld://oauth/kakao?code=abcd...
+      try {
+        const u = new URL(deeplink);
+        const code = u.searchParams.get('code');
+        const oauthError = u.searchParams.get('error');
+        if (!code && !oauthError) return;
+        void Browser.close().catch(() => undefined);
+        if (oauthError) {
+          void useModalStore.getState().alert({
+            emoji: '⚠️',
+            title: '카카오 로그인 취소',
+            message: oauthError,
+            tone: 'info',
+          });
+          return;
+        }
+        setKakaoInFlight(true);
+        setLoading(true);
+        completeKakaoLogin(code!).catch(err => {
+          console.error('[Kakao deeplink]', err);
+          setLoading(false);
+          setKakaoInFlight(false);
+        });
+      } catch (e) {
+        console.warn('[appUrlOpen] parse fail', e);
+      }
+    });
+    return () => {
+      void sub.then(s => s.remove());
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결
@@ -220,7 +260,7 @@ export default function App() {
         </Routes>
       </HashRouter>
       <Modal />
-      <PWAPrompts />
+      {import.meta.env.VITE_TARGET !== 'capacitor' && <PWAPrompts />}
     </div>
   );
 }

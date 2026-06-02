@@ -1,4 +1,21 @@
 {
+  "hosting": {
+    "public": "public-hosting",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "/oauth/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-store" },
+          { "key": "Referrer-Policy", "value": "no-referrer" }
+        ]
+      }
+    ]
+  },
   "firestore": {
     "database": "(default)",
     "location": "asia-northeast3",

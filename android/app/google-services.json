@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "991739230354",
+    "project_id": "aquaworld-bf2f4",
+    "storage_bucket": "aquaworld-bf2f4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991739230354:android:638e8271ea010529a70e4b",
+        "android_client_info": {
+          "package_name": "app.aquaworld"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYqhyw-enxQUIWWI6tIexP5zos7c2DiGU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -8,12 +8,13 @@ export default defineConfig(({ mode }) => {
   const sentryEnabled = Boolean(
     env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT,
   );
+  const isCapacitor = process.env.VITE_TARGET === 'capacitor';
 
   return {
   build: { sourcemap: true },
   plugins: [
     react(),
-    VitePWA({
+    !isCapacitor && VitePWA({
       registerType: 'prompt',
       includeAssets: ['icons/*.png', 'icons/*.svg', 'favicon.svg'],
       manifest: {
@@ -81,7 +82,12 @@ export default defineConfig(({ mode }) => {
       }),
   ],
   resolve: {
-    alias: { '@': '/src' },
+    alias: {
+      '@': '/src',
+      ...(isCapacitor
+        ? { 'virtual:pwa-register/react': '/src/stubs/pwa-register-react.ts' }
+        : {}),
+    },
   },
   };
 });

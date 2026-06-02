@@ -10,9 +10,20 @@
     "type-check": "tsc -b --noEmit",
     "gen:fish": "node scripts/generate-fish-models.mjs",
     "gen:icons": "node scripts/generate-icons.mjs",
-    "gen:licenses": "node scripts/generate-licenses.mjs"
+    "gen:licenses": "node scripts/generate-licenses.mjs",
+    "cap:build": "cross-env VITE_TARGET=capacitor npm run build && cap sync",
+    "cap:sync": "cap sync",
+    "cap:open:android": "cap open android",
+    "cap:run:android": "cross-env VITE_TARGET=capacitor npm run build && cap sync android && cap run android",
+    "cap:livereload:android": "cross-env VITE_TARGET=capacitor cap run android --live-reload --external"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.2",
     "@sentry/react": "^10.55.0",
     "firebase": "^11.0.0",
     "howler": "^2.2.4",
@@ -23,6 +34,8 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
     "@gltf-transform/core": "^4.3.0",
     "@sentry/vite-plugin": "^5.3.0",
     "@types/howler": "^2.2.13",
@@ -32,6 +45,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "cross-env": "^10.1.0",
     "eslint": "^9.0.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
