@@ -91,6 +91,28 @@ export const TANK_ENVIRONMENTS: Record<TankEnvironment, { name: string; unlockLe
   space: { name: '우주', unlockLevel: 20 },
 };
 
+// ==================== 수조 수용량(마릿수 상한) ====================
+// capacityLevel(0~3) → 한 수조에 배치 가능한 최대 물고기 수
+export const TANK_CAPACITY_BY_LEVEL = [8, 12, 16, 20] as const;
+export const TANK_MAX_CAPACITY_LEVEL = TANK_CAPACITY_BY_LEVEL.length - 1;
+// 수조 확장 비용(Pearl): 레벨 0→1, 1→2, 2→3
+export const TANK_EXPAND_COST_PEARL = [300, 600, 1200] as const;
+
+/** capacityLevel(미지정 시 0)에 해당하는 마릿수 상한 반환 */
+export function getTankCapacity(capacityLevel?: number): number {
+  const lvl = Math.max(0, Math.min(TANK_MAX_CAPACITY_LEVEL, capacityLevel ?? 0));
+  return TANK_CAPACITY_BY_LEVEL[lvl];
+}
+
+// 확장 레벨 → 3D 수조 가로·세로(바닥 면적) 시각 배율. 높이는 고정.
+export const TANK_SCALE_BY_LEVEL = [1, 1.12, 1.24, 1.36] as const;
+
+/** capacityLevel(미지정 시 0)에 해당하는 수조 시각 배율 반환 */
+export function getTankScale(capacityLevel?: number): number {
+  const lvl = Math.max(0, Math.min(TANK_MAX_CAPACITY_LEVEL, capacityLevel ?? 0));
+  return TANK_SCALE_BY_LEVEL[lvl];
+}
+
 // ==================== 일일 로그인 보상 (7일) ====================
 
 export const DAILY_LOGIN_REWARDS = [

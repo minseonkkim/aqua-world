@@ -127,7 +127,7 @@
 - [x] 🔴 기초 물 셰이더 구현 (물결, 투명도, 코스틱스 shimmer)
 - [x] 🟡 ResizeObserver 기반 캔버스 반응형 리사이즈
 - [x] 🟡 Boids 알고리즘 기초 프로토타입 (Phase 2에서 완전 Boids로 고도화 완료)
-- [ ] 🟡 파티클 시스템 기초 (거품 효과)
+- [x] 🟡 파티클 시스템 기초 (거품 효과) — BUBBLE_COUNT=35 거품 풀 + 먹이 파티클 구현
 
 ### 1-3. 성능 벤치마크
 
@@ -240,6 +240,14 @@
   - [x] 표정 상태 3종 — Boids 가중치로 표현 (happy: 속도×1.15, bored: 속도×0.65 + 바닥 가라앉음)
   - [x] FishInfoCard 쾌적도 게이지(0~100) + 개선 팁 자동 노출
   - [x] 상단 HUD 청결도(💧%) + 행복도(💖%) 인디케이터
+- [x] 🟡 물고기 보관함 & 수조 배치 시스템 (기획서 5.2.7) — 꾸미기 인벤토리 패턴 차용
+  - [x] `User.fishInventory` 도입 (useUserStore: addFishToInventory/removeFishFromInventory)
+  - [x] 수조 마릿수 상한 (8→12→16→20, `Tank.capacityLevel` + `getTankCapacity`) + 가득 차면 부화분 자동 보관 + 배치 차단
+  - [x] 보관함 → 수조 배치(용량 가드) / 수조 → 보관함 회수 (FishInfoCard 📦 버튼, 성장단계·기분 상태 보존)
+  - [x] 보관함 UI (FishInventoryPanel — 종/희귀도/단계 표시, 넣기 토글, 수조 확장 버튼 `expandTankCapacity` + Pearl 차감)
+  - [x] HUD 마릿수 pill(🐟 n/cap) + 도감은 보유 기준이라 보관 물고기도 등록, TankScene은 배치 물고기만 렌더(기존 구조 유지)
+  - [x] 수조 확장 시 3D 실제 크기도 확대 (`getTankScale` 레벨별 1→1.36 배율, 가로·세로 + 카메라 거리 + boids 경계 스케일)
+  - [x] 좌측 하단 패널 UX — 인큐베이터(🥚)·보관함(📦) 상호 배타(하나 열면 다른 하나 닫힘) + 열린 패널 z-index 상향 (제어형 컴포넌트로 전환, leftPanel 단일 상태)
 - [-] 🔴 가챠 시스템 (알)
   - [x] 알 3티어 정의 (기본/희귀/전설)
   - [x] 부화 타이머 (기본 5분, 희귀 30분, 전설 2시간)

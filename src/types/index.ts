@@ -76,6 +76,8 @@ export interface Tank {
   decorationPresets?: DecorationPreset[];
   /** 마지막 청결도 감쇠 계산 시각(unix ms). 없으면 updatedAt fallback */
   lastCleanlinessTickAt?: number;
+  /** 수조 수용량 레벨(0~3) → 마릿수 상한(8/12/16/20). 없으면 0 */
+  capacityLevel?: number;
 }
 
 // ==================== User ====================
@@ -94,6 +96,8 @@ export interface User {
   createdAt: number;
   tanks: string[]; // tank IDs
   inventory: Egg[];
+  /** 보관함(아쿠아 박스): 어느 수조에도 배치되지 않은 물고기 */
+  fishInventory?: Fish[];
   collectedSpecies: string[]; // species IDs
   feedCountToday: number;
   lastFeedResetAt: number;

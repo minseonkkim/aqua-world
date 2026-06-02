@@ -115,10 +115,12 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
 interface Props {
   /** 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리. */
   onCollect: (eggId: string, eggTier: EggTier) => void;
+  /** 패널 열림 상태 (부모가 제어 — 좌측 패널 상호 배타) */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export default function IncubatorPanel({ onCollect }: Props) {
-  const [open, setOpen] = useState(false);
+export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props) {
   const { user, startHatching } = useUserStore();
 
   const handleStart = (eggId: string) => {
@@ -141,7 +143,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
   return (
     <>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => onOpenChange(!open)}
         style={{
           position: 'absolute', left: 12, bottom: 80,
           background: 'rgba(0,0,0,0.7)',
@@ -149,6 +151,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
           borderRadius: 12, padding: '8px 14px',
           color: '#fff', fontSize: 13, fontWeight: 600,
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+          zIndex: open ? 71 : 'auto',
         }}
       >
         🥚 {inventory.length}
@@ -165,6 +168,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
           backdropFilter: 'blur(12px)',
           maxHeight: 340,
           overflowY: 'auto',
+          zIndex: 70,
         }}>
           <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>
             🥚 인큐베이터 ({inventory.length})
@@ -177,7 +181,7 @@ export default function IncubatorPanel({ onCollect }: Props) {
                 onStart={() => handleStart(egg.id)}
                 onCollect={() => {
                   onCollect(egg.id, egg.tier);
-                  if (inventory.length <= 1) setOpen(false);
+                  if (inventory.length <= 1) onOpenChange(false);
                 }}
               />
             ))}

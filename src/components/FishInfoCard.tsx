@@ -33,9 +33,11 @@ interface Props {
   feedRemaining: number;
   onClose: () => void;
   onFeed: () => void;
+  /** 이 물고기를 수조에서 빼서 보관함으로 이동 */
+  onStore?: () => void;
 }
 
-export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: Props) {
+export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed, onStore }: Props) {
   const { getSpeciesById } = useFishStore();
   const species = getSpeciesById(fish.speciesId);
   const activeTank = useTankStore(s => s.tanks.find(t => t.id === s.activeTankId) ?? null);
@@ -216,6 +218,20 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed }: P
           }}>
             {species.description}
           </div>
+        )}
+
+        {onStore && (
+          <button
+            className="btn"
+            onClick={onStore}
+            style={{
+              width: '100%', marginBottom: 8,
+              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            📦 보관함에 넣기
+          </button>
         )}
 
         <div style={{ display: 'flex', gap: 8 }}>

@@ -9,6 +9,7 @@ import TutorialOverlay, { TutorialAction } from '@/components/TutorialOverlay';
 import DecorationModePanel from '@/components/DecorationModePanel';
 import PhotoModeOverlay from '@/components/PhotoModeOverlay';
 import NotificationPanel from '@/components/NotificationPanel';
+import FishInventoryPanel from '@/components/FishInventoryPanel';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
@@ -16,6 +17,7 @@ import { useNotificationStore } from '@/store/useNotificationStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
+import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL } from '@/constants';
 import {
   isCloudUser,
   sprinkleFeed,
@@ -42,12 +44,14 @@ export default function TankPage() {
     setTutorialStep,
     consumeDecorationInventory,
     addDecorationInventory,
+    addFishToInventory,
+    removeFishFromInventory,
   } = useUserStore();
   const {
-    tanks, activeTankId, addFishToTank, feedFish, tickFishGrowth,
+    tanks, activeTankId, addFishToTank, removeFish, feedFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
     savePreset, loadPreset, deletePreset, setLightMode,
-    tickMoodAndCleanliness, cleanTank, contaminate,
+    tickMoodAndCleanliness, cleanTank, contaminate, expandTankCapacity,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const pushNotification = useNotificationStore(s => s.push);
@@ -60,11 +64,18 @@ export default function TankPage() {
   const [selectedDecoId, setSelectedDecoId] = useState<string | null>(null);
   const [photoMode, setPhotoMode] = useState(false);
   const [lightPopupOpen, setLightPopupOpen] = useState(false);
+  // 좌측 하단 패널 상호 배타 — 한 번에 하나만 열림
+  const [leftPanel, setLeftPanel] = useState<'incubator' | 'fishbox' | null>(null);
   const tankSceneRef = useRef<TankSceneHandle>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
   const environment: TankEnvironment = activeTank?.environment ?? 'coral_reef';
   const fishInTank = activeTank?.fish ?? [];
+  const capacityLevel = activeTank?.capacityLevel ?? 0;
+  const tankCapacity = getTankCapacity(capacityLevel);
+  const tankFull = fishInTank.length >= tankCapacity;
+  const canExpand = capacityLevel < TANK_MAX_CAPACITY_LEVEL;
+  const expandCost = canExpand ? TANK_EXPAND_COST_PEARL[capacityLevel] : null;
   const decorationsInTank = activeTank?.decorations ?? [];
   const cleanliness = Math.round(activeTank?.cleanliness ?? 100);
   const happyRatio = fishInTank.length > 0
@@ -347,11 +358,67 @@ export default function TankPage() {
         z: (Math.random() - 0.5) * 6,
       },
     };
-    addFishToTank(activeTank.id, newFish);
+    // 도감은 보유 기준이므로 배치 여부와 무관하게 항상 등록
     addCollectedSpecies(pendingHatch.speciesId);
+    // 수조가 가득 차면 보관함으로, 아니면 수조에 바로 배치
+    if (activeTank.fish.length >= getTankCapacity(activeTank.capacityLevel)) {
+      addFishToInventory(newFish);
+      setPendingHatch(null);
+      showToast(`📦 수조가 가득 차 ${name}을(를) 보관함에 보관했어요`);
+      return;
+    }
+    addFishToTank(activeTank.id, newFish);
     setPendingHatch(null);
     showToast(`✨ ${name} 획득!`);
   };
+
+  // ===== 물고기 보관함 핸들러 =====
+  const handlePlaceFish = useCallback((fishId: string) => {
+    if (!activeTankId) return;
+    const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
+    if (!tank) return;
+    if (tank.fish.length >= getTankCapacity(tank.capacityLevel)) {
+      showToast(`수조가 가득 찼어요 (${getTankCapacity(tank.capacityLevel)}마리) — 확장하거나 다른 물고기를 빼주세요`);
+      return;
+    }
+    const fish = removeFishFromInventory(fishId);
+    if (!fish) return;
+    addFishToTank(activeTankId, {
+      ...fish,
+      position: {
+        x: (Math.random() - 0.5) * 8,
+        y: (Math.random() - 0.5) * 4,
+        z: (Math.random() - 0.5) * 6,
+      },
+    });
+    showToast(`🐟 ${fish.name} 수조에 배치`);
+  }, [activeTankId, removeFishFromInventory, addFishToTank]);
+
+  const handleStoreFish = useCallback((fish: Fish) => {
+    if (!activeTankId) return;
+    removeFish(activeTankId, fish.id);
+    addFishToInventory(fish);
+    setSelectedFishId(null);
+    showToast(`📦 ${fish.name} 보관함에 보관`);
+  }, [activeTankId, removeFish, addFishToInventory]);
+
+  const handleExpandCapacity = useCallback(() => {
+    if (!activeTankId) return;
+    const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
+    if (!tank) return;
+    const lvl = tank.capacityLevel ?? 0;
+    if (lvl >= TANK_MAX_CAPACITY_LEVEL) {
+      showToast('이미 최대 크기예요');
+      return;
+    }
+    const cost = TANK_EXPAND_COST_PEARL[lvl];
+    if (!spendPearl(cost)) {
+      showToast(`Pearl이 부족합니다 (${cost} 🪙 필요)`);
+      return;
+    }
+    expandTankCapacity(activeTankId);
+    showToast(`🔧 수조 확장! 최대 ${getTankCapacity(lvl + 1)}마리`);
+  }, [activeTankId, spendPearl, expandTankCapacity]);
 
   const remaining = 3 - (user?.feedCountToday ?? 0);
 
@@ -497,6 +564,7 @@ export default function TankPage() {
         onDecorationMove={handleMoveDecoration}
         lightMode={activeTank?.lightMode ?? 'auto'}
         onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
+        tankScale={getTankScale(capacityLevel)}
         style={{ position: 'absolute', inset: 0 }}
       />
 
@@ -515,6 +583,13 @@ export default function TankPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {fishInTank.length > 0 && (
             <>
+              <div
+                className="currency-pill"
+                title={`수조 마릿수 ${fishInTank.length}/${tankCapacity}`}
+                style={{ color: tankFull ? '#e57373' : '#90caf9' }}
+              >
+                🐟 {fishInTank.length}/{tankCapacity}
+              </div>
               <div
                 className="currency-pill"
                 title={`수조 청결도 ${cleanliness}%`}
@@ -561,7 +636,28 @@ export default function TankPage() {
       )}
 
       {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기/포토 모드 중에는 숨김 */}
-      {!decorationMode && !photoMode && <IncubatorPanel onCollect={handleHatchCollect} />}
+      {!decorationMode && !photoMode && (
+        <IncubatorPanel
+          onCollect={handleHatchCollect}
+          open={leftPanel === 'incubator'}
+          onOpenChange={o => setLeftPanel(o ? 'incubator' : null)}
+        />
+      )}
+
+      {/* 물고기 보관함 패널 (왼쪽, 인큐베이터 위) — 보유 물고기가 있을 때만 */}
+      {!decorationMode && !photoMode &&
+        (fishInTank.length > 0 || (user?.fishInventory?.length ?? 0) > 0) && (
+          <FishInventoryPanel
+            onPlace={handlePlaceFish}
+            onExpand={handleExpandCapacity}
+            tankFishCount={fishInTank.length}
+            capacity={tankCapacity}
+            canExpand={canExpand}
+            expandCost={expandCost}
+            open={leftPanel === 'fishbox'}
+            onOpenChange={o => setLeftPanel(o ? 'fishbox' : null)}
+          />
+        )}
 
       {/* 우측 액션 버튼 — 꾸미기/포토 모드 중에는 숨김 */}
       {!decorationMode && !photoMode && (
@@ -701,6 +797,7 @@ export default function TankPage() {
           feedRemaining={remaining}
           onClose={() => setSelectedFishId(null)}
           onFeed={() => handleFeedFish(selectedFish)}
+          onStore={() => handleStoreFish(selectedFish)}
         />
       )}
 

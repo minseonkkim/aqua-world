@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Tank, TankEnvironment, TankDecoration, Fish, FishGrowthStage, DecorationPreset } from '../types';
-import { FEED_GROWTH_BOOST_SECONDS } from '../constants';
+import { FEED_GROWTH_BOOST_SECONDS, TANK_MAX_CAPACITY_LEVEL } from '../constants';
 import { applyGrowthAdvance } from '../utils/growth';
 import {
   computeFishComfort,
@@ -36,6 +36,8 @@ interface TankState {
   addFishToTank: (tankId: string, fish: Fish) => void;
   updateFish: (tankId: string, fishId: string, updates: Partial<Fish>) => void;
   removeFish: (tankId: string, fishId: string) => void;
+  /** 수조 수용량 레벨 +1 (상한 검증·비용 차감은 호출자 책임) */
+  expandTankCapacity: (tankId: string) => void;
 
   /** 특정 물고기에 먹이를 줘서 성장 가속. 승급 가능하면 즉시 다음 단계로. */
   feedFish: (tankId: string, fishId: string) => { newStage: FishGrowthStage | null } | null;
@@ -159,6 +161,19 @@ export const useTankStore = create<TankState>()(
           tanks: state.tanks.map(t =>
             t.id === tankId
               ? { ...t, fish: t.fish.filter(f => f.id !== fishId), updatedAt: Date.now() }
+              : t,
+          ),
+        })),
+
+      expandTankCapacity: tankId =>
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? {
+                  ...t,
+                  capacityLevel: Math.min(TANK_MAX_CAPACITY_LEVEL, (t.capacityLevel ?? 0) + 1),
+                  updatedAt: Date.now(),
+                }
               : t,
           ),
         })),

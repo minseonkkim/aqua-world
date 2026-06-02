@@ -31,6 +31,8 @@ interface Props {
   lightMode?: LightMode;
   /** 수면 클릭 시 호출 — 일일 먹이 카운트 등 게임 로직에서 처리 */
   onSurfaceFeed?: (x: number, z: number) => boolean | void;
+  /** 수조 확장 시각 배율 — 가로·세로(바닥 면적)를 확대. 기본 1 */
+  tankScale?: number;
   style?: React.CSSProperties;
 }
 
@@ -44,9 +46,14 @@ const ENV: Record<TankEnvironment, { water: number; ambient: number; bg: string 
 
 const FLOOR_Y = -3;
 const WATER_Y = 2.9;
-const TANK_HALF_X = 4.5;
+// 확장 레벨 1.0 기준(base) 수조 반경. 가로(X)·세로(Z)는 tankScale로 확대, 높이(Y)는 고정.
+const BASE_HALF_X = 4.5;
 const TANK_HALF_Y = 2.5;
-const TANK_HALF_Z = 3.5;
+const BASE_HALF_Z = 3.5;
+// 유리 박스/바닥/수면 평면의 base 치수 (가로 X, 깊이 Z)
+const BASE_BOX_W = 10;
+const BASE_BOX_D = 8;
+const BOX_H = 6;
 const BUBBLE_COUNT = 35;
 const FOOD_LIFETIME_MS = 8000;
 
@@ -99,7 +106,7 @@ function TankSceneImpl({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
   onDecorationSelect, onDecorationMove,
-  lightMode = 'auto', onSurfaceFeed, style,
+  lightMode = 'auto', onSurfaceFeed, tankScale = 1, style,
 }: Props, ref: React.Ref<TankSceneHandle>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -121,6 +128,8 @@ function TankSceneImpl({
   const pointerRef = useRef(new THREE.Vector2());
   const clickStartRef = useRef<{ x: number; y: number } | null>(null);
   const draggingDecoRef = useRef<{ id: string; offset: THREE.Vector3 } | null>(null);
+  // 현재 tankScale 반영된 수영 경계 — animate/핸들러에서 항상 최신값 참조
+  const boundsRef = useRef({ halfX: BASE_HALF_X * tankScale, halfZ: BASE_HALF_Z * tankScale });
 
   // 최신 lightMode/onSurfaceFeed를 ref로 보관 (animate/handler 안에서 최신 값 참조)
   // lightMode는 ref 갱신 후 즉시 applyDayNight 호출 — 5초 throttle 우회
@@ -191,9 +200,9 @@ function TankSceneImpl({
       wrapper.add(inner);
       wrapper.scale.setScalar(baseScale * stageScale);
       wrapper.position.set(
-        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 2 * boundsRef.current.halfX,
         (Math.random() - 0.5) * 4,
-        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 2 * boundsRef.current.halfZ,
       );
       wrapper.userData.vel = new THREE.Vector3(
         (Math.random() - 0.5) * 0.02,
@@ -291,6 +300,14 @@ function TankSceneImpl({
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
 
+    // 확장 배율 반영 치수
+    const s = tankScale;
+    const boxW = BASE_BOX_W * s;
+    const boxD = BASE_BOX_D * s;
+    const halfX = BASE_HALF_X * s;
+    const halfZ = BASE_HALF_Z * s;
+    boundsRef.current = { halfX, halfZ };
+
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
@@ -302,7 +319,8 @@ function TankSceneImpl({
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
-    camera.position.set(0, 4, 8);
+    // 수조가 커진 만큼 카메라를 뒤로 빼서 프레이밍 유지
+    camera.position.set(0, 4 * s, 8 * s);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
     apply();
@@ -320,13 +338,13 @@ function TankSceneImpl({
 
     // 수조 유리
     scene.add(new THREE.Mesh(
-      new THREE.BoxGeometry(10, 6, 8),
+      new THREE.BoxGeometry(boxW, BOX_H, boxD),
       new THREE.MeshPhysicalMaterial({ color: 0x88ccff, transparent: true, opacity: 0.06, roughness: 0, side: THREE.BackSide }),
     ));
 
     // 바닥
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 8),
+      new THREE.PlaneGeometry(boxW, boxD),
       new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.9 }),
     );
     floor.rotation.x = -Math.PI / 2;
@@ -336,13 +354,13 @@ function TankSceneImpl({
     // 수면
     const waterMat = createWaterMaterial();
     (waterMat.uniforms.uWaterColor.value as THREE.Color).set(env.water);
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(10, 8, 32, 32), waterMat);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(boxW, boxD, 32, 32), waterMat);
     water.rotation.x = -Math.PI / 2;
     water.position.y = 2.9;
     scene.add(water);
     waterRef.current = water;
 
-    // 자갈
+    // 자갈 — 바닥 면적에 맞춰 분포
     for (let i = 0; i < 60; i++) {
       const g = new THREE.Mesh(
         new THREE.SphereGeometry(0.05 + Math.random() * 0.08, 4, 4),
@@ -351,7 +369,7 @@ function TankSceneImpl({
           roughness: 0.9,
         }),
       );
-      g.position.set((Math.random() - 0.5) * 9, -2.95, (Math.random() - 0.5) * 7);
+      g.position.set((Math.random() - 0.5) * (boxW - 1), -2.95, (Math.random() - 0.5) * (boxD - 1));
       scene.add(g);
     }
 
@@ -368,8 +386,8 @@ function TankSceneImpl({
         new THREE.SphereGeometry(size, 6, 6),
         bubbleMat,
       );
-      const baseX = (Math.random() - 0.5) * 8;
-      const baseZ = (Math.random() - 0.5) * 6;
+      const baseX = (Math.random() - 0.5) * 2 * halfX;
+      const baseZ = (Math.random() - 0.5) * 2 * halfZ;
       b.position.set(baseX, FLOOR_Y + Math.random() * (WATER_Y - FLOOR_Y), baseZ);
       b.userData.bubble = {
         speed: 0.4 + Math.random() * 0.6,
@@ -393,7 +411,7 @@ function TankSceneImpl({
     });
     ro.observe(canvas);
     return ro;
-  }, [apply, env, syncFishMeshes, syncDecorationMeshes, syncHighlight]);
+  }, [apply, env, tankScale, syncFishMeshes, syncDecorationMeshes, syncHighlight]);
 
   // fish prop 변경 시 메시 동기화
   useEffect(() => {
@@ -474,9 +492,9 @@ function TankSceneImpl({
       const jitterX = (Math.random() - 0.5) * 0.4;
       const jitterZ = (Math.random() - 0.5) * 0.4;
       mesh.position.set(
-        THREE.MathUtils.clamp(x + jitterX, -TANK_HALF_X, TANK_HALF_X),
+        THREE.MathUtils.clamp(x + jitterX, -boundsRef.current.halfX, boundsRef.current.halfX),
         WATER_Y - 0.05,
-        THREE.MathUtils.clamp(z + jitterZ, -TANK_HALF_Z, TANK_HALF_Z),
+        THREE.MathUtils.clamp(z + jitterZ, -boundsRef.current.halfZ, boundsRef.current.halfZ),
       );
       scene.add(mesh);
       foodsRef.current.push({
@@ -526,8 +544,8 @@ function TankSceneImpl({
     if (!ground) return;
     const mesh = decoMeshesRef.current.get(drag.id);
     if (!mesh) return;
-    const x = THREE.MathUtils.clamp(ground.x + drag.offset.x, -TANK_HALF_X, TANK_HALF_X);
-    const z = THREE.MathUtils.clamp(ground.z + drag.offset.z, -TANK_HALF_Z, TANK_HALF_Z);
+    const x = THREE.MathUtils.clamp(ground.x + drag.offset.x, -boundsRef.current.halfX, boundsRef.current.halfX);
+    const z = THREE.MathUtils.clamp(ground.z + drag.offset.z, -boundsRef.current.halfZ, boundsRef.current.halfZ);
     mesh.position.x = x;
     mesh.position.z = z;
     // 하이라이트 동기화
@@ -757,12 +775,14 @@ function TankSceneImpl({
 
       // 3) 경계 회피 — 벽 근처에서 중심 쪽으로 부드럽게 조향
       const m = BOID_BOUND_MARGIN;
-      if (f.position.x >  TANK_HALF_X - m) vel.x -= BOID_BOUND_FORCE;
-      else if (f.position.x < -TANK_HALF_X + m) vel.x += BOID_BOUND_FORCE;
+      const halfX = boundsRef.current.halfX;
+      const halfZ = boundsRef.current.halfZ;
+      if (f.position.x >  halfX - m) vel.x -= BOID_BOUND_FORCE;
+      else if (f.position.x < -halfX + m) vel.x += BOID_BOUND_FORCE;
       if (f.position.y >  TANK_HALF_Y - m) vel.y -= BOID_BOUND_FORCE;
       else if (f.position.y < -TANK_HALF_Y + m) vel.y += BOID_BOUND_FORCE;
-      if (f.position.z >  TANK_HALF_Z - m) vel.z -= BOID_BOUND_FORCE;
-      else if (f.position.z < -TANK_HALF_Z + m) vel.z += BOID_BOUND_FORCE;
+      if (f.position.z >  halfZ - m) vel.z -= BOID_BOUND_FORCE;
+      else if (f.position.z < -halfZ + m) vel.z += BOID_BOUND_FORCE;
 
       // 4) 속도 제한 (mood 가중치 반영)
       const speed = vel.length();
@@ -775,9 +795,9 @@ function TankSceneImpl({
       f.position.z += vel.z;
 
       // 6) 하드 클램프 — 수조 밖 이탈 방지 (안전망)
-      f.position.x = THREE.MathUtils.clamp(f.position.x, -TANK_HALF_X, TANK_HALF_X);
+      f.position.x = THREE.MathUtils.clamp(f.position.x, -halfX, halfX);
       f.position.y = THREE.MathUtils.clamp(f.position.y, -TANK_HALF_Y, TANK_HALF_Y);
-      f.position.z = THREE.MathUtils.clamp(f.position.z, -TANK_HALF_Z, TANK_HALF_Z);
+      f.position.z = THREE.MathUtils.clamp(f.position.z, -halfZ, halfZ);
 
       // 7) 진행 방향으로 부드럽게 회전 (최단 각도 보간)
       if (vel.lengthSq() > 1e-6) {
@@ -795,8 +815,8 @@ function TankSceneImpl({
       b.position.x = d.baseX + Math.sin(t * 1.5 + d.wobblePhase) * d.wobbleAmp;
       b.position.z = d.baseZ + Math.cos(t * 1.2 + d.wobblePhase) * d.wobbleAmp * 0.6;
       if (b.position.y > WATER_Y - 0.05) {
-        const baseX = (Math.random() - 0.5) * 8;
-        const baseZ = (Math.random() - 0.5) * 6;
+        const baseX = (Math.random() - 0.5) * 2 * boundsRef.current.halfX;
+        const baseZ = (Math.random() - 0.5) * 2 * boundsRef.current.halfZ;
         d.baseX = baseX;
         d.baseZ = baseZ;
         d.wobblePhase = Math.random() * Math.PI * 2;

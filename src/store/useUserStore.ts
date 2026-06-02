@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Egg, EggTier, FishRarity } from '../types';
+import { User, Egg, EggTier, FishRarity, Fish } from '../types';
 import {
   COMPENDIUM_REWARDS,
   CompendiumReward,
@@ -47,6 +47,11 @@ interface UserState {
   addCollectedSpecies: (speciesId: string) => void;
 
   setTutorialStep: (step: number) => void;
+
+  /** 물고기 보관함에 추가 (수조 가득 참 / 수조에서 빼기) */
+  addFishToInventory: (fish: Fish) => void;
+  /** 보관함에서 물고기 1마리 제거하고 그 객체를 반환. 없으면 null */
+  removeFishFromInventory: (fishId: string) => Fish | null;
 
   /** 데코 인벤토리 보유 수량 조회 */
   getDecorationCount: (modelId: string) => number;
@@ -228,6 +233,23 @@ export const useUserStore = create<UserState>()(
         const { user } = get();
         if (!user) return;
         set({ user: { ...user, tutorialStep: step } });
+      },
+
+      addFishToInventory: fish => {
+        const { user } = get();
+        if (!user) return;
+        set({ user: { ...user, fishInventory: [...(user.fishInventory ?? []), fish] } });
+      },
+
+      removeFishFromInventory: fishId => {
+        const { user } = get();
+        if (!user) return null;
+        const target = (user.fishInventory ?? []).find(f => f.id === fishId);
+        if (!target) return null;
+        set({
+          user: { ...user, fishInventory: (user.fishInventory ?? []).filter(f => f.id !== fishId) },
+        });
+        return target;
       },
 
       getDecorationCount: modelId => {
