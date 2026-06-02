@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
@@ -48,8 +48,31 @@ function createDefaultTank(): Tank {
 export default function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  // signIn() 이 성공해 실제 계정 bootstrap 이 진행 중일 때만 true.
+  // 팝업/외부 브라우저를 사용자가 그냥 닫고 돌아온 경우와 구분하기 위함.
+  const bootstrappingRef = useRef(false);
   const { setUser, claimDailyLogin, setPendingReward } = useUserStore();
   const { tanks, addTank, setTanks } = useTankStore();
+
+  // OAuth(구글 팝업 / 카카오 Custom Tab 등)로 떠난 뒤 사용자가 로그인을 끝내지 않고
+  // 창을 닫거나 앱으로 돌아오면, signInWithPopup 의 reject 가 누락되거나(COOP 정책)
+  // 카카오 Custom Tab 닫힘에 콜백이 없어 로딩이 영원히 풀리지 않는다.
+  // 앱 창이 다시 보이거나 포커스를 받으면 로딩을 해제한다.
+  // 단, signIn 성공 후 bootstrap 진행 중(bootstrappingRef)일 때는 풀지 않는다 —
+  // 성공 시엔 곧 user 가 채워져 MainLayout 으로 라우팅되며 이 컴포넌트가 사라진다.
+  useEffect(() => {
+    const restore = () => {
+      if (document.visibilityState === 'visible' && !bootstrappingRef.current) {
+        setLoading(false);
+      }
+    };
+    document.addEventListener('visibilitychange', restore);
+    window.addEventListener('focus', restore);
+    return () => {
+      document.removeEventListener('visibilitychange', restore);
+      window.removeEventListener('focus', restore);
+    };
+  }, []);
 
   // 소셜 로그인 공통: signIn 콜백으로 Firebase 진입 → bootstrap → tanks 로드 → 일일보상.
   const handleSocialLogin = async (
@@ -60,6 +83,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const firebaseUser = await signIn();
+      // 여기까지 왔으면 인증 성공 → 창 복귀(focus/visible) 시 로딩을 풀지 않도록 잠근다.
+      bootstrappingRef.current = true;
 
       // bootstrapUser는 idempotent — 신규면 생성하고 튜토리얼 알을 발급,
       // 기존이면 그대로 반환(미발급 계정엔 한 번만 튜토리얼 알 지급).
@@ -88,6 +113,7 @@ export default function LoginPage() {
         tone: 'danger',
       });
     } finally {
+      bootstrappingRef.current = false;
       setLoading(false);
     }
   };
@@ -123,6 +149,8 @@ export default function LoginPage() {
   };
 
   const guestLogin = async () => {
+    // 소셜 로그인 bootstrap 이 진행 중이면 게스트 생성으로 상태가 꼬이지 않게 막는다.
+    if (bootstrappingRef.current) return;
     setLoading(true);
     await new Promise(r => setTimeout(r, 400));
 
