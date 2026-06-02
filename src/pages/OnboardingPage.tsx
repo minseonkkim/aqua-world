@@ -5,7 +5,7 @@ import { analytics } from '@/services/analytics';
 const SLIDES = [
   { title: '내 손안의\n살아있는 수족관', subtitle: '완전한 3D로 구현된\n나만의 수족관을 만들어보세요', emoji: '🐠' },
   { title: '희귀 물고기를\n수집하세요', subtitle: '전설급 실러캔스부터\n귀여운 클라운피시까지', emoji: '🐡' },
-  { title: '어디서나 즐기는\nPWA 앱', subtitle: '설치 없이 브라우저에서 바로\n오프라인에서도 동작해요', emoji: '🌊' },
+  { title: '언제 어디서나\n함께하는 수족관', subtitle: '먹이 줄 시간엔 알림으로 알려드려요\n오프라인에서도 끊김 없이 즐기세요', emoji: '🌊' },
 ];
 
 export default function OnboardingPage() {
