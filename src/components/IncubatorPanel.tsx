@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { Egg, EggTier } from '@/types';
 import { isCloudUser, optimistic, startHatching as startHatchingServer } from '@/services/firebase/functions';
+import { analytics } from '@/services/analytics';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -121,6 +122,8 @@ export default function IncubatorPanel({ onCollect }: Props) {
   const { user, startHatching } = useUserStore();
 
   const handleStart = (eggId: string) => {
+    const egg = user?.inventory.find(e => e.id === eggId);
+    if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
       optimistic(
         () => startHatching(eggId),

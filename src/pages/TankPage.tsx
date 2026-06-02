@@ -22,6 +22,7 @@ import {
   feedFish as feedFishServer,
   hatchEgg as hatchEggServer,
 } from '@/services/firebase/functions';
+import { analytics } from '@/services/analytics';
 
 interface PendingHatch {
   speciesId: string;
@@ -99,6 +100,7 @@ export default function TankPage() {
           const f = updated.find(x => x.id === id);
           if (!f) return;
           names.push(f.name);
+          analytics.fishGrowStage(f.growthStage);
           pushNotification({
             id: `growth_${id}_${f.growthStage}`,
             type: 'growth',
@@ -147,6 +149,7 @@ export default function TankPage() {
       title: `${r.day}일 연속 출석 보상`,
       body,
     });
+    analytics.dailyRewardClaim(r.day, r.type);
   }, [pendingDailyReward, pushNotification]);
 
   // ===== 튜토리얼 =====
@@ -157,6 +160,11 @@ export default function TankPage() {
   useEffect(() => {
     if (user && user.tutorialStep === 0) setTutorialStep(1);
   }, [user, setTutorialStep]);
+
+  // 튜토리얼 단계 진입 시마다 analytics 로 funnel 추적 — auto/manual 모두 한 곳에서.
+  useEffect(() => {
+    if (tutorialStep >= 1 && tutorialStep <= 5) analytics.tutorialStep(tutorialStep);
+  }, [tutorialStep]);
 
   // Step 4 → 5: 부화 시작 감지
   useEffect(() => {
@@ -169,6 +177,7 @@ export default function TankPage() {
   useEffect(() => {
     if (tutorialStep === 5 && fishInTank.length > prevFishCountRef.current) {
       setTutorialStep(-1);
+      analytics.tutorialComplete('completed');
       showToast('🎉 튜토리얼 완료! 자유롭게 수족관을 즐겨보세요');
     }
     prevFishCountRef.current = fishInTank.length;
@@ -177,6 +186,7 @@ export default function TankPage() {
   const handleTutorialAction = (action: TutorialAction) => {
     if (action.type === 'skip') {
       setTutorialStep(-1);
+      analytics.tutorialComplete('skipped');
       return;
     }
     if (action.type === 'gift_egg') {
@@ -198,6 +208,7 @@ export default function TankPage() {
       addPearl(10);
       if (activeTankId) contaminate(activeTankId);
       showToast('+10 🪙 Pearl 획득!');
+      analytics.sprinkleFeed();
       sprinkleFeed().catch(() => {
         useUserStore.getState().setUser(prevUser);
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
@@ -208,6 +219,7 @@ export default function TankPage() {
     addPearl(10);
     if (activeTankId) contaminate(activeTankId);
     showToast('+10 🪙 Pearl 획득!');
+    analytics.sprinkleFeed();
   };
 
   // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
@@ -221,6 +233,7 @@ export default function TankPage() {
       addPearl(10);
       if (activeTankId) contaminate(activeTankId);
       showToast('🍤 먹이 뿌리기 · +10 🪙');
+      analytics.sprinkleFeed();
       sprinkleFeed().catch(() => {
         useUserStore.getState().setUser(prevUser);
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
@@ -234,6 +247,7 @@ export default function TankPage() {
     addPearl(10);
     if (activeTankId) contaminate(activeTankId);
     showToast('🍤 먹이 뿌리기 · +10 🪙');
+    analytics.sprinkleFeed();
     return true;
   }, [recordFeed, addPearl, activeTankId, contaminate]);
 
@@ -253,8 +267,11 @@ export default function TankPage() {
       addPearl(10);
       const result = feedFish(activeTankId, fish.id);
       contaminate(activeTankId);
-      if (result?.newStage) showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
-      else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+      analytics.feedFish(fish.growthStage);
+      if (result?.newStage) {
+        analytics.fishGrowStage(result.newStage);
+        showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
+      } else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
       feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(() => {
         useUserStore.getState().setUser(prevUser);
         useTankStore.getState().setTanks(prevTanks);
@@ -269,7 +286,9 @@ export default function TankPage() {
     addPearl(10);
     const result = feedFish(activeTankId, fish.id);
     contaminate(activeTankId);
+    analytics.feedFish(fish.growthStage);
     if (result?.newStage) {
+      analytics.fishGrowStage(result.newStage);
       showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
     } else {
       showToast(`🍖 +5분 성장 가속 · +10 🪙`);
@@ -299,6 +318,8 @@ export default function TankPage() {
     }
     const species = getSpeciesById(pendingHatch.speciesId);
     const name = species?.name ?? '???';
+
+    analytics.hatchEgg(pendingHatch.eggTier, pendingHatch.speciesId);
 
     // 클라우드 유저는 서버 hatchEgg가 이미 물고기 생성·도감 등록을 마침
     if (isCloudUser()) {
@@ -346,6 +367,7 @@ export default function TankPage() {
     }
     cleanTank(activeTankId);
     tickMoodAndCleanliness(activeTankId);
+    analytics.cleanTank();
     showToast('💧 물을 갈았어요 — 청결도 100%');
   };
 

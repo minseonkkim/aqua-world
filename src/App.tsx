@@ -17,6 +17,7 @@ import TermsPage from '@/pages/TermsPage';
 import Modal from '@/components/Modal';
 import PWAPrompts from '@/components/PWAPrompts';
 import { unlockAudio } from '@/services/audio';
+import { analytics, identifyUser, setUserProps } from '@/services/analytics';
 import '@/store/useAudioStore'; // 영속 설정 복원 (rehydrate)
 
 function createDefaultTank() {
@@ -100,6 +101,13 @@ export default function App() {
     isPushSupported().then(ok => { if (ok) listenForeground(); });
   }, []);
 
+  // 앱 진입 1회 — Analytics 가 isSupported() 통과 후 채워지므로
+  // 다음 틱에서 호출해도 인스턴스가 있을 가능성이 더 높다.
+  useEffect(() => {
+    const t = setTimeout(() => analytics.appOpen(), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   // 첫 사용자 입력에서 오디오 unlock + BGM 시작 (iOS/Android 자동재생 정책)
   useEffect(() => {
     const onGesture = () => {
@@ -147,6 +155,26 @@ export default function App() {
             useTankStore.getState().setTanks(tanks);
             const daily = await claimDailyReward();
             if (daily.reward) store.setPendingReward(daily.reward as DailyRewardResult);
+
+            // Analytics: 사용자 식별 + 가입/로그인 구분.
+            // identify 는 새로고침 세션 복원에서도 매번 호출(이후 이벤트 attribution 용).
+            // login/sign_up 은 LoginPage 가 sessionStorage 에 심어둔 플래그가 있을 때만 — 즉,
+            // 사용자가 이번 세션에서 직접 로그인 버튼을 눌렀을 때만 1회 발화한다.
+            identifyUser(firebaseUser.uid);
+            const provider = firebaseUser.uid.startsWith('kakao:')
+              ? 'kakao'
+              : (firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'kakao');
+            setUserProps({
+              account_type: 'cloud',
+              level: res.user.level ?? 1,
+              provider,
+            });
+            const authAction = sessionStorage.getItem('aw:auth_action');
+            if (authAction === 'google' || authAction === 'kakao') {
+              sessionStorage.removeItem('aw:auth_action');
+              if (res.created) analytics.signUp(authAction);
+              else analytics.login(authAction);
+            }
           } catch {
             // 네트워크 오류 시 로그인 화면 유지
           }
@@ -155,6 +183,7 @@ export default function App() {
         // 클라우드 유저 로그아웃/세션 만료 → 클리어
         store.setUser(null);
         useTankStore.getState().setTanks([]);
+        identifyUser(null);
       } else if (current) {
         // 게스트: 로컬 유지 + 일일 보상 체크
         store.claimDailyLogin();

@@ -6,6 +6,7 @@ import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle, startKakaoLogin } from '@/services/firebase/auth';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
+import { analytics, identifyUser, setUserProps } from '@/services/analytics';
 import { Tank } from '@/types';
 import { DailyRewardResult } from '@/store/useUserStore';
 
@@ -91,20 +92,25 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = () =>
-    handleSocialLogin('Google', signInWithGoogle, [
+  const handleGoogleLogin = () => {
+    // App.tsx onAuthChanged 가 login/sign_up 이벤트를 발화할 때 참조하는 플래그.
+    sessionStorage.setItem('aw:auth_action', 'google');
+    return handleSocialLogin('Google', signInWithGoogle, [
       'auth/popup-closed-by-user',
       'auth/cancelled-popup-request',
       'auth/popup-blocked',
-    ]);
+    ]).catch(() => sessionStorage.removeItem('aw:auth_action'));
+  };
 
   // 카카오는 리다이렉트 흐름 — 즉시 페이지가 카카오로 떠나므로 try/catch 가 의미 없다.
   // SDK 초기화 실패만 잡아 모달로 보여준다. 콜백 후 토큰 교환은 App.tsx 에서 처리.
   const handleKakaoLogin = () => {
     try {
       setLoading(true);
+      sessionStorage.setItem('aw:auth_action', 'kakao');
       startKakaoLogin();
     } catch (err) {
+      sessionStorage.removeItem('aw:auth_action');
       setLoading(false);
       const msg = err instanceof Error ? err.message : String(err);
       void useModalStore.getState().alert({
@@ -120,8 +126,14 @@ export default function LoginPage() {
     setLoading(true);
     await new Promise(r => setTimeout(r, 400));
 
+    const guestId = 'guest_' + Date.now();
+    // 게스트는 Firebase Auth 를 거치지 않아 onAuthChanged 가 발화되지 않는다 → 여기서 직접 처리.
+    identifyUser(guestId);
+    setUserProps({ account_type: 'guest', level: 1, provider: 'guest' });
+    analytics.signUp('guest');
+
     setUser({
-      id: 'guest_' + Date.now(),
+      id: guestId,
       displayName: '게스트',
       email: '',
       pearl: 200,

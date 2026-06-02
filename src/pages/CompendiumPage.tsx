@@ -3,6 +3,7 @@ import { useFishStore } from '@/store/useFishStore';
 import { useUserStore } from '@/store/useUserStore';
 import { COMPENDIUM_MILESTONES, COMPENDIUM_REWARDS, CompendiumReward } from '@/constants';
 import { isCloudUser, claimMilestone } from '@/services/firebase/functions';
+import { analytics } from '@/services/analytics';
 
 const RARITY_COLOR: Record<string, string> = {
   common: 'var(--color-rarity-common)', rare: 'var(--color-rarity-rare)',
@@ -33,6 +34,7 @@ export default function CompendiumPage() {
     if (isCloudUser()) {
       try {
         const res = await claimMilestone({ pct: milestone });
+        analytics.compendiumMilestoneClaim(milestone);
         showToast(`🎉 ${milestone}% 보상 획득 · ${rewardLabel(res.reward as CompendiumReward)}`);
       } catch {
         showToast('아직 청구할 수 없습니다');
@@ -44,6 +46,7 @@ export default function CompendiumPage() {
       showToast('아직 청구할 수 없습니다');
       return;
     }
+    analytics.compendiumMilestoneClaim(milestone);
     showToast(`🎉 ${milestone}% 보상 획득 · ${rewardLabel(reward)}`);
   };
 

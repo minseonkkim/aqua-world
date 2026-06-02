@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { analytics } from '@/services/analytics';
 
 const SLIDES = [
   { title: '내 손안의\n살아있는 수족관', subtitle: '완전한 3D로 구현된\n나만의 수족관을 만들어보세요', emoji: '🐠' },
@@ -11,7 +12,15 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const [idx, setIdx] = useState(0);
 
-  const next = () => idx < SLIDES.length - 1 ? setIdx(idx + 1) : navigate('/login');
+  const next = () => {
+    if (idx < SLIDES.length - 1) {
+      setIdx(idx + 1);
+      return;
+    }
+    // 마지막 슬라이드의 '시작하기' 만 완료로 카운트 — '건너뛰기' 는 제외.
+    analytics.onboardingComplete();
+    navigate('/login');
+  };
   const slide = SLIDES[idx];
 
   return (

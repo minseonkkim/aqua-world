@@ -8,6 +8,7 @@ import { playSFX } from '@/services/audio';
 import { signOut } from '@/services/firebase/auth';
 import { deleteAccount } from '@/services/firebase/functions';
 import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
+import { analytics, identifyUser } from '@/services/analytics';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -56,6 +57,8 @@ export default function SettingsPage() {
       tone: 'danger',
     });
     if (!ok) return;
+    analytics.logout();
+    identifyUser(null);
     await signOut();
     setUser(null);
     setTanks([]);

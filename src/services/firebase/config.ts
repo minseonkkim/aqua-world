@@ -3,6 +3,7 @@ import { getAuth, Auth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions } from 'firebase/functions';
+import { Analytics, getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
@@ -24,6 +25,7 @@ let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 let functions: Functions | null = null;
+let analytics: Analytics | null = null;
 
 if (isConfigured) {
   const alreadyInitialized = getApps().length > 0;
@@ -35,8 +37,26 @@ if (isConfigured) {
     : initializeFirestore(app, { ignoreUndefinedProperties: true });
   storage = getStorage(app);
   functions = getFunctions(app, 'asia-northeast3');
+
+  // Analytics 는 브라우저 환경 + measurementId 가 있을 때만 동작.
+  // SSR/Node, 일부 in-app 브라우저, DNT 등에서는 isSupported() 가 false 를 반환한다.
+  if (firebaseConfig.measurementId) {
+    analyticsSupported()
+      .then(ok => {
+        if (ok && app) analytics = getAnalytics(app);
+      })
+      .catch(() => { /* 미지원 환경은 조용히 무시 */ });
+  }
 } else {
   console.warn('[Firebase] .env 파일에 실제 Firebase 설정값을 입력해주세요. 현재 게스트 모드로 동작합니다.');
 }
 
-export { app, auth, db, storage, functions, isConfigured, firebaseConfig, vapidKey };
+/** Analytics 핸들 (비동기 초기화 — 처음 몇 초간은 null 일 수 있음). */
+function getAnalyticsInstance(): Analytics | null {
+  return analytics;
+}
+
+export {
+  app, auth, db, storage, functions, isConfigured, firebaseConfig, vapidKey,
+  getAnalyticsInstance,
+};

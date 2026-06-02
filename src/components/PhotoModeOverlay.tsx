@@ -4,6 +4,7 @@ import {
   composePhoto, sharePhoto, downloadPhoto,
 } from '@/utils/photoCompose';
 import { playSFX } from '@/services/audio';
+import { analytics } from '@/services/analytics';
 
 interface Props {
   /** 부모에서 TankScene의 captureFrame을 호출해 PNG dataURL을 반환 */
@@ -69,17 +70,23 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
   const handleShare = useCallback(async () => {
     if (!resultBlob) return;
     const result = await sharePhoto(resultBlob);
-    if (result === 'shared') onToast('✨ 공유 완료!');
-    else if (result === 'downloaded') onToast('💾 갤러리에 저장됨');
-    else if (result === 'cancelled') {/* 무음 */}
+    if (result === 'shared') {
+      analytics.photoCapture(filter, frame, 'shared');
+      onToast('✨ 공유 완료!');
+    } else if (result === 'downloaded') {
+      analytics.photoCapture(filter, frame, 'downloaded');
+      onToast('💾 갤러리에 저장됨');
+    } else if (result === 'cancelled') {/* 무음 */}
     else onToast('공유 실패');
-  }, [resultBlob, onToast]);
+  }, [resultBlob, onToast, filter, frame]);
 
   const handleSave = useCallback(() => {
     if (!resultBlob) return;
-    if (downloadPhoto(resultBlob)) onToast('💾 저장 완료!');
-    else onToast('저장 실패');
-  }, [resultBlob, onToast]);
+    if (downloadPhoto(resultBlob)) {
+      analytics.photoCapture(filter, frame, 'downloaded');
+      onToast('💾 저장 완료!');
+    } else onToast('저장 실패');
+  }, [resultBlob, onToast, filter, frame]);
 
   // 미리보기 화면
   if (stage === 'preview' && preview) {

@@ -14,6 +14,7 @@ import {
   purchaseDecoration,
 } from '@/services/firebase/functions';
 import { playSFX } from '@/services/audio';
+import { analytics } from '@/services/analytics';
 
 type ShopTab = 'egg' | 'decoration' | 'pearl' | 'star_coral';
 
@@ -119,6 +120,7 @@ export default function ShopPage() {
       confirmText: '구매',
     });
     if (!ok) return;
+    analytics.purchaseStarCoral(pkg.id, pkg.amount + pkg.bonus, pkg.priceKRW);
     if (isCloudUser()) {
       optimistic(
         () => {
@@ -150,6 +152,7 @@ export default function ShopPage() {
       confirmText: '교환',
     });
     if (!ok) return;
+    analytics.exchangePearl(pkg.id);
     if (isCloudUser()) {
       optimistic(
         () => {
@@ -183,6 +186,7 @@ export default function ShopPage() {
       confirmText: '구매',
     });
     if (!confirmed) return;
+    analytics.purchaseEgg(item.tier, item.currency, item.price);
     if (isCloudUser()) {
       optimistic(
         () => {
@@ -217,6 +221,7 @@ export default function ShopPage() {
       confirmText: '구매',
     });
     if (!confirmed) return;
+    analytics.purchaseDecoration(modelId, price);
     if (isCloudUser()) {
       optimistic(
         () => {
