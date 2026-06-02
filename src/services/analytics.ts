@@ -15,6 +15,7 @@ import {
   setUserId as fbSetUserId,
   setUserProperties as fbSetUserProperties,
 } from 'firebase/analytics';
+import * as Sentry from '@sentry/react';
 import { getAnalyticsInstance } from './firebase/config';
 
 type EventParams = Record<string, string | number | boolean | undefined | null>;
@@ -45,6 +46,7 @@ export function track(name: string, params?: EventParams): void {
 
 /** 로그인/로그아웃 시 호출. null → 사용자 식별 해제. */
 export function identifyUser(uid: string | null): void {
+  Sentry.setUser(uid ? { id: uid } : null);
   const inst = getAnalyticsInstance();
   if (!inst) return;
   try {

@@ -1,8 +1,16 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const sentryEnabled = Boolean(
+    env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT,
+  );
+
+  return {
+  build: { sourcemap: true },
   plugins: [
     react(),
     VitePWA({
@@ -65,8 +73,15 @@ export default defineConfig({
         enabled: false,
       },
     }),
+    sentryEnabled &&
+      sentryVitePlugin({
+        org: env.SENTRY_ORG,
+        project: env.SENTRY_PROJECT,
+        authToken: env.SENTRY_AUTH_TOKEN,
+      }),
   ],
   resolve: {
     alias: { '@': '/src' },
   },
+  };
 });
