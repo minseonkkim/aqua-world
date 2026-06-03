@@ -717,13 +717,13 @@ export default function TankPage() {
           ].map(btn => (
             <button key={btn.icon} onClick={btn.action} style={{
               background: btn.active ? 'rgba(77, 208, 225, 0.25)' : 'rgba(0,0,0,0.6)',
-              borderRadius: 12, padding: '8px 12px',
+              borderRadius: 11, padding: '7px 10px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               border: `1px solid ${btn.active ? 'rgba(77, 208, 225, 0.7)' : 'rgba(255,255,255,0.15)'}`,
-              minWidth: 60, color: '#fff',
-              fontSize: 10, whiteSpace: 'pre-line', textAlign: 'center',
+              minWidth: 54, color: '#fff',
+              fontSize: 9, whiteSpace: 'pre-line', textAlign: 'center',
             }}>
-              <span style={{ fontSize: 22 }}>{btn.icon}</span>
+              <span style={{ fontSize: 20 }}>{btn.icon}</span>
               {btn.label}
             </button>
           ))}
@@ -751,15 +751,15 @@ export default function TankPage() {
                   showToast(`${LIGHT_MODE_ICON[mode]} ${LIGHT_MODE_LABEL[mode]} 모드`);
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
+                  display: 'flex', alignItems: 'center', gap: 7,
                   background: isActive ? 'rgba(77, 208, 225, 0.25)' : 'transparent',
                   border: `1px solid ${isActive ? 'rgba(77, 208, 225, 0.6)' : 'transparent'}`,
-                  borderRadius: 8, padding: '6px 12px',
-                  color: '#fff', fontSize: 12, fontWeight: isActive ? 700 : 500,
-                  cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 100,
+                  borderRadius: 8, padding: '5px 10px',
+                  color: '#fff', fontSize: 11, fontWeight: isActive ? 700 : 500,
+                  cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 90,
                 }}
               >
-                <span style={{ fontSize: 18 }}>{LIGHT_MODE_ICON[mode]}</span>
+                <span style={{ fontSize: 16 }}>{LIGHT_MODE_ICON[mode]}</span>
                 <span>{LIGHT_MODE_LABEL[mode]}</span>
               </button>
             );

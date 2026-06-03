@@ -150,7 +150,7 @@ export default function DecorationModePanel({
             <button key={c} onClick={() => setFilter(c)} style={{
               background: filter === c ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
               border: `1px solid ${filter === c ? 'rgba(77, 208, 225, 0.6)' : 'rgba(255,255,255,0.1)'}`,
-              borderRadius: 16, padding: '5px 12px', color: '#fff', fontSize: 12,
+              borderRadius: 14, padding: '4px 10px', color: '#fff', fontSize: 11,
               whiteSpace: 'nowrap', cursor: 'pointer',
             }}>
               {CATEGORY_LABEL[c]}
@@ -167,23 +167,23 @@ export default function DecorationModePanel({
                 key={item.modelId}
                 onClick={owned ? () => { playSFX('place'); onAdd(item.modelId); } : onShopRedirect}
                 style={{
-                  flex: '0 0 auto', width: 76, height: 96, position: 'relative',
+                  flex: '0 0 auto', width: 68, height: 86, position: 'relative',
                   background: owned ? 'rgba(77, 208, 225, 0.08)' : 'rgba(255,255,255,0.04)',
                   border: `1px solid ${owned ? 'rgba(77, 208, 225, 0.35)' : 'rgba(255,255,255,0.08)'}`,
-                  borderRadius: 12, padding: '6px 4px',
+                  borderRadius: 11, padding: '5px 4px',
                   color: owned ? '#fff' : 'var(--color-text-disabled)',
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
                   cursor: 'pointer', opacity: owned ? 1 : 0.7,
                 }}
               >
-                <span style={{ fontSize: 28, lineHeight: 1, filter: owned ? 'none' : 'grayscale(80%)' }}>
+                <span style={{ fontSize: 25, lineHeight: 1, filter: owned ? 'none' : 'grayscale(80%)' }}>
                   {item.emoji}
                 </span>
-                <span style={{ fontSize: 10, textAlign: 'center', lineHeight: 1.2 }}>{item.name}</span>
+                <span style={{ fontSize: 9, textAlign: 'center', lineHeight: 1.2 }}>{item.name}</span>
                 {owned ? (
-                  <span style={{ fontSize: 10, color: '#4dd0e1', fontWeight: 700 }}>×{count}</span>
+                  <span style={{ fontSize: 9, color: '#4dd0e1', fontWeight: 700 }}>×{count}</span>
                 ) : (
-                  <span style={{ fontSize: 9, color: '#ffd54f' }}>🛒 상점</span>
+                  <span style={{ fontSize: 8, color: '#ffd54f' }}>🛒 상점</span>
                 )}
               </button>
             );
