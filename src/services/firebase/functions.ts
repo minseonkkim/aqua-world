@@ -120,6 +120,7 @@ export const placeFish = call<{ tankId: string; fishId: string }, { user: User; 
 export const expandTankCapacity = call<{ tankId: string }, { user: User; tank: Tank }>(
   'expandTankCapacity',
 );
+export const cleanTank = call<{ tankId: string }, { user: User; tank: Tank }>('cleanTank');
 export const reconcileFish = call<{ tankId: string }, { user: User; tank: Tank }>('reconcileFish');
 
 // ─── 회원 탈퇴 ─────────────────────────────────────────────────────────────

@@ -465,6 +465,36 @@ exports.expandTankCapacity = onCall(async (request) => {
   });
 });
 
+/** 수조 청소 (Pearl 차감 + 청결도 100) */
+exports.cleanTank = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  if (!tankId) throw new HttpsError("invalid-argument", "tankId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    if ((tankData.cleanliness || 0) >= 95) {
+      throw new HttpsError("failed-precondition", "이미 깨끗합니다.");
+    }
+    const cost = G.CLEAN_TANK_COST_PEARL;
+    if ((user.pearl || 0) < cost) {
+      throw new HttpsError("failed-precondition", "Pearl이 부족합니다.");
+    }
+
+    const now = Date.now();
+    user.pearl = (user.pearl || 0) - cost;
+    const newTank = { ...tankData, cleanliness: 100, lastCleanlinessTickAt: now, updatedAt: now };
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), newTank);
+    return { user, tank: stripTank(newTank) };
+  });
+});
+
 /**
  * 데이터 정합성 보정 (idempotent). 과거 클라-only 이동 로직으로 생긴 손상 복구용:
  *  1) 수조 내 중복 물고기 id 제거

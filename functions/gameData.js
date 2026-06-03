@@ -13,6 +13,8 @@ const TANK_CAPACITY_BY_LEVEL = [8, 12, 16, 20];
 const TANK_MAX_CAPACITY_LEVEL = TANK_CAPACITY_BY_LEVEL.length - 1;
 // 수조 확장 비용(Pearl): 레벨 0→1, 1→2, 2→3 (클라 src/constants 와 일치)
 const TANK_EXPAND_COST_PEARL = [300, 600, 1200];
+// 수조 청소 비용(Pearl) (클라 src/utils/mood 와 일치)
+const CLEAN_TANK_COST_PEARL = 50;
 
 /** capacityLevel(미지정 시 0)에 해당하는 마릿수 상한 반환 */
 function getTankCapacity(capacityLevel) {
@@ -136,6 +138,7 @@ module.exports = {
   TANK_CAPACITY_BY_LEVEL,
   TANK_MAX_CAPACITY_LEVEL,
   TANK_EXPAND_COST_PEARL,
+  CLEAN_TANK_COST_PEARL,
   getTankCapacity,
   SPECIES,
   SPECIES_COUNT,

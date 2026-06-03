@@ -27,6 +27,7 @@ import {
   storeFish as storeFishServer,
   placeFish as placeFishServer,
   expandTankCapacity as expandTankCapacityServer,
+  cleanTank as cleanTankServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
 
@@ -471,12 +472,27 @@ export default function TankPage() {
       showToast('이미 깨끗해요 ✨');
       return;
     }
-    if (!spendPearl(CLEAN_TANK_COST_PEARL)) {
+    if ((user?.pearl ?? 0) < CLEAN_TANK_COST_PEARL) {
       showToast(`Pearl이 부족합니다 (${CLEAN_TANK_COST_PEARL} 🪙 필요)`);
       return;
     }
-    cleanTank(activeTankId);
-    tickMoodAndCleanliness(activeTankId);
+    const clean = () => {
+      spendPearl(CLEAN_TANK_COST_PEARL);
+      cleanTank(activeTankId);
+      tickMoodAndCleanliness(activeTankId);
+    };
+    if (isCloudUser()) {
+      optimistic(clean, () => cleanTankServer({ tankId: activeTankId }), () =>
+        showToast('청소에 실패했어요 — 다시 시도해주세요'),
+      );
+    } else {
+      if (!spendPearl(CLEAN_TANK_COST_PEARL)) {
+        showToast(`Pearl이 부족합니다 (${CLEAN_TANK_COST_PEARL} 🪙 필요)`);
+        return;
+      }
+      cleanTank(activeTankId);
+      tickMoodAndCleanliness(activeTankId);
+    }
     analytics.cleanTank();
     showToast('💧 물을 갈았어요 — 청결도 100%');
   };
