@@ -160,17 +160,17 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 130,
-          width: 300,
+          width: 280,
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 16,
-          padding: 16,
+          borderRadius: 14,
+          padding: 14,
           backdropFilter: 'blur(12px)',
-          maxHeight: 340,
+          maxHeight: 320,
           overflowY: 'auto',
           zIndex: 70,
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 14 }}>
             🥚 인큐베이터 ({inventory.length})
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

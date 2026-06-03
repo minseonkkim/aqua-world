@@ -118,18 +118,18 @@ export default function FishInventoryPanel({ onPlace, onExpand, tankFishCount, c
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 180,
-          width: 300,
+          width: 280,
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 16,
-          padding: 16,
+          borderRadius: 14,
+          padding: 14,
           backdropFilter: 'blur(12px)',
           maxHeight: 380,
           display: 'flex', flexDirection: 'column',
           zIndex: 70,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>📦 보관함 ({fishInventory.length})</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>📦 보관함 ({fishInventory.length})</div>
             <div style={{
               fontSize: 12, fontWeight: 600,
               color: full ? '#e57373' : 'var(--color-text-secondary)',
