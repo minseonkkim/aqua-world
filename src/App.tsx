@@ -8,7 +8,7 @@ import { Browser } from '@capacitor/browser';
 import { isNative } from '@/services/platform';
 import { useModalStore } from '@/store/useModalStore';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
-import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
+import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/firebase/functions';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, pushPermission } from '@/services/firebase/messaging';
@@ -193,6 +193,8 @@ export default function App() {
               ? fsTanks
               : res.tank ? [res.tank] : [createDefaultTank()];
             useTankStore.getState().setTanks(tanks);
+            // 과거 클라-only 이동으로 생긴 손상(수조 초과·중복) 보정 (idempotent)
+            if (tanks[0]) reconcileFish({ tankId: tanks[0].id }).catch(() => {});
             const daily = await claimDailyReward();
             if (daily.reward) store.setPendingReward(daily.reward as DailyRewardResult);
 

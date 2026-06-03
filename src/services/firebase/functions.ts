@@ -101,13 +101,26 @@ export const startHatching = call<{ eggId: string }, { user: User }>('startHatch
 
 export const hatchEgg = call<
   { eggId: string; tankId: string },
-  { user: User; tank: Tank; speciesId: string; fish: Fish }
+  { user: User; tank: Tank; speciesId: string; fish: Fish; storedInInventory?: boolean }
 >('hatchEgg');
 
 export const feedFish = call<
   { tankId: string; fishId: string },
   { user: User; tank: Tank; newStage: FishGrowthStage | null }
 >('feedFish');
+
+// ─── 물고기 보관함 ↔ 수조 / 수조 확장 ───────────────────────────────────────
+
+export const storeFish = call<{ tankId: string; fishId: string }, { user: User; tank: Tank }>(
+  'storeFish',
+);
+export const placeFish = call<{ tankId: string; fishId: string }, { user: User; tank: Tank }>(
+  'placeFish',
+);
+export const expandTankCapacity = call<{ tankId: string }, { user: User; tank: Tank }>(
+  'expandTankCapacity',
+);
+export const reconcileFish = call<{ tankId: string }, { user: User; tank: Tank }>('reconcileFish');
 
 // ─── 회원 탈퇴 ─────────────────────────────────────────────────────────────
 // 서버에서 user 문서 + 소유 tanks + Auth 계정까지 영구 삭제한다.

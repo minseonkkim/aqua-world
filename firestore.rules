@@ -15,7 +15,8 @@ service cloud.firestore {
         && request.resource.data.collectedSpecies == resource.data.collectedSpecies
         && request.resource.data.feedCountToday == resource.data.feedCountToday
         && request.resource.data.lastFeedResetAt == resource.data.lastFeedResetAt
-        && request.resource.data.claimedCompendiumMilestones == resource.data.claimedCompendiumMilestones;
+        && request.resource.data.claimedCompendiumMilestones == resource.data.claimedCompendiumMilestones
+        && request.resource.data.fishInventory == resource.data.fishInventory;
     }
 
     match /users/{uid} {
@@ -36,7 +37,8 @@ service cloud.firestore {
       allow update: if request.auth != null
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.fish == resource.data.fish;
+        && request.resource.data.fish == resource.data.fish
+        && request.resource.data.capacityLevel == resource.data.capacityLevel;
       allow delete: if false;
     }
   }

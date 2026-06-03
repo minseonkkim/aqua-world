@@ -20,15 +20,21 @@ import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
 import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL } from '@/constants';
 import {
   isCloudUser,
+  optimistic,
   sprinkleFeed,
   feedFish as feedFishServer,
   hatchEgg as hatchEggServer,
+  storeFish as storeFishServer,
+  placeFish as placeFishServer,
+  expandTankCapacity as expandTankCapacityServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
 
 interface PendingHatch {
   speciesId: string;
   eggTier: EggTier;
+  /** 클라우드 유저: 서버가 수조가 가득 차 보관함에 넣었으면 true */
+  storedInInventory?: boolean;
 }
 
 export default function TankPage() {
@@ -311,7 +317,7 @@ export default function TankPage() {
       if (!activeTankId) return;
       try {
         const res = await hatchEggServer({ eggId, tankId: activeTankId });
-        setPendingHatch({ speciesId: res.speciesId, eggTier });
+        setPendingHatch({ speciesId: res.speciesId, eggTier, storedInInventory: res.storedInInventory });
       } catch {
         showToast('아직 부화하지 않았습니다');
       }
@@ -334,8 +340,9 @@ export default function TankPage() {
 
     // 클라우드 유저는 서버 hatchEgg가 이미 물고기 생성·도감 등록을 마침
     if (isCloudUser()) {
+      const stored = pendingHatch.storedInInventory;
       setPendingHatch(null);
-      showToast(`✨ ${name} 획득!`);
+      showToast(stored ? `📦 수조가 가득 차 ${name}을(를) 보관함에 보관했어요` : `✨ ${name} 획득!`);
       return;
     }
 
@@ -373,6 +380,8 @@ export default function TankPage() {
   };
 
   // ===== 물고기 보관함 핸들러 =====
+  // tank.fish 는 서버 소유 → 클라우드 유저는 서버 함수로 이동(낙관적 UI + 실패 시 롤백),
+  // 게스트/로컬 유저는 기존 로컬 로직 그대로.
   const handlePlaceFish = useCallback((fishId: string) => {
     if (!activeTankId) return;
     const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
@@ -381,23 +390,42 @@ export default function TankPage() {
       showToast(`수조가 가득 찼어요 (${getTankCapacity(tank.capacityLevel)}마리) — 확장하거나 다른 물고기를 빼주세요`);
       return;
     }
-    const fish = removeFishFromInventory(fishId);
-    if (!fish) return;
-    addFishToTank(activeTankId, {
-      ...fish,
-      position: {
-        x: (Math.random() - 0.5) * 8,
-        y: (Math.random() - 0.5) * 4,
-        z: (Math.random() - 0.5) * 6,
-      },
-    });
-    showToast(`🐟 ${fish.name} 수조에 배치`);
+    const invFish = (useUserStore.getState().user?.fishInventory ?? []).find(f => f.id === fishId);
+    if (!invFish) return;
+    const place = () => {
+      removeFishFromInventory(fishId);
+      addFishToTank(activeTankId, {
+        ...invFish,
+        position: {
+          x: (Math.random() - 0.5) * 8,
+          y: (Math.random() - 0.5) * 4,
+          z: (Math.random() - 0.5) * 6,
+        },
+      });
+    };
+    if (isCloudUser()) {
+      optimistic(place, () => placeFishServer({ tankId: activeTankId, fishId }), () =>
+        showToast('배치에 실패했어요 — 다시 시도해주세요'),
+      );
+    } else {
+      place();
+    }
+    showToast(`🐟 ${invFish.name} 수조에 배치`);
   }, [activeTankId, removeFishFromInventory, addFishToTank]);
 
   const handleStoreFish = useCallback((fish: Fish) => {
     if (!activeTankId) return;
-    removeFish(activeTankId, fish.id);
-    addFishToInventory(fish);
+    const store = () => {
+      removeFish(activeTankId, fish.id);
+      addFishToInventory(fish);
+    };
+    if (isCloudUser()) {
+      optimistic(store, () => storeFishServer({ tankId: activeTankId, fishId: fish.id }), () =>
+        showToast('보관에 실패했어요 — 다시 시도해주세요'),
+      );
+    } else {
+      store();
+    }
     setSelectedFishId(null);
     showToast(`📦 ${fish.name} 보관함에 보관`);
   }, [activeTankId, removeFish, addFishToInventory]);
@@ -412,13 +440,28 @@ export default function TankPage() {
       return;
     }
     const cost = TANK_EXPAND_COST_PEARL[lvl];
-    if (!spendPearl(cost)) {
+    if ((user?.pearl ?? 0) < cost) {
       showToast(`Pearl이 부족합니다 (${cost} 🪙 필요)`);
       return;
     }
-    expandTankCapacity(activeTankId);
+    if (isCloudUser()) {
+      optimistic(
+        () => {
+          spendPearl(cost);
+          expandTankCapacity(activeTankId);
+        },
+        () => expandTankCapacityServer({ tankId: activeTankId }),
+        () => showToast('확장에 실패했어요 — 다시 시도해주세요'),
+      );
+    } else {
+      if (!spendPearl(cost)) {
+        showToast(`Pearl이 부족합니다 (${cost} 🪙 필요)`);
+        return;
+      }
+      expandTankCapacity(activeTankId);
+    }
     showToast(`🔧 수조 확장! 최대 ${getTankCapacity(lvl + 1)}마리`);
-  }, [activeTankId, spendPearl, expandTankCapacity]);
+  }, [activeTankId, user?.pearl, spendPearl, expandTankCapacity]);
 
   const remaining = 3 - (user?.feedCountToday ?? 0);
 

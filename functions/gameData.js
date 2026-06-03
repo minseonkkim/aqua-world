@@ -7,6 +7,19 @@
 const START_PEARL = 200;
 const START_STAR_CORAL = 20;
 
+// ─── 수조 수용량(마릿수 상한) ───
+// capacityLevel(0~3) → 한 수조에 배치 가능한 최대 물고기 수 (클라 src/constants 와 일치)
+const TANK_CAPACITY_BY_LEVEL = [8, 12, 16, 20];
+const TANK_MAX_CAPACITY_LEVEL = TANK_CAPACITY_BY_LEVEL.length - 1;
+// 수조 확장 비용(Pearl): 레벨 0→1, 1→2, 2→3 (클라 src/constants 와 일치)
+const TANK_EXPAND_COST_PEARL = [300, 600, 1200];
+
+/** capacityLevel(미지정 시 0)에 해당하는 마릿수 상한 반환 */
+function getTankCapacity(capacityLevel) {
+  const lvl = Math.max(0, Math.min(TANK_MAX_CAPACITY_LEVEL, capacityLevel || 0));
+  return TANK_CAPACITY_BY_LEVEL[lvl];
+}
+
 // ─── 물고기 종 (id → 메타) ───
 const SPECIES = {
   clownfish: { name: "클라운피시", rarity: "common" },
@@ -120,6 +133,10 @@ const DECORATION_PRICES = {
 module.exports = {
   START_PEARL,
   START_STAR_CORAL,
+  TANK_CAPACITY_BY_LEVEL,
+  TANK_MAX_CAPACITY_LEVEL,
+  TANK_EXPAND_COST_PEARL,
+  getTankCapacity,
   SPECIES,
   SPECIES_COUNT,
   RARITY_BY_EGG,

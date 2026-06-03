@@ -5,7 +5,7 @@ import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle, startKakaoLogin } from '@/services/firebase/auth';
 import { loadUserTanks } from '@/services/firebase/firestore';
-import { bootstrapUser, claimDailyReward } from '@/services/firebase/functions';
+import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/firebase/functions';
 import { analytics, identifyUser, setUserProps } from '@/services/analytics';
 import { Tank } from '@/types';
 import { DailyRewardResult } from '@/store/useUserStore';
@@ -93,8 +93,10 @@ export default function LoginPage() {
         loadUserTanks(firebaseUser.uid),
       ]);
       setUser(res.user);
-      if (firestoreTanks.length > 0) setTanks(firestoreTanks);
-      else if (res.tank) setTanks([res.tank]);
+      const loadedTanks = firestoreTanks.length > 0 ? firestoreTanks : res.tank ? [res.tank] : [];
+      if (loadedTanks.length > 0) setTanks(loadedTanks);
+      // 과거 클라-only 이동으로 생긴 손상(수조 초과·중복) 보정 (idempotent)
+      if (loadedTanks[0]) reconcileFish({ tankId: loadedTanks[0].id }).catch(() => {});
 
       // 일일 로그인 보상 (서버 검증)
       const daily = await claimDailyReward();

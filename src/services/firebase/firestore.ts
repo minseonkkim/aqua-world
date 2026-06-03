@@ -34,6 +34,7 @@ const USER_SERVER_OWNED_FIELDS = [
   'claimedCompendiumMilestones',
   'fcmTokens',
   'nextHatchAt',
+  'fishInventory',
 ] as const;
 
 export async function saveUserToFirestore(user: User): Promise<void> {
@@ -61,8 +62,9 @@ export async function loadUserTanks(uid: string): Promise<Tank[]> {
 
 export async function saveTankToFirestore(tank: Tank, ownerId: string): Promise<void> {
   if (!db) return;
-  // fish(성장·보유 어종)는 서버 소유 — 클라는 꾸미기/환경/조명만 저장
-  const { fish: _fish, ...rest } = tank;
+  // fish(성장·보유 어종) / capacityLevel(Pearl 비용 확장)은 서버 소유 — 클라는 꾸미기/환경/조명만 저장
+  const { fish: _fish, capacityLevel: _cap, ...rest } = tank;
   void _fish;
+  void _cap;
   await setDoc(doc(db, 'tanks', tank.id), { ...rest, ownerId }, { merge: true });
 }

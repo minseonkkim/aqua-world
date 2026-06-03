@@ -298,8 +298,16 @@ exports.hatchEgg = onCall(async (request) => {
     if (!user.collectedSpecies.includes(speciesId)) {
       user.collectedSpecies = [...user.collectedSpecies, speciesId];
     }
-    const fishList = [...(tankData.fish || []), fish];
+    // 수조가 가득 차면 보관함으로, 아니면 수조에 바로 배치 (클라 TankPage.finalizeHatch 와 동일)
+    const currentFish = tankData.fish || [];
+    const full = currentFish.length >= G.getTankCapacity(tankData.capacityLevel);
+    if (full) {
+      user.fishInventory = [...(user.fishInventory || []), fish];
+      tx.set(userRef(uid), user);
+      return { user, tank: stripTank(tankData), speciesId, fish, storedInInventory: true };
+    }
 
+    const fishList = [...currentFish, fish];
     tx.set(userRef(uid), user);
     tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
     return { user, tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }), speciesId, fish };
@@ -355,6 +363,162 @@ exports.feedFish = onCall(async (request) => {
       tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }),
       newStage: advanced ? advanced.growthStage : null,
     };
+  });
+});
+
+// ─── 물고기 보관함 ↔ 수조 이동 / 수조 확장 ──────────────────────────────────
+// tank.fish 는 서버 소유(보안 규칙으로 클라 쓰기 차단)이므로 이동/확장은 반드시 서버에서.
+
+/** 수조 → 보관함 */
+exports.storeFish = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  const fishId = request.data && request.data.fishId;
+  if (!tankId || !fishId) throw new HttpsError("invalid-argument", "tankId/fishId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const target = (tankData.fish || []).find((f) => f.id === fishId);
+    if (!target) throw new HttpsError("not-found", "물고기 없음");
+
+    const now = Date.now();
+    const fishList = (tankData.fish || []).filter((f) => f.id !== fishId);
+    user.fishInventory = [...(user.fishInventory || []), target];
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
+    return { user, tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }) };
+  });
+});
+
+/** 보관함 → 수조 (상한 검증) */
+exports.placeFish = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  const fishId = request.data && request.data.fishId;
+  if (!tankId || !fishId) throw new HttpsError("invalid-argument", "tankId/fishId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const target = (user.fishInventory || []).find((f) => f.id === fishId);
+    if (!target) throw new HttpsError("not-found", "보관함에 물고기 없음");
+
+    const currentFish = tankData.fish || [];
+    if (currentFish.length >= G.getTankCapacity(tankData.capacityLevel)) {
+      throw new HttpsError("failed-precondition", "수조가 가득 찼습니다.");
+    }
+
+    const now = Date.now();
+    const placed = {
+      ...target,
+      position: {
+        x: (Math.random() - 0.5) * 8,
+        y: (Math.random() - 0.5) * 4,
+        z: (Math.random() - 0.5) * 6,
+      },
+    };
+    user.fishInventory = (user.fishInventory || []).filter((f) => f.id !== fishId);
+    const fishList = [...currentFish, placed];
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
+    return { user, tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }) };
+  });
+});
+
+/** 수조 확장 (Pearl 차감 + capacityLevel +1) */
+exports.expandTankCapacity = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  if (!tankId) throw new HttpsError("invalid-argument", "tankId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const lvl = tankData.capacityLevel || 0;
+    if (lvl >= G.TANK_MAX_CAPACITY_LEVEL) {
+      throw new HttpsError("failed-precondition", "이미 최대 크기입니다.");
+    }
+    const cost = G.TANK_EXPAND_COST_PEARL[lvl];
+    if ((user.pearl || 0) < cost) {
+      throw new HttpsError("failed-precondition", "Pearl이 부족합니다.");
+    }
+
+    const now = Date.now();
+    user.pearl = (user.pearl || 0) - cost;
+    const newTank = { ...tankData, capacityLevel: lvl + 1, updatedAt: now };
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), newTank);
+    return { user, tank: stripTank(newTank) };
+  });
+});
+
+/**
+ * 데이터 정합성 보정 (idempotent). 과거 클라-only 이동 로직으로 생긴 손상 복구용:
+ *  1) 수조 내 중복 물고기 id 제거
+ *  2) 보관함에서 수조에 이미 있는 물고기 / 보관함 내 중복 제거
+ *  3) 수조 상한 초과분을 보관함으로 이동
+ * 변경이 있을 때만 기록한다. 로그인 시 1회 호출.
+ */
+exports.reconcileFish = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  if (!tankId) throw new HttpsError("invalid-argument", "tankId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const origTank = tankData.fish || [];
+    const origInv = user.fishInventory || [];
+
+    // 1) 수조 내 중복 id 제거
+    const seen = new Set();
+    let tankFish = origTank.filter((f) => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    });
+    // 2) 보관함: 수조에 이미 있는 물고기 + 보관함 내 중복 제거
+    const tankIds = new Set(tankFish.map((f) => f.id));
+    const invSeen = new Set();
+    let inventory = origInv.filter((f) => {
+      if (tankIds.has(f.id) || invSeen.has(f.id)) return false;
+      invSeen.add(f.id);
+      return true;
+    });
+    // 3) 상한 초과분을 보관함으로 이동
+    const cap = G.getTankCapacity(tankData.capacityLevel);
+    if (tankFish.length > cap) {
+      inventory = [...inventory, ...tankFish.slice(cap)];
+      tankFish = tankFish.slice(0, cap);
+    }
+
+    const before = JSON.stringify([origTank.map((f) => f.id), origInv.map((f) => f.id)]);
+    const after = JSON.stringify([tankFish.map((f) => f.id), inventory.map((f) => f.id)]);
+    if (before === after) {
+      return { user, tank: stripTank(tankData) };
+    }
+
+    const now = Date.now();
+    user.fishInventory = inventory;
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), { ...tankData, fish: tankFish, updatedAt: now });
+    return { user, tank: stripTank({ ...tankData, fish: tankFish, updatedAt: now }) };
   });
 });
 
