@@ -71,10 +71,12 @@ function loadSfx(key: SFXKey): Howl {
   return h;
 }
 
-export function playSFX(key: SFXKey): void {
+export function playSFX(key: SFXKey, rate = 1): void {
   if (!sfxEnabled) return;
   try {
-    loadSfx(key).play();
+    const h = loadSfx(key);
+    const id = h.play();
+    if (rate !== 1) h.rate(rate, id);
   } catch {
     // 사일런트 실패 (자동재생 차단 등) — UX에 영향 없음
   }

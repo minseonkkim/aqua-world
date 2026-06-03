@@ -45,11 +45,10 @@ export default function HatchAnimationModal({ speciesId, eggTier, onComplete }: 
   const rarity = species?.rarity ?? 'common';
 
   useEffect(() => {
+    // 알이 흔들리기 시작하는 순간부터 효과음 재생 (애니메이션과 타이밍 일치)
+    playSFX('hatch', 1.32);
     const t1 = setTimeout(() => setPhase('crack'), 1200);
-    const t2 = setTimeout(() => {
-      setPhase('flash');
-      playSFX('hatch');
-    }, 2100);
+    const t2 = setTimeout(() => setPhase('flash'), 2100);
     const t3 = setTimeout(() => setPhase('reveal'), 2500);
     return () => {
       clearTimeout(t1);
@@ -148,7 +147,7 @@ export default function HatchAnimationModal({ speciesId, eggTier, onComplete }: 
               src={`${import.meta.env.BASE_URL}${species.thumbnailPath}`}
               alt={species.name}
               style={{ width: '85%', height: '85%', objectFit: 'contain' }}
-              onError={(e) => {
+              onError={e => {
                 const img = e.currentTarget;
                 img.style.display = 'none';
                 const parent = img.parentElement;
