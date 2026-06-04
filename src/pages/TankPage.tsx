@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
-import TankScene, { TankSceneHandle } from '@/components/3d/TankScene';
+import type { TankSceneHandle } from '@/components/3d/TankScene';
+// TankScene은 three.js + GLB 로더 체인(~500KB+ 압축 후)을 끌어오므로 lazy load — 첫 화면 번들에서 제외
+const TankScene = lazy(() => import('@/components/3d/TankScene'));
 import DailyRewardModal from '@/components/DailyRewardModal';
 import IncubatorPanel from '@/components/IncubatorPanel';
 import FishInfoCard from '@/components/FishInfoCard';
@@ -611,21 +613,24 @@ export default function TankPage() {
   return (
     <div style={{ position: 'relative', flex: 1, overflow: 'hidden', background: '#000' }}>
       {/* 3D 수조 — 포토 모드 중에는 인터랙션(클릭/먹이) 비활성, 카메라 컨트롤은 유지 */}
-      <TankScene
-        ref={tankSceneRef}
-        environment={environment}
-        fish={fishInTank}
-        decorations={decorationsInTank}
-        onFishClick={photoMode ? undefined : handleFishClick}
-        decorationMode={decorationMode}
-        selectedDecorationId={selectedDecoId}
-        onDecorationSelect={setSelectedDecoId}
-        onDecorationMove={handleMoveDecoration}
-        lightMode={activeTank?.lightMode ?? 'auto'}
-        onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
-        tankScale={getTankScale(capacityLevel)}
-        style={{ position: 'absolute', inset: 0 }}
-      />
+      {/* TankScene 자체가 GLB 프리로드 동안 로딩 오버레이를 표시하므로 Suspense fallback은 동일 배경만 */}
+      <Suspense fallback={<div style={{ position: 'absolute', inset: 0, background: '#000' }} />}>
+        <TankScene
+          ref={tankSceneRef}
+          environment={environment}
+          fish={fishInTank}
+          decorations={decorationsInTank}
+          onFishClick={photoMode ? undefined : handleFishClick}
+          decorationMode={decorationMode}
+          selectedDecorationId={selectedDecoId}
+          onDecorationSelect={setSelectedDecoId}
+          onDecorationMove={handleMoveDecoration}
+          lightMode={activeTank?.lightMode ?? 'auto'}
+          onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
+          tankScale={getTankScale(capacityLevel)}
+          style={{ position: 'absolute', inset: 0 }}
+        />
+      </Suspense>
 
       {/* 상단 HUD — 포토 모드 중에는 숨김 */}
       {!photoMode && (

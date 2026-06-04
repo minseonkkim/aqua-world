@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './gltfLoader';
 
 // Species ID → GLB file basename in /public/models/fish/
 const SPECIES_TO_MODEL: Record<string, string> = {
@@ -60,7 +61,7 @@ function loadOne(loader: GLTFLoader, id: string): Promise<void> {
 
 export function preloadFishModels(): Promise<Map<string, LoadedFishModel>> {
   if (loadPromise) return loadPromise;
-  const loader = new GLTFLoader();
+  const loader = createGLTFLoader();
   loadPromise = Promise.all(MODEL_IDS.map((id) => loadOne(loader, id)))
     .then(() => cache)
     .catch((err) => {

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createGLTFLoader } from './gltfLoader';
 
 // modelId → GLB basename in /public/models/decoration/
 const MODEL_IDS = [
@@ -52,7 +53,7 @@ function loadOne(loader: GLTFLoader, id: string): Promise<void> {
 
 export function preloadDecorationModels(): Promise<Map<string, LoadedDecorationModel>> {
   if (loadPromise) return loadPromise;
-  const loader = new GLTFLoader();
+  const loader = createGLTFLoader();
   loadPromise = Promise.all(MODEL_IDS.map((id) => loadOne(loader, id)))
     .then(() => cache)
     .catch((err) => {

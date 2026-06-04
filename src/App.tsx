@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
@@ -140,6 +140,16 @@ export default function App() {
     if (pushPermission() !== 'granted') return;
     isPushSupported().then(ok => { if (ok) listenForeground(); });
   }, []);
+
+  // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을
+  // 사용자가 /tank 로 이동하기 전에 캐시에 올려둔다. 동적 import 라 비로그인 번들에는 포함되지 않음.
+  const preloadedRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || preloadedRef.current) return;
+    preloadedRef.current = true;
+    void import('@/utils/fishModelLoader').then(m => m.preloadFishModels()).catch(() => {});
+    void import('@/utils/decorationModelLoader').then(m => m.preloadDecorationModels()).catch(() => {});
+  }, [isAuthenticated]);
 
   // 앱 진입 1회 — Analytics 가 isSupported() 통과 후 채워지므로
   // 다음 틱에서 호출해도 인스턴스가 있을 가능성이 더 높다.
