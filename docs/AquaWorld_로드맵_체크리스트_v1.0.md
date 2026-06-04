@@ -325,20 +325,20 @@
 - [x] 🔴 카카오 로그인 네이티브 분기 — 외부 브라우저(`@capacitor/browser`) + 커스텀 스킴 딥링크(`app.aquaworld://oauth/kakao`) 콜백
 - [x] 🔴 Google 로그인 네이티브 분기 — `signInWithRedirect` + `getRedirectResult` 부팅 시 회수
 - [x] 🔴 App URL listener 등록 (`@capacitor/app` appUrlOpen → completeKakaoLogin)
-- [ ] 🔴 **(사용자 작업)** JDK 21 + Android Studio 설치
-- [ ] 🔴 **(사용자 작업)** `npx cap add android` 실행 (Android 네이티브 프로젝트 생성)
-- [ ] 🔴 **(사용자 작업)** `AndroidManifest.xml` 에 `app.aquaworld` 커스텀 스킴 intent-filter 추가
+- [x] 🔴 **(사용자 작업)** JDK 21 + Android Studio 설치
+- [x] 🔴 **(사용자 작업)** `npx cap add android` 실행 (Android 네이티브 프로젝트 생성)
+- [x] 🔴 **(사용자 작업)** `AndroidManifest.xml` 에 `app.aquaworld` 커스텀 스킴 intent-filter 추가
 - [x] 🔴 Firebase Hosting OAuth 중계 페이지 (`public-hosting/oauth/kakao.html`) — 카카오 https 제약 우회
-- [ ] 🔴 **(사용자 작업)** `firebase deploy --only hosting` 으로 중계 페이지 배포
-- [ ] 🔴 **(사용자 작업)** Kakao Developer Console 에 네이티브 redirect URI(`https://aquaworld-bf2f4.web.app/oauth/kakao.html`) 등록
-- [ ] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
-- [ ] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
+- [x] 🔴 **(사용자 작업)** `firebase deploy --only hosting` 으로 중계 페이지 배포
+- [x] 🔴 **(사용자 작업)** Kakao Developer Console 에 네이티브 redirect URI(`https://aquaworld-bf2f4.web.app/oauth/kakao.html`) 등록
+- [x] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
+- [x] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
 - [ ] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 웹 광고 SDK 대체 (Phase 2-5의 광고 항목과 합쳐서 처리)
 - [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
 - [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
-  - [ ] 🟡 **(사용자 작업)** AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널·아이콘 메타 확인 (`cap sync` 후 머지 결과 점검)
+  - [x] 🟡 AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널 메타데이터(`aquaworld_default`) 적용
   - [ ] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 (없으면 회색 사각형으로 fallback)
-- [ ] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용
+- [x] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용 — `scripts/generate-native-assets.mjs` + `@capacitor/assets` 로 mipmap·drawable 105개 생성, 시스템/Capacitor 스플래시 색 통일 (#0a1628)
 - [ ] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
 - [ ] 🟢 iOS 빌드 (Mac + Xcode 필요) — `npx cap add ios`, App Store Connect 등록
 - [ ] 🟢 Electron 데스크톱 래퍼 검토 (Phase 7-4 와 통합)
