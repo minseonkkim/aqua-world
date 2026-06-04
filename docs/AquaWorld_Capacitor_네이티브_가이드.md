@@ -11,9 +11,9 @@
 | 구분 | 항목 |
 | --- | --- |
 | **재작성** | 없음. React/Three.js/Zustand/Firebase JS SDK 그대로 동작 |
-| **수정** | 카카오 로그인(딥링크), Google 로그인(redirect), PWA SW 비활성화 → **이미 코드 반영 완료** |
+| **수정** | 카카오 로그인(딥링크), Google 로그인(redirect), PWA SW 비활성화, **네이티브 푸시(Capacitor PushNotifications) 통합** → **이미 코드 반영 완료** |
 | **추가 작업** | Android Studio 설치 / 네이티브 프로젝트 생성 / 콘솔 설정 → **아래 §3 사용자가 직접 수행** |
-| **새 플러그인 후속** | AdMob, In-App Purchase, Push (Phase 2-5 진행 시 통합) |
+| **새 플러그인 후속** | AdMob, In-App Purchase (Phase 2-5 진행 시 통합) |
 
 ---
 
@@ -21,11 +21,13 @@
 
 | 파일 | 변경 |
 | --- | --- |
-| `package.json` | `@capacitor/core/cli/app/browser/preferences/status-bar/splash-screen/android` 의존성, `cap:*` 스크립트 5종 |
+| `package.json` | `@capacitor/core/cli/app/browser/preferences/status-bar/splash-screen/push-notifications/android` 의존성, `cap:*` 스크립트 5종 |
 | `capacitor.config.ts` | 신규 — `appId: app.aquaworld`, `webDir: dist`, splash/statusbar 옵션 |
 | `vite.config.ts` | `VITE_TARGET=capacitor` 일 때 PWA 플러그인 자동 비활성화 |
 | `src/services/platform.ts` | 신규 — `isNative()`, 딥링크 스킴 + Kakao https 중계 URL 상수 |
 | `src/services/firebase/auth.ts` | 네이티브 분기 — Google: `signInWithRedirect`, Kakao: `@capacitor/browser` + https 중계 → 딥링크 콜백 |
+| `src/services/firebase/messaging.ts` | 네이티브 분기 — `@capacitor/push-notifications` 로 FCM Android 토큰 수신 → 기존 `registerPushToken` Callable 로 등록 (Web Push 스택 우회) |
+| `android/app/src/main/AndroidManifest.xml` | Android 13+ `POST_NOTIFICATIONS` 권한, 기본 알림 채널·아이콘 메타 |
 | `src/App.tsx` | `App.addListener('appUrlOpen', ...)` 등록, 부팅 시 `consumePendingRedirectResult()` |
 | `src/pages/LoginPage.tsx` | `startKakaoLogin()` async 화 |
 | `.env.example` | `VITE_KAKAO_REST_API_KEY`, `VITE_KAKAO_NATIVE_REDIRECT` 추가 |
@@ -182,7 +184,52 @@ keytool -list -v -alias androiddebugkey -keystore "$env:USERPROFILE\.android\deb
 
 > Google 로그인 사용 시: Firebase Auth 콘솔에서 Google provider 의 SHA-1 인증 지문도 같이 등록되어야 `signInWithRedirect` 가 작동합니다.
 
-### 3-9. 실행
+### 3-9. 푸시 알림 (FCM Android) — Firebase Console / 설정
+
+> 웹 푸시(Web Push API + Service Worker)는 안드로이드 WebView 에서 동작하지 않으므로,
+> 네이티브에서는 `@capacitor/push-notifications` 플러그인이 발급하는 **FCM Android 토큰**을 기존 `registerPushToken` Callable 로 등록합니다.
+> 서버측 `admin.messaging().sendEachForMulticast()` 는 웹/안드로이드 토큰을 형식에 따라 자동 라우팅하므로 **Cloud Functions 코드 수정은 없습니다.**
+
+#### 코드/플러그인 측 (이미 반영됨)
+
+- `@capacitor/push-notifications` 의존성 추가
+- `src/services/firebase/messaging.ts` 에 `isNative()` 분기:
+  - `enablePush()` → `PushNotifications.requestPermissions()` → `register()` → `registration` 이벤트로 토큰 수신 → 기존 `registerPushToken` Callable 호출
+  - `disablePush()` → 리스너 해제 + 서버측 토큰 제거 (`unregisterPushToken`)
+  - 포그라운드 수신 (`pushNotificationReceived`) → 인앱 알림함(`useNotificationStore`) 적재
+  - 알림 탭 (`pushNotificationActionPerformed`) → `data.link` 또는 기본 `/` 라우팅
+- `android/app/src/main/AndroidManifest.xml` 에 다음이 들어있어야 합니다:
+
+  ```xml
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application ...>
+    <!-- 기본 알림 아이콘 (단색 흰색 PNG; 미지정 시 회색 사각형) -->
+    <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@drawable/ic_stat_notify" />
+    <!-- 기본 채널 (Android 8+ 필수) -->
+    <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="aquaworld_default" />
+  </application>
+  ```
+
+#### 사용자가 해야 하는 것
+
+1. **`google-services.json` 배치** — §3-8 에서 이미 했으면 OK. FCM 은 같은 파일을 공유합니다.
+2. **Firebase Console → 프로젝트 설정 → 클라우드 메시징 (FCM API V1)** 활성화 여부 확인.
+   - 좌측 메뉴 → Build → Cloud Messaging → API V1 사용 가능 상태인지.
+   - 레거시 "Cloud Messaging API (Legacy)" 는 안 써도 됩니다.
+3. **(선택) 알림 아이콘 추가** — `android/app/src/main/res/drawable-*/ic_stat_notify.png` (24dp 단색 흰색).
+   - 없으면 시스템이 앱 아이콘 silhouette 으로 fallback 하지만 안드로이드 5+ 에서는 회색 사각형으로 보일 수 있습니다.
+   - `npm run cap:assets` 생성물에는 포함되지 않으므로 별도 디자인 필요.
+4. **테스트**:
+   - 앱에서 로그인 → 설정 → "푸시 알림" 토글 ON → OS 권한 다이얼로그 허용
+   - Firebase Console → Cloud Messaging → "테스트 메시지 보내기" 에 토큰 붙여넣고 발송
+   - 또는 Firestore `users/{uid}.fcmTokens` 배열에 토큰이 잘 적재되는지 확인 후 부화 스케줄러(`notifyReadyHatches`) 자연 발송 대기
+
+### 3-10. 실행
 
 USB 로 폰 연결 + USB 디버깅 허용 후:
 
@@ -197,7 +244,7 @@ npm run cap:run:android    # 빌드 → 설치 → 자동 실행
 npm run cap:open:android   # Android Studio 열림 → Run 버튼
 ```
 
-### 3-10. 핫리로드 개발 (선택)
+### 3-11. 핫리로드 개발 (선택)
 
 PC 와 폰이 **같은 Wi-Fi** 상에 있어야 합니다.
 
@@ -207,7 +254,7 @@ npm run cap:livereload:android
 
 이 모드에선 폰이 dist 가 아니라 PC 의 Vite dev 서버를 직접 읽어, 코드 저장 → 폰에 즉시 반영.
 
-### 3-11. Chrome DevTools 로 폰 WebView 디버깅
+### 3-12. Chrome DevTools 로 폰 WebView 디버깅
 
 폰 USB 연결 상태에서 PC Chrome 주소창에 `chrome://inspect` 입력 → "Remote Target" 에 AquaWorld 가 보이면 **inspect** 클릭 → 콘솔/네트워크/Elements 전부 사용 가능.
 
@@ -249,7 +296,6 @@ npm run cap:livereload:android
 | --- | --- | --- |
 | 광고 | `@capacitor-community/admob` | 웹 AdSense 대신 AdMob 단가가 5~10배. `src/services/ads/` 모듈에 native 분기 추가 예정 |
 | 인앱결제 | `@capacitor-community/in-app-purchases` | Google Play Billing — 기존 `purchaseStarCoral` Cloud Function 에 영수증 검증 추가 필요 |
-| 푸시 | `@capacitor/push-notifications` | 현재 FCM Web Push 토큰 흐름과 통합 (네이티브 채널 + APNS) |
 | 햅틱 | `@capacitor/haptics` | 부화/구매/먹이 인터랙션 진동 |
 | 공유 | `@capacitor/share` | 포토 모드 — 현재 Web Share API 폴백 보강 |
 | 앱 아이콘/스플래시 | `@capacitor/assets` (CLI) | 1024×1024 PNG 1장 → 전 해상도 자동 생성 |
@@ -271,6 +317,10 @@ npm run cap:livereload:android
 | `cap add android` 가 "Could not find an installed version of Gradle" | JDK 미설치 또는 `JAVA_HOME` 미설정 |
 | 앱은 뜨는데 흰 화면 | `dist/` 빌드 안 된 상태로 sync — `npm run cap:build` 다시 |
 | Kakao 로그인 후 앱으로 안 돌아옴 | AndroidManifest intent-filter 누락 또는 `app.aquaworld` 스킴 오타 |
+| 설정에서 푸시 토글이 "미지원" 으로 회색 | `@capacitor/push-notifications` 미설치 / `google-services.json` 누락 / Firebase Console FCM 미활성 |
+| 푸시 권한 다이얼로그가 안 뜸 (Android 13+) | AndroidManifest 의 `POST_NOTIFICATIONS` uses-permission 누락 |
+| 토큰은 받았는데 알림이 안 옴 | Cloud Functions 가 `sendEachForMulticast` 로 보낸 응답에서 토큰별 실패 사유 확인 (대부분 `registration-token-not-registered` = 사용자가 앱 삭제) |
+| 알림 아이콘이 회색 사각형 | `res/drawable-*/ic_stat_notify.png` (단색 흰색 24dp) 미배치 — 임시방편으론 `meta-data` 제거 시 앱 아이콘 fallback |
 | Kakao Console 에서 "유효하지 않은 URL" | 카카오는 커스텀 스킴(`app.aquaworld://`) 등록 거절. **§3-5 의 https 중계 URL** 을 등록해야 함 |
 | `KOE006` (잘못된 redirect_uri) | 카카오 콘솔 등록 URL 과 `kakaoRedirectUri()` 가 반환하는 URL 이 1글자라도 다름 — Firebase Hosting 도메인/경로 정확히 확인 |
 | 중계 페이지까지는 가는데 앱이 안 열림 | AndroidManifest intent-filter 누락 또는 `app.aquaworld` 스킴 오타 |

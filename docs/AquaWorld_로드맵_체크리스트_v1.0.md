@@ -335,7 +335,9 @@
 - [ ] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
 - [ ] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 웹 광고 SDK 대체 (Phase 2-5의 광고 항목과 합쳐서 처리)
 - [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
-- [ ] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` + 기존 FCM 토큰 흐름 통합
+- [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
+  - [ ] 🟡 **(사용자 작업)** AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널·아이콘 메타 확인 (`cap sync` 후 머지 결과 점검)
+  - [ ] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 (없으면 회색 사각형으로 fallback)
 - [ ] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용
 - [ ] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
 - [ ] 🟢 iOS 빌드 (Mac + Xcode 필요) — `npx cap add ios`, App Store Connect 등록
@@ -358,15 +360,17 @@
   - [x] 프레임 3종 구현 (없음/폴라로이드/그라데이션)
   - [x] 앱 워터마크 자동 삽입 (🐟 AquaWorld)
   - [x] Web Share API로 공유 (+ 다운로드 폴백)
-- [-] 🔴 웹 푸시 알림 (Web Push API + FCM)
+- [-] 🔴 푸시 알림 (Web Push API + FCM, 네이티브 분기 포함)
   - [x] FCM 전용 SW(firebase-messaging-sw.js) 별도 스코프 등록 (Workbox SW와 충돌 회피)
   - [x] 권한 요청 → 토큰 발급 → 서버 등록 플로우 (registerPushToken / unregisterPushToken)
-  - [x] 설정 화면 푸시 알림 ON/OFF 토글 (SettingsPage)
-  - [x] 포그라운드 메시지 → 인앱 알림함 적재 (onMessage)
+  - [x] 설정 화면 푸시 알림 ON/OFF 토글 (SettingsPage) — 웹/네이티브 공용
+  - [x] 포그라운드 메시지 → 인앱 알림함 적재 (웹 onMessage / 네이티브 pushNotificationReceived)
+  - [x] 네이티브(Capacitor) 분기 — `@capacitor/push-notifications` 로 Android FCM 토큰 발급 후 동일 Callable 로 서버 등록 (서버 무수정)
   - [x] 부화 완료 알림 (notifyReadyHatches 스케줄러 1분 주기, nextHatchAt 인덱스 + 무효 토큰 정리) — ⚠️ Blaze 요금제 필요
   - [ ] 물고기 성장 완료 알림 (백그라운드 푸시 — 현재 인앱 알림만)
   - [ ] 일일 보상 리마인더 (백그라운드 푸시 — 현재 인앱 알림만)
   - [ ] iOS 16.4+ 웹 푸시 실기기 지원 확인 (isSupported 가드만 적용, 실기기 미검증)
+  - [ ] iOS 네이티브 푸시 — APNs 인증서 등록 (`npx cap add ios` 이후, Phase 6 이상)
 - [-] 🔴 분석 및 모니터링 SDK 연동
   - [x] Firebase Analytics 이벤트 정의 및 구현 (핵심 20개 이벤트)
   - [ ] Amplitude 코호트 분석 세팅

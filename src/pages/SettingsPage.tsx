@@ -7,7 +7,7 @@ import { useAudioStore } from '@/store/useAudioStore';
 import { playSFX } from '@/services/audio';
 import { signOut } from '@/services/firebase/auth';
 import { deleteAccount } from '@/services/firebase/functions';
-import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
+import { isPushSupported, enablePush, disablePush, getPushPermission } from '@/services/firebase/messaging';
 import { analytics, identifyUser } from '@/services/analytics';
 import { isNative } from '@/services/platform';
 
@@ -17,11 +17,12 @@ export default function SettingsPage() {
   const { setTanks } = useTankStore();
   const { sfxEnabled, bgmEnabled, setSfx, setBgm } = useAudioStore();
   const [pushSupported, setPushSupported] = useState(false);
-  const [pushOn, setPushOn] = useState(pushPermission() === 'granted');
+  const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
     isPushSupported().then(setPushSupported);
+    getPushPermission().then(p => setPushOn(p === 'granted'));
   }, []);
 
   const handlePushToggle = async (next: boolean) => {
@@ -36,7 +37,9 @@ export default function SettingsPage() {
           await useModalStore.getState().alert({
             emoji: '🔕',
             title: '푸시 알림을 켤 수 없어요',
-            message: '브라우저 알림 권한이 거부되었거나 지원되지 않는 환경입니다. iOS는 16.4+ & 홈 화면 설치 시에만 지원됩니다.',
+            message: isNative()
+              ? '알림 권한이 거부되었습니다. 휴대폰 설정 → 앱 → AquaWorld → 알림에서 허용해주세요.'
+              : '브라우저 알림 권한이 거부되었거나 지원되지 않는 환경입니다. iOS는 16.4+ & 홈 화면 설치 시에만 지원됩니다.',
           });
           setPushOn(false);
         }

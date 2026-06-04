@@ -11,7 +11,7 @@ import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/firebase/functions';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
-import { isPushSupported, listenForeground, pushPermission } from '@/services/firebase/messaging';
+import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -135,10 +135,19 @@ export default function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결
+  // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결.
+  // 네이티브에서는 토큰이 회전될 수 있으므로 enablePush() 로 재등록까지 수행.
   useEffect(() => {
-    if (pushPermission() !== 'granted') return;
-    isPushSupported().then(ok => { if (ok) listenForeground(); });
+    (async () => {
+      if (!(await isPushSupported())) return;
+      const perm = await getPushPermission();
+      if (perm !== 'granted') return;
+      if (isNative()) {
+        await enablePush();
+      } else {
+        listenForeground();
+      }
+    })();
   }, []);
 
   // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을

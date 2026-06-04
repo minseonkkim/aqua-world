@@ -34,9 +34,16 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- FCM 기본 알림 채널 (Android 8+ 필수). 채널 자체는 PushNotifications.createChannel 로 생성. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="aquaworld_default" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ 런타임 알림 권한. 미만 버전은 자동 허용. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
