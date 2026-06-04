@@ -16,7 +16,16 @@
     </style>
 
 
+    <!--
+      Android 12+ 의 SplashScreen API + 그 이전 버전을 한꺼번에 처리.
+      windowSplashScreenBackground 를 Capacitor 풀스크린 스플래시와 같은 색(#0a1628)으로 맞춰
+      시스템 스플래시 → Capacitor 스플래시 전환이 색깔 끊김 없이 자연스럽게 이어진다.
+      windowSplashScreenAnimatedIconBackgroundColor 도 같이 줘서 아이콘 뒤 흰 동그라미 제거.
+    -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">#0a1628</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">#0a1628</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>
