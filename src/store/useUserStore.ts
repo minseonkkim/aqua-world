@@ -23,6 +23,13 @@ interface UserState {
   isAuthenticated: boolean;
   isLoading: boolean;
   pendingDailyReward: DailyRewardResult | null;
+  /**
+   * 튜토리얼 진행도는 "클라 UI 권위" 필드라 서버에 동기화하지 않는다.
+   * 클라우드 유저는 user 객체 자체가 localStorage 에 남지 않으므로,
+   * 앱 재시작 후 서버의 stale 값(0)이 들어와 튜토리얼이 다시 뜨는 것을 막기 위해
+   * uid 별로 마지막 단계를 별도 영속화한다.
+   */
+  persistedTutorialStep: { uid: string; step: number } | null;
 
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
@@ -78,9 +85,19 @@ export const useUserStore = create<UserState>()(
       isAuthenticated: false,
       isLoading: true,
       pendingDailyReward: null,
+      persistedTutorialStep: null,
 
-      setUser: user =>
-        set({ user, isAuthenticated: !!user, isLoading: false }),
+      setUser: user => {
+        if (!user) {
+          set({ user: null, isAuthenticated: false, isLoading: false, persistedTutorialStep: null });
+          return;
+        }
+        const persisted = get().persistedTutorialStep;
+        const next = persisted && persisted.uid === user.id
+          ? { ...user, tutorialStep: persisted.step }
+          : user;
+        set({ user: next, isAuthenticated: true, isLoading: false });
+      },
 
       setLoading: isLoading => set({ isLoading }),
 
@@ -232,7 +249,10 @@ export const useUserStore = create<UserState>()(
       setTutorialStep: step => {
         const { user } = get();
         if (!user) return;
-        set({ user: { ...user, tutorialStep: step } });
+        set({
+          user: { ...user, tutorialStep: step },
+          persistedTutorialStep: { uid: user.id, step },
+        });
       },
 
       addFishToInventory: fish => {
@@ -306,9 +326,18 @@ export const useUserStore = create<UserState>()(
       partialize: state => {
         const u = state.user;
         const isGuest = !u || u.id.startsWith('guest_');
+        // persistedTutorialStep 은 클라 UI 권위 필드라 클라우드 유저에도 항상 영속화한다.
         return isGuest
-          ? { user: state.user, isAuthenticated: state.isAuthenticated }
-          : { user: null, isAuthenticated: false };
+          ? {
+              user: state.user,
+              isAuthenticated: state.isAuthenticated,
+              persistedTutorialStep: state.persistedTutorialStep,
+            }
+          : {
+              user: null,
+              isAuthenticated: false,
+              persistedTutorialStep: state.persistedTutorialStep,
+            };
       },
     },
   ),
