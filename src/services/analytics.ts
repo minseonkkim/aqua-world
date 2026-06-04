@@ -15,8 +15,14 @@ import {
   setUserId as fbSetUserId,
   setUserProperties as fbSetUserProperties,
 } from 'firebase/analytics';
-import * as Sentry from '@sentry/react';
 import { getAnalyticsInstance } from './firebase/config';
+
+// Sentry는 main.tsx와 동일하게 lazy — analytics 사용 시점에 동적 로드.
+let sentryPromise: Promise<typeof import('@sentry/react')> | null = null;
+function getSentry() {
+  if (!sentryPromise) sentryPromise = import('@sentry/react');
+  return sentryPromise;
+}
 
 type EventParams = Record<string, string | number | boolean | undefined | null>;
 
@@ -46,7 +52,7 @@ export function track(name: string, params?: EventParams): void {
 
 /** 로그인/로그아웃 시 호출. null → 사용자 식별 해제. */
 export function identifyUser(uid: string | null): void {
-  Sentry.setUser(uid ? { id: uid } : null);
+  void getSentry().then(S => S.setUser(uid ? { id: uid } : null)).catch(() => {});
   const inst = getAnalyticsInstance();
   if (!inst) return;
   try {

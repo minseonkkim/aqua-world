@@ -11,7 +11,22 @@ export default defineConfig(({ mode }) => {
   const isCapacitor = process.env.VITE_TARGET === 'capacitor';
 
   return {
-  build: { sourcemap: true },
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // 무거운 vendor 라이브러리를 분리 — 병렬 다운로드 + 앱 코드 변경 시 캐시 유지
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('three')) return 'three';
+          if (id.includes('firebase') || id.includes('@firebase')) return 'firebase';
+          if (id.includes('@sentry')) return 'sentry';
+          if (id.includes('howler')) return 'audio';
+          return undefined;
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     !isCapacitor && VitePWA({
