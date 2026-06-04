@@ -272,7 +272,7 @@ export default function App() {
         </Routes>
       </HashRouter>
       <Modal />
-      {import.meta.env.VITE_TARGET !== 'capacitor' && <PWAPrompts />}
+      {import.meta.env.VITE_TARGET !== 'capacitor' && !isNative() && <PWAPrompts />}
     </div>
   );
 }

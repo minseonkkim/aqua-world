@@ -9,6 +9,7 @@ import { signOut } from '@/services/firebase/auth';
 import { deleteAccount } from '@/services/firebase/functions';
 import { isPushSupported, enablePush, disablePush, pushPermission } from '@/services/firebase/messaging';
 import { analytics, identifyUser } from '@/services/analytics';
+import { isNative } from '@/services/platform';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -158,16 +159,20 @@ export default function SettingsPage() {
         </Row>
       </div>
 
-      <Section title="앱" />
-      <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
-        <div
-          onClick={() => window.dispatchEvent(new Event('aquaworld:show-install'))}
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
-        >
-          <span style={{ fontSize: 15 }}>홈 화면에 설치</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
-        </div>
-      </div>
+      {!isNative() && (
+        <>
+          <Section title="앱" />
+          <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
+            <div
+              onClick={() => window.dispatchEvent(new Event('aquaworld:show-install'))}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: 15 }}>홈 화면에 설치</span>
+              <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
+            </div>
+          </div>
+        </>
+      )}
 
       <Section title="정보" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
