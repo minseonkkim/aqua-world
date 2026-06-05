@@ -39,6 +39,11 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="aquaworld_default" />
+
+        <!-- AdMob APPLICATION_ID. 현재는 Google 공식 테스트 ID. 실서비스 빌드 전에 AdMob 콘솔에서 발급한 실제 값으로 교체 필수. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2189275813205372~8805884871" />
     </application>
 
     <!-- Permissions -->

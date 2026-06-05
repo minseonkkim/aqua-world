@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { Egg, EggTier } from '@/types';
-import { isCloudUser, optimistic, startHatching as startHatchingServer } from '@/services/firebase/functions';
+import {
+  isCloudUser,
+  optimistic,
+  startHatching as startHatchingServer,
+  prepareAdReward,
+  claimAdReward,
+} from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
+import { isAdsAvailable, showRewardedAd } from '@/services/ads';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -24,9 +31,11 @@ interface EggCardProps {
   egg: Egg;
   onStart: () => void;
   onCollect: () => void;
+  onBoostAd: () => void;
+  boostInFlight: boolean;
 }
 
-function EggCard({ egg, onStart, onCollect }: EggCardProps) {
+function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -82,8 +91,32 @@ function EggCard({ egg, onStart, onCollect }: EggCardProps) {
                 transition: 'width 1s linear',
               }} />
             </div>
-            <div style={{ fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
-              {isReady ? '🎉 부화 완료!' : `⏳ ${formatTime(remaining)}`}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+            }}>
+              <div style={{ fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                {isReady ? '🎉 부화 완료!' : `⏳ ${formatTime(remaining)}`}
+              </div>
+              {!isReady && isAdsAvailable() && (
+                <button
+                  onClick={onBoostAd}
+                  disabled={boostInFlight}
+                  style={{
+                    background: 'rgba(255,193,7,0.15)',
+                    border: '1px solid rgba(255,193,7,0.4)',
+                    borderRadius: 6,
+                    padding: '2px 8px',
+                    fontSize: 11, fontWeight: 600,
+                    color: '#ffd54a',
+                    cursor: boostInFlight ? 'wait' : 'pointer',
+                    opacity: boostInFlight ? 0.5 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                  title="광고를 보고 부화 시간을 5분 단축합니다"
+                >
+                  {boostInFlight ? '⏳' : '🎬 -5분'}
+                </button>
+              )}
             </div>
           </>
         )}
@@ -121,7 +154,8 @@ interface Props {
 }
 
 export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props) {
-  const { user, startHatching } = useUserStore();
+  const { user, startHatching, setUser } = useUserStore();
+  const [boostingEggId, setBoostingEggId] = useState<string | null>(null);
 
   const handleStart = (eggId: string) => {
     const egg = user?.inventory.find(e => e.id === eggId);
@@ -134,6 +168,39 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       return;
     }
     startHatching(eggId);
+  };
+
+  const handleBoostAd = async (eggId: string) => {
+    if (!user || boostingEggId) return;
+    setBoostingEggId(eggId);
+    try {
+      if (isCloudUser()) {
+        // 서버: nonce 발급 → 광고 시청 → SSV 우선, 폴백으로 claimAdReward
+        const { nonceId } = await prepareAdReward('hatch_boost', { eggId });
+        const rewarded = await showRewardedAd(nonceId, user.id);
+        if (!rewarded) return;
+        // SSV 가 먼저 nonce 를 소비했어도 Callable 은 멱등(이미 used → 실패) 이므로
+        // 시도 후 무시. 성공 응답이 오면 user 상태가 setUser 로 자동 반영됨.
+        try {
+          await claimAdReward({ nonceId });
+        } catch {
+          // SSV 가 이미 처리 — user 상태는 다음 동기화 사이클에 반영
+        }
+      } else {
+        // 게스트: 서버 검증 없이 로컬에서만 적용
+        if (!isAdsAvailable()) return;
+        const rewarded = await showRewardedAd('guest', user.id);
+        if (!rewarded) return;
+        setUser({
+          ...user,
+          inventory: user.inventory.map(e =>
+            e.id === eggId ? { ...e, hatchDuration: Math.max(1, e.hatchDuration - 300) } : e,
+          ),
+        });
+      }
+    } finally {
+      setBoostingEggId(null);
+    }
   };
 
   const inventory = user?.inventory ?? [];
@@ -183,6 +250,8 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
                   onCollect(egg.id, egg.tier);
                   if (inventory.length <= 1) onOpenChange(false);
                 }}
+                onBoostAd={() => handleBoostAd(egg.id)}
+                boostInFlight={boostingEggId === egg.id}
               />
             ))}
           </div>

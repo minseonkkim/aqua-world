@@ -22,6 +22,7 @@
     "cap:livereload:android": "cross-env VITE_TARGET=capacitor cap run android --live-reload --external"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.0.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
     "@capacitor/core": "^8.3.4",

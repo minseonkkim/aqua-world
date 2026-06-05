@@ -5,7 +5,7 @@
  * 클라이언트는 요청만 보내고, Firestore 직접 쓰기는 보안 규칙으로 차단된다.
  * Admin SDK 는 보안 규칙을 우회하므로 실제 쓰기는 이 함수들만 가능하다.
  */
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
@@ -887,5 +887,218 @@ exports.notifyReadyHatches = onSchedule("every 1 minutes", async () => {
       { inventory: user.inventory, nextHatchAt: user.nextHatchAt },
       { merge: true },
     );
+  }
+});
+
+// ─── 보상형 광고 (AdMob Rewarded) ───────────────────────────────────────────
+// 흐름:
+//   1) 클라가 prepareAdReward 호출 → 서버가 1회용 nonce 발급(타입+payload 동봉)
+//   2) 클라가 nonce 를 AdMob.showRewardVideoAd 의 customData 로 실어 광고 시청
+//   3a) (정식) AdMob SSV → admobSSV 엔드포인트가 서명 검증 후 보상 지급
+//   3b) (폴백) 클라 onReward 이벤트 → claimAdReward Callable 로 nonce 소비
+// 안전 장치:
+//   - nonce 는 users/{uid}/adNonces/{nonceId} 에 저장, used 플래그로 1회만 사용
+//   - 일일 한도 (HATCH_BOOST 10회 / DAILY_DOUBLE 1회) — 어뷰징 차단
+//   - SSV 와 Callable 양쪽 모두 같은 applyAdRewardTx 로 수렴
+
+const AD_REWARD_LIMITS = { hatch_boost: 10, daily_double: 1 };
+const HATCH_BOOST_SECONDS = 300;
+const AD_NONCE_TTL_MS = 15 * 60 * 1000;
+
+function adNonceRef(uid, nonceId) {
+  return db.doc(`users/${uid}/adNonces/${nonceId}`);
+}
+
+function dayKey(ms) {
+  const d = new Date(ms);
+  return `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, "0")}${d.getDate().toString().padStart(2, "0")}`;
+}
+
+/** 광고 보상 1건을 실제로 user/관련 알에 적용. tx 내에서 호출. */
+async function applyAdRewardTx(tx, uid, nonce) {
+  const uSnap = await tx.get(userRef(uid));
+  if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+  const user = uSnap.data();
+
+  if (nonce.type === "hatch_boost") {
+    const eggId = nonce.payload && nonce.payload.eggId;
+    const inv = user.inventory || [];
+    const egg = inv.find((e) => e.id === eggId);
+    if (!egg) throw new HttpsError("not-found", "알을 찾을 수 없습니다.");
+    if (!egg.isHatching) throw new HttpsError("failed-precondition", "부화 중이 아닙니다.");
+    const newDuration = Math.max(1, (egg.hatchDuration || 0) - HATCH_BOOST_SECONDS);
+    user.inventory = inv.map((e) => (e.id === eggId ? { ...e, hatchDuration: newDuration } : e));
+    user.nextHatchAt = computeNextHatchAt(user);
+    tx.set(userRef(uid), user);
+    return { user, applied: { type: "hatch_boost", eggId, boostSeconds: HATCH_BOOST_SECONDS } };
+  }
+
+  if (nonce.type === "daily_double") {
+    // payload 의 보상 정의를 그대로 한 번 더 적용 (claimDailyReward 가 발급 직후 호출되는 시나리오)
+    const def = nonce.payload && nonce.payload.reward;
+    if (!def || !def.type) throw new HttpsError("failed-precondition", "보상 정보 없음");
+    applyReward(user, def);
+    tx.set(userRef(uid), user);
+    return { user, applied: { type: "daily_double", reward: def } };
+  }
+
+  throw new HttpsError("invalid-argument", "알 수 없는 보상 타입");
+}
+
+exports.prepareAdReward = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const type = request.data && request.data.type;
+  const payload = (request.data && request.data.payload) || {};
+  const limit = AD_REWARD_LIMITS[type];
+  if (!limit) throw new HttpsError("invalid-argument", "잘못된 보상 타입");
+
+  const now = Date.now();
+  const today = dayKey(now);
+
+  return db.runTransaction(async (tx) => {
+    // 일일 한도 검증 — users/{uid}.adWatchCounters[type][YYYYMMDD] 카운터
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const counters = user.adWatchCounters || {};
+    const used = ((counters[type] || {})[today] || 0);
+    if (used >= limit) throw new HttpsError("failed-precondition", "오늘 한도를 다 썼습니다.");
+
+    // hatch_boost 는 발급 시점에 알 존재 검증 (UX — 광고 본 뒤 실패하면 짜증)
+    if (type === "hatch_boost") {
+      const egg = (user.inventory || []).find((e) => e.id === payload.eggId);
+      if (!egg) throw new HttpsError("not-found", "알을 찾을 수 없습니다.");
+      if (!egg.isHatching) throw new HttpsError("failed-precondition", "부화 중이 아닙니다.");
+    }
+
+    const nonceId = genId("ad");
+    const nonce = {
+      type,
+      payload,
+      used: false,
+      createdAt: now,
+      expiresAt: now + AD_NONCE_TTL_MS,
+    };
+    tx.set(adNonceRef(uid, nonceId), nonce);
+    return { nonceId, ttlMs: AD_NONCE_TTL_MS };
+  });
+});
+
+exports.claimAdReward = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const nonceId = request.data && request.data.nonceId;
+  if (!nonceId) throw new HttpsError("invalid-argument", "nonceId 필요");
+
+  return db.runTransaction(async (tx) => {
+    const nRef = adNonceRef(uid, nonceId);
+    const nSnap = await tx.get(nRef);
+    if (!nSnap.exists) throw new HttpsError("not-found", "nonce 없음");
+    const nonce = nSnap.data();
+    if (nonce.used) throw new HttpsError("failed-precondition", "이미 사용된 nonce");
+    if (Date.now() > (nonce.expiresAt || 0)) {
+      throw new HttpsError("failed-precondition", "nonce 만료");
+    }
+
+    const { user, applied } = await applyAdRewardTx(tx, uid, nonce);
+
+    // nonce 소비 + 일일 카운터 증가
+    const today = dayKey(Date.now());
+    const counters = user.adWatchCounters || {};
+    const typeCounters = counters[nonce.type] || {};
+    typeCounters[today] = (typeCounters[today] || 0) + 1;
+    counters[nonce.type] = typeCounters;
+    user.adWatchCounters = counters;
+    tx.set(userRef(uid), user);
+    tx.set(nRef, { ...nonce, used: true, usedAt: Date.now() });
+    return { user, applied };
+  });
+});
+
+// AdMob SSV — Google 의 검증 서버가 GET 으로 호출하는 HTTP 엔드포인트.
+// 콘솔에서 콜백 URL 로 `https://<region>-<project>.cloudfunctions.net/admobSSV` 등록.
+// 서명 검증 후 nonce 를 소비 → applyAdRewardTx 로 보상 지급.
+const AD_VERIFIER_KEYS_URL = "https://gstatic.com/admob/reward/verifier-keys.json";
+let verifierKeysCache = { keys: null, fetchedAt: 0 };
+async function loadVerifierKeys() {
+  const now = Date.now();
+  if (verifierKeysCache.keys && now - verifierKeysCache.fetchedAt < 60 * 60 * 1000) {
+    return verifierKeysCache.keys;
+  }
+  const res = await fetch(AD_VERIFIER_KEYS_URL);
+  if (!res.ok) throw new Error(`verifier keys fetch failed: ${res.status}`);
+  const body = await res.json();
+  verifierKeysCache = { keys: body.keys || [], fetchedAt: now };
+  return verifierKeysCache.keys;
+}
+
+function verifyAdMobSignature(rawQuery, signature, keyId) {
+  // AdMob 사양: 쿼리스트링에서 `signature` 와 `key_id` 두 파라미터를 빼고 남은
+  // 원본 부분("?" 뒤, "&signature=" 이전)에 대해 ECDSA-SHA256 으로 서명.
+  // 같은 입력을 그대로 재구성하기 위해 쿼리 문자열 위치를 보존해야 한다.
+  const sigMarker = "&signature=";
+  const idx = rawQuery.indexOf(sigMarker);
+  if (idx < 0) return false;
+  const message = rawQuery.slice(0, idx);
+  return loadVerifierKeys().then((keys) => {
+    const key = keys.find((k) => String(k.keyId) === String(keyId));
+    if (!key || !key.pem) return false;
+    const crypto = require("crypto");
+    const verify = crypto.createVerify("SHA256");
+    verify.update(message);
+    verify.end();
+    // signature 는 web-safe base64. 표준 base64 로 변환.
+    const sigB64 = signature.replace(/-/g, "+").replace(/_/g, "/");
+    return verify.verify(key.pem, Buffer.from(sigB64, "base64"));
+  });
+}
+
+exports.admobSSV = onRequest({ region: "asia-northeast3" }, async (req, res) => {
+  try {
+    const rawQuery = req.url.includes("?") ? req.url.slice(req.url.indexOf("?") + 1) : "";
+    const q = req.query || {};
+    const signature = q.signature;
+    const keyId = q.key_id;
+    const uid = q.user_id;
+    const nonceId = q.custom_data;
+    const txnId = q.transaction_id;
+
+    if (!signature || !keyId || !uid || !nonceId || !txnId) {
+      // AdMob 콘솔 등록 검증 ping (빈 GET) 은 200 으로 받아줘야 등록이 통과된다.
+      // 실제 보상 처리는 서명·nonce 검증을 모두 통과해야만 진행되므로 200 응답 자체는 안전.
+      res.status(200).send("ok");
+      return;
+    }
+
+    const valid = await verifyAdMobSignature(rawQuery, signature, keyId);
+    if (!valid) {
+      res.status(403).send("invalid signature");
+      return;
+    }
+
+    // 보상 적용은 Callable 폴백과 동일한 1회용 nonce 경로로 수렴
+    await db.runTransaction(async (tx) => {
+      const nRef = adNonceRef(uid, nonceId);
+      const nSnap = await tx.get(nRef);
+      if (!nSnap.exists) return; // 이미 폴백이 소비했거나 위조
+      const nonce = nSnap.data();
+      if (nonce.used) return;
+      if (Date.now() > (nonce.expiresAt || 0)) return;
+      if (nonce.transactionId && nonce.transactionId !== txnId) return; // 재발사 차단
+
+      const { user } = await applyAdRewardTx(tx, uid, nonce);
+      const today = dayKey(Date.now());
+      const counters = user.adWatchCounters || {};
+      const typeCounters = counters[nonce.type] || {};
+      typeCounters[today] = (typeCounters[today] || 0) + 1;
+      counters[nonce.type] = typeCounters;
+      user.adWatchCounters = counters;
+      tx.set(userRef(uid), user);
+      tx.set(nRef, { ...nonce, used: true, usedAt: Date.now(), transactionId: txnId, viaSSV: true });
+    });
+
+    res.status(200).send("ok");
+  } catch (err) {
+    console.error("admobSSV error", err);
+    res.status(500).send("error");
   }
 });

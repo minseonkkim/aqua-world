@@ -1,6 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { playSFX } from '@/services/audio';
+import { isAdsAvailable, showRewardedAd } from '@/services/ads';
+import {
+  isCloudUser,
+  prepareAdReward,
+  claimAdReward,
+} from '@/services/firebase/functions';
 
 const REWARD_ICONS: Record<DailyRewardResult['type'], string> = {
   pearl: '🪙',
@@ -19,11 +25,48 @@ interface Props {
 }
 
 export default function DailyRewardModal({ reward }: Props) {
-  const { clearPendingReward } = useUserStore();
+  const { user, clearPendingReward, addPearl, addStarCoral, addEggToInventory } = useUserStore();
+  const [doubling, setDoubling] = useState(false);
+  const [doubled, setDoubled] = useState(false);
 
   useEffect(() => {
     playSFX('reward');
   }, []);
+
+  const handleDouble = async () => {
+    if (!user || doubling || doubled) return;
+    setDoubling(true);
+    try {
+      // payload 는 서버에서 그대로 한 번 더 적용된다 — 본 보상 정의를 넘긴다.
+      const rewardPayload = {
+        type: reward.type,
+        amount: reward.amount,
+        tier: reward.tier,
+      };
+      if (isCloudUser()) {
+        const { nonceId } = await prepareAdReward('daily_double', { reward: rewardPayload });
+        const rewarded = await showRewardedAd(nonceId, user.id);
+        if (!rewarded) return;
+        try {
+          await claimAdReward({ nonceId });
+        } catch {
+          // SSV 가 이미 처리한 경우 — user 상태는 setUser 로 자동 반영됨
+        }
+      } else {
+        // 게스트: 로컬에서 즉시 한 번 더 지급
+        if (!isAdsAvailable()) return;
+        const rewarded = await showRewardedAd('guest', user.id);
+        if (!rewarded) return;
+        if (reward.type === 'pearl') addPearl(reward.amount ?? 0);
+        else if (reward.type === 'star_coral') addStarCoral(reward.amount ?? 0);
+        else if (reward.type === 'egg' && reward.tier) addEggToInventory(reward.tier);
+      }
+      setDoubled(true);
+      playSFX('reward');
+    } finally {
+      setDoubling(false);
+    }
+  };
 
   const icon = REWARD_ICONS[reward.type];
   let rewardText = '';
@@ -75,6 +118,43 @@ export default function DailyRewardModal({ reward }: Props) {
           <div style={{ fontSize: 18, fontWeight: 700 }}>{rewardText}</div>
         </div>
 
+        {isAdsAvailable() && !doubled && (
+          <button
+            onClick={handleDouble}
+            disabled={doubling}
+            style={{
+              width: '100%',
+              background: 'rgba(255,193,7,0.15)',
+              border: '1px solid rgba(255,193,7,0.5)',
+              color: '#ffd54a',
+              borderRadius: 12,
+              padding: '12px 16px',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: doubling ? 'wait' : 'pointer',
+              marginBottom: 8,
+            }}
+          >
+            {doubling ? '⏳ 광고 준비 중…' : '🎬 광고 보고 2배 받기'}
+          </button>
+        )}
+        {doubled && (
+          <div
+            style={{
+              width: '100%',
+              background: 'rgba(76,175,80,0.18)',
+              border: '1px solid rgba(76,175,80,0.5)',
+              color: '#9be7a3',
+              borderRadius: 12,
+              padding: '10px 16px',
+              fontSize: 13,
+              fontWeight: 700,
+              marginBottom: 8,
+            }}
+          >
+            ✨ 2배 보상 지급 완료!
+          </div>
+        )}
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={clearPendingReward}>
           받기!
         </button>

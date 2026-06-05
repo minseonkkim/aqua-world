@@ -12,6 +12,7 @@ import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/fireb
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
+import { initAds } from '@/services/ads';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -148,6 +149,11 @@ export default function App() {
         listenForeground();
       }
     })();
+  }, []);
+
+  // 네이티브 빌드: AdMob SDK 초기화. 보상형 광고 첫 prepare 가 빠르도록 부팅 시 1회만 호출.
+  useEffect(() => {
+    void initAds().catch(() => undefined);
   }, []);
 
   // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을

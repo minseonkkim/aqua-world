@@ -123,6 +123,30 @@ export const expandTankCapacity = call<{ tankId: string }, { user: User; tank: T
 export const cleanTank = call<{ tankId: string }, { user: User; tank: Tank }>('cleanTank');
 export const reconcileFish = call<{ tankId: string }, { user: User; tank: Tank }>('reconcileFish');
 
+// ─── 보상형 광고 ────────────────────────────────────────────────────────────
+// prepareAdReward: 광고 노출 직전에 1회용 nonce 발급 (서버 권위)
+// claimAdReward:   SSV 가 등록 안 됐거나 실패했을 때 클라가 직접 보상 청구 (폴백)
+// nonce 는 양쪽에서 같은 1회용 키로 동작하므로 중복 지급 위험 없음.
+
+export type AdRewardType = 'hatch_boost' | 'daily_double';
+
+export async function prepareAdReward(
+  type: AdRewardType,
+  payload: Record<string, unknown> = {},
+): Promise<{ nonceId: string; ttlMs: number }> {
+  if (!functions) throw new FunctionsUnavailableError();
+  const fn = httpsCallable<{ type: AdRewardType; payload: Record<string, unknown> }, { nonceId: string; ttlMs: number }>(
+    functions,
+    'prepareAdReward',
+  );
+  const res = await fn({ type, payload });
+  return res.data;
+}
+
+export const claimAdReward = call<{ nonceId: string }, { user: User; applied: unknown }>(
+  'claimAdReward',
+);
+
 // ─── 회원 탈퇴 ─────────────────────────────────────────────────────────────
 // 서버에서 user 문서 + 소유 tanks + Auth 계정까지 영구 삭제한다.
 // 응답에 user/tank 가 없으므로 call 헬퍼를 쓰지 않고 직접 호출한다.

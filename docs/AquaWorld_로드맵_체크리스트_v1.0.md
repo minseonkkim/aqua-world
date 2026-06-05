@@ -252,7 +252,7 @@
   - [x] 알 3티어 정의 (기본/희귀/전설)
   - [x] 부화 타이머 (기본 5분, 희귀 30분, 전설 2시간)
   - [x] 부화 연출 애니메이션 (HatchAnimationModal: shake→crack→flash→reveal)
-  - [ ] 광고 시청 부화 단축 기능
+  - [x] 광고 시청 부화 단축 기능 (AdMob Rewarded → -5분, SSV/Callable 1회용 nonce)
   - [x] 가챠 확률 로직 및 확률 공시 준비
 - [x] 🔴 재화 시스템
   - [x] Pearl(진주) 획득 · 소비 로직
@@ -333,7 +333,7 @@
 - [x] 🔴 **(사용자 작업)** Kakao Developer Console 에 네이티브 redirect URI(`https://aquaworld-bf2f4.web.app/oauth/kakao.html`) 등록
 - [x] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
 - [x] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
-- [ ] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 웹 광고 SDK 대체 (Phase 2-5의 광고 항목과 합쳐서 처리)
+- [x] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 보상형 광고 1종 (Rewarded), 네이티브 전용 (웹은 광고 버튼 숨김), Cloud Functions SSV 서명 검증 + 1회용 nonce 폴백
 - [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
 - [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
   - [x] 🟡 AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널 메타데이터(`aquaworld_default`) 적용
@@ -349,10 +349,15 @@
   - [ ] 결제 플로우 UI 구현
   - [ ] Firebase Functions 결제 검증 로직
   - [ ] 결제 완료 → 재화 즉시 지급 플로우
-- [ ] 🔴 광고 SDK 연동
-  - [ ] Google AdSense / AdMob Web 리워드 동영상 광고 구현
-  - [ ] 광고 시청 보상 지급 로직 (일일 최대 10회 제한)
+- [-] 🔴 광고 SDK 연동
+  - [x] AdMob Rewarded 동영상 광고 (`@capacitor-community/admob`) — 네이티브 전용, 웹은 버튼 숨김
+  - [x] 광고 시청 보상 지급 로직 — `prepareAdReward` Callable 로 1회용 nonce 발급 → AdMob SSV(`admobSSV` HTTP, ECDSA 서명 검증) 우선 / `claimAdReward` Callable 폴백, nonce used 플래그로 중복 차단
+  - [x] 일일 한도 — `users.adWatchCounters[type][YYYYMMDD]` (hatch_boost 10회/일, daily_double 1회/일)
+  - [x] 보상 통합 — IncubatorPanel '🎬 -5분' 부화 단축 + DailyRewardModal '🎬 광고 보고 2배 받기'
   - [ ] 광고 로딩 실패 시 대체 보상 처리
+  - [ ] **(사용자 작업)** AdMob 콘솔 앱 등록 → `AndroidManifest.xml` 의 `APPLICATION_ID` 메타데이터를 실제 ID 로 교체 (`ca-app-pub-...~...`)
+  - [ ] **(사용자 작업)** AdMob 콘솔에서 Rewarded 광고 단위 발급 → `.env` 에 `VITE_ADMOB_REWARDED_ANDROID` 주입
+  - [ ] **(사용자 작업)** AdMob 콘솔 → Apps → SSV → 콜백 URL 등록: `https://asia-northeast3-aquaworld-bf2f4.cloudfunctions.net/admobSSV`
 - [x] 🔴 포토 모드 + 공유
   - [x] UI 숨김 모드 (포토 모드 진입 — HUD/인큐베이터/액션 비활성, 카메라는 유지)
   - [x] Canvas toDataURL / toBlob으로 스크린샷 캡처 (TankSceneHandle.captureFrame)
