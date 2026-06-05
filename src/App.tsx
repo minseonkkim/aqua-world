@@ -12,7 +12,7 @@ import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/fireb
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
-import { initAds } from '@/services/ads';
+import { initAds, preloadRewardedAd } from '@/services/ads';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -151,9 +151,13 @@ export default function App() {
     })();
   }, []);
 
-  // 네이티브 빌드: AdMob SDK 초기화. 보상형 광고 첫 prepare 가 빠르도록 부팅 시 1회만 호출.
+  // 네이티브 빌드: AdMob SDK 초기화 + 첫 보상형 광고 사전 로드.
+  // 부팅 시점에 미리 받아두면 사용자가 인큐베이터 도달할 때쯤 광고가 이미 준비돼 있어
+  // '🎬 -5분' 버튼 클릭 시 체감 지연이 거의 0 이 된다.
   useEffect(() => {
-    void initAds().catch(() => undefined);
+    void initAds()
+      .then(() => preloadRewardedAd())
+      .catch(() => undefined);
   }, []);
 
   // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을

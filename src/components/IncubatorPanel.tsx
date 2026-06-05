@@ -9,7 +9,7 @@ import {
   claimAdReward,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
-import { isAdsAvailable, showRewardedAd } from '@/services/ads';
+import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -156,6 +156,13 @@ interface Props {
 export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props) {
   const { user, startHatching, setUser } = useUserStore();
   const [boostingEggId, setBoostingEggId] = useState<string | null>(null);
+
+  // 패널이 열리고 부화 중인 알이 있으면 백그라운드로 광고 미리 받기 — 체감 지연 제거
+  const hasHatchingEgg = (user?.inventory ?? []).some(e => e.isHatching);
+  useEffect(() => {
+    if (!open || !hasHatchingEgg || !isAdsAvailable()) return;
+    void preloadRewardedAd();
+  }, [open, hasHatchingEgg]);
 
   const handleStart = (eggId: string) => {
     const egg = user?.inventory.find(e => e.id === eggId);

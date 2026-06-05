@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { playSFX } from '@/services/audio';
-import { isAdsAvailable, showRewardedAd } from '@/services/ads';
+import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 import {
   isCloudUser,
   prepareAdReward,
@@ -31,6 +31,8 @@ export default function DailyRewardModal({ reward }: Props) {
 
   useEffect(() => {
     playSFX('reward');
+    // 광고 보고 2배 받기 버튼을 누를 가능성에 대비해 백그라운드 사전 로드
+    if (isAdsAvailable()) void preloadRewardedAd();
   }, []);
 
   const handleDouble = async () => {
