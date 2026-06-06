@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 알림 small icon 틴트 색 (AquaWorld 물고기 골드/오렌지). 흰색 실루엣에 적용된다. -->
+    <color name="aquaworld_notification">#FF9B3D</color>
+</resources>

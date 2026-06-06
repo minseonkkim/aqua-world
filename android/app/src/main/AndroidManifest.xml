@@ -40,6 +40,15 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="aquaworld_default" />
 
+        <!-- 알림 상태바 small icon (흰색 단색 실루엣). 미지정 시 앱 런처 아이콘이 회색 사각형으로 표시됨. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <!-- 흰색 실루엣에 적용되는 틴트 색 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/aquaworld_notification" />
+
         <!-- AdMob APPLICATION_ID. 현재는 Google 공식 테스트 ID. 실서비스 빌드 전에 AdMob 콘솔에서 발급한 실제 값으로 교체 필수. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

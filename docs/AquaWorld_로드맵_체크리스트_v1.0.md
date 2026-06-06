@@ -337,7 +337,7 @@
 - [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
 - [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
   - [x] 🟡 AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널 메타데이터(`aquaworld_default`) 적용
-  - [ ] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 (없으면 회색 사각형으로 fallback)
+  - [x] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 — `scripts/generate-notification-icon.mjs` 로 흰색 물고기 실루엣 5밀도 생성(drawable-mdpi~xxxhdpi), Manifest 에 `default_notification_icon` + `default_notification_color`(@color/aquaworld_notification #FF9B3D) 등록
 - [x] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용 — `scripts/generate-native-assets.mjs` + `@capacitor/assets` 로 mipmap·drawable 105개 생성, 시스템/Capacitor 스플래시 색 통일 (#0a1628)
 - [ ] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
 - [ ] 🟢 iOS 빌드 (Mac + Xcode 필요) — `npx cap add ios`, App Store Connect 등록

@@ -12,6 +12,7 @@
     "gen:decoration": "node scripts/generate-decoration-models.mjs && node scripts/compress-models.mjs",
     "gen:models:compress": "node scripts/compress-models.mjs",
     "gen:icons": "node scripts/generate-icons.mjs",
+    "gen:notify-icon": "node scripts/generate-notification-icon.mjs",
     "gen:native-assets": "node scripts/generate-native-assets.mjs",
     "gen:licenses": "node scripts/generate-licenses.mjs",
     "cap:assets": "npm run gen:native-assets && capacitor-assets generate --android --iconBackgroundColor #0a1628 --iconBackgroundColorDark #0a1628 --splashBackgroundColor #0a1628 --splashBackgroundColorDark #0a1628",
