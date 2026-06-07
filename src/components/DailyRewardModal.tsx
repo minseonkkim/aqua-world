@@ -28,6 +28,12 @@ export default function DailyRewardModal({ reward }: Props) {
   const { user, clearPendingReward, addPearl, addStarCoral, addEggToInventory } = useUserStore();
   const [doubling, setDoubling] = useState(false);
   const [doubled, setDoubled] = useState(false);
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
 
   useEffect(() => {
     playSFX('reward');
@@ -47,8 +53,12 @@ export default function DailyRewardModal({ reward }: Props) {
       };
       if (isCloudUser()) {
         const { nonceId } = await prepareAdReward('daily_double', { reward: rewardPayload });
-        const rewarded = await showRewardedAd(nonceId, user.id);
-        if (!rewarded) return;
+        const result = await showRewardedAd(nonceId, user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return; // 중도 닫기 — 보상 없음, 안내도 없음
         try {
           await claimAdReward({ nonceId });
         } catch {
@@ -57,8 +67,12 @@ export default function DailyRewardModal({ reward }: Props) {
       } else {
         // 게스트: 로컬에서 즉시 한 번 더 지급
         if (!isAdsAvailable()) return;
-        const rewarded = await showRewardedAd('guest', user.id);
-        if (!rewarded) return;
+        const result = await showRewardedAd('guest', user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return;
         if (reward.type === 'pearl') addPearl(reward.amount ?? 0);
         else if (reward.type === 'star_coral') addStarCoral(reward.amount ?? 0);
         else if (reward.type === 'egg' && reward.tier) addEggToInventory(reward.tier);
@@ -161,6 +175,18 @@ export default function DailyRewardModal({ reward }: Props) {
           받기!
         </button>
       </div>
+
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.85)', color: '#fff',
+          padding: '10px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+          border: '1px solid rgba(255,255,255,0.15)', zIndex: 1001, maxWidth: '80%',
+          textAlign: 'center',
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

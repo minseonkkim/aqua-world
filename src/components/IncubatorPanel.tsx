@@ -156,6 +156,12 @@ interface Props {
 export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props) {
   const { user, startHatching, setUser } = useUserStore();
   const [boostingEggId, setBoostingEggId] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2500);
+  };
 
   // 패널이 열리고 부화 중인 알이 있으면 백그라운드로 광고 미리 받기 — 체감 지연 제거
   const hasHatchingEgg = (user?.inventory ?? []).some(e => e.isHatching);
@@ -184,8 +190,12 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       if (isCloudUser()) {
         // 서버: nonce 발급 → 광고 시청 → SSV 우선, 폴백으로 claimAdReward
         const { nonceId } = await prepareAdReward('hatch_boost', { eggId });
-        const rewarded = await showRewardedAd(nonceId, user.id);
-        if (!rewarded) return;
+        const result = await showRewardedAd(nonceId, user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return; // 중도 닫기 — 보상 없음, 안내도 없음
         // SSV 가 먼저 nonce 를 소비했어도 Callable 은 멱등(이미 used → 실패) 이므로
         // 시도 후 무시. 성공 응답이 오면 user 상태가 setUser 로 자동 반영됨.
         try {
@@ -196,8 +206,12 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       } else {
         // 게스트: 서버 검증 없이 로컬에서만 적용
         if (!isAdsAvailable()) return;
-        const rewarded = await showRewardedAd('guest', user.id);
-        if (!rewarded) return;
+        const result = await showRewardedAd('guest', user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return;
         setUser({
           ...user,
           inventory: user.inventory.map(e =>
@@ -262,6 +276,17 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'absolute', left: 12, bottom: 130, width: 280,
+          background: 'rgba(0,0,0,0.85)', color: '#fff',
+          padding: '10px 14px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+          border: '1px solid rgba(255,255,255,0.15)', zIndex: 72, textAlign: 'center',
+        }}>
+          {toast}
         </div>
       )}
     </>

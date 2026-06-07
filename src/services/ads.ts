@@ -101,21 +101,33 @@ export function preloadRewardedAd(): Promise<boolean> {
 }
 
 /**
- * 광고 시청 → 보상 1회. 성공 시 true, 사용자 닫기/실패 시 false.
+ * 광고 시청 결과.
+ *  - 'rewarded'     : 끝까지 시청 → 보상 지급 대상
+ *  - 'dismissed'    : 사용자가 중도에 닫음 → 본인 선택이므로 보상 없음(안내도 없음)
+ *  - 'load_failed'  : 광고 인벤토리 없음(no-fill)·네트워크 등 → 사용자 잘못 아님, 재시도 안내 대상
+ */
+export type AdResult = 'rewarded' | 'dismissed' | 'load_failed';
+
+/**
+ * 광고 시청 → 결과 반환. 호출 측은 결과에 따라:
+ *  - 'rewarded'    → 보상 청구(claimAdReward)
+ *  - 'dismissed'   → 조용히 종료
+ *  - 'load_failed' → "잠시 후 다시 시도" 토스트 노출(보상은 주지 않음)
  *
  * 우선 preload 가 끝났으면 즉시 show. 없으면 prepare 부터 직렬 호출(느림).
  * nonce/uid 는 SSV 옵션을 채우고 싶은 경우를 대비해 시그니처에 남겼지만, 사전 로드된
  * 광고에는 SSV 가 없다. 보상 검증은 호출 측의 claimAdReward(nonce) 가 책임진다.
  */
-export async function showRewardedAd(_nonce: string, _uid: string): Promise<boolean> {
-  if (!isNative()) return false;
+export async function showRewardedAd(_nonce: string, _uid: string): Promise<AdResult> {
+  if (!isNative()) return 'load_failed';
   await initAds();
   const { plugin } = await loadPlugin();
 
-  // 1) 사전 로드된 광고가 없으면 지금 받음 (콜드 패스 — 느림)
+  // 1) 사전 로드된 광고가 없으면 지금 받음 (콜드 패스 — 느림).
+  //    여기서 실패하면 보여줄 광고 자체가 없는 것 → load_failed.
   if (!preloaded) {
     const ok = await preloadRewardedAd();
-    if (!ok) return false;
+    if (!ok) return 'load_failed';
   }
 
   try {
@@ -123,11 +135,13 @@ export async function showRewardedAd(_nonce: string, _uid: string): Promise<bool
     preloaded = false; // 한 번 보여진 광고는 재사용 불가
     // 다음번을 위해 즉시 백그라운드 재로드 (사용자가 연속으로 누르는 흐름 대응)
     void preloadRewardedAd();
-    return !!reward && (reward.amount ?? 0) > 0;
+    // amount>0 = 끝까지 시청, 그 외(null/0) = 중도 닫기
+    return reward && (reward.amount ?? 0) > 0 ? 'rewarded' : 'dismissed';
   } catch (err) {
+    // 로드는 됐지만 노출 도중 오류 — 사용자 잘못이 아니므로 재시도 안내 대상으로 묶는다.
     console.warn('[ads] showRewardedAd failed', err);
     preloaded = false;
     void preloadRewardedAd();
-    return false;
+    return 'load_failed';
   }
 }
