@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
-import { onAuthChanged, completeKakaoLogin, consumePendingRedirectResult } from '@/services/firebase/auth';
+import { onAuthChanged, completeKakaoLogin } from '@/services/firebase/auth';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { isNative } from '@/services/platform';
@@ -99,10 +99,10 @@ export default function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Capacitor (네이티브) 전용: 딥링크로 돌아온 OAuth code 수신 + Google redirect 결과 회수.
+  // Capacitor (네이티브) 전용: 딥링크로 돌아온 카카오 OAuth code 수신.
+  // (Google 은 네이티브 Sign-In 으로 즉시 처리되므로 redirect 회수가 필요 없다.)
   useEffect(() => {
     if (!isNative()) return;
-    void consumePendingRedirectResult();
     const sub = CapApp.addListener('appUrlOpen', ({ url: deeplink }) => {
       // 예: app.aquaworld://oauth/kakao?code=abcd...
       try {

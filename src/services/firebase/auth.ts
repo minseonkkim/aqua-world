@@ -1,8 +1,7 @@
 import {
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithCredential,
   signInWithCustomToken,
   signOut as firebaseSignOut,
   onAuthStateChanged,
@@ -10,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { Browser } from '@capacitor/browser';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import { auth, functions } from './config';
 import { isNative, KAKAO_NATIVE_REDIRECT_BRIDGE } from '../platform';
 
@@ -18,25 +18,29 @@ const googleProvider = new GoogleAuthProvider();
 export async function signInWithGoogle(): Promise<FirebaseUser> {
   if (!auth) throw new Error('Firebase Auth가 설정되지 않았습니다.');
   if (isNative()) {
-    // 네이티브 WebView에서는 popup이 막히므로 redirect 사용.
-    // 결과는 앱 재진입 시 consumePendingRedirectResult()가 처리한다.
-    await signInWithRedirect(auth, googleProvider);
-    throw new Error('REDIRECT_IN_PROGRESS');
+    // WebView 안의 signInWithRedirect 는 storage-partitioning 때문에 실기기에서 깨진다
+    // (missing initial state). 네이티브 Google Sign-In 으로 ID 토큰을 받아
+    // Firebase JS SDK 에 credential 로 직접 로그인한다.
+    let credential;
+    try {
+      ({ credential } = await FirebaseAuthentication.signInWithGoogle());
+    } catch (err) {
+      // 사용자가 계정 선택 시트를 닫은 경우 — 웹 popup-closed 와 동일 코드로 매핑해
+      // LoginPage 가 조용히 무시(모달 없이)하도록 한다.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/cancel/i.test(msg)) {
+        throw Object.assign(new Error(msg), { code: 'auth/popup-closed-by-user' });
+      }
+      throw err;
+    }
+    const idToken = credential?.idToken;
+    if (!idToken) throw new Error('Google ID 토큰을 받지 못했습니다.');
+    const googleCredential = GoogleAuthProvider.credential(idToken, credential?.accessToken);
+    const result = await signInWithCredential(auth, googleCredential);
+    return result.user;
   }
   const result = await signInWithPopup(auth, googleProvider);
   return result.user;
-}
-
-/** 앱 부팅 시 1회 호출 — redirect 로그인 결과를 회수한다 (Native Google Sign-In). */
-export async function consumePendingRedirectResult(): Promise<FirebaseUser | null> {
-  if (!auth) return null;
-  try {
-    const result = await getRedirectResult(auth);
-    return result?.user ?? null;
-  } catch (err) {
-    console.error('[redirect-result]', err);
-    return null;
-  }
 }
 
 // ─── 카카오 로그인 (authorization code 리다이렉트 흐름) ──────────────────────
@@ -128,6 +132,10 @@ export async function signOut(): Promise<void> {
   // 카카오 SDK 세션도 같이 정리해 다음 로그인 시 계정 선택 화면이 정상 표시되게 한다.
   if (typeof window !== 'undefined' && window.Kakao?.isInitialized()) {
     try { window.Kakao.Auth.logout(); } catch { /* ignore */ }
+  }
+  // 네이티브 Google 세션도 정리 — 안 하면 다음 로그인에서 계정 선택 없이 자동 재로그인된다.
+  if (isNative()) {
+    try { await FirebaseAuthentication.signOut(); } catch { /* ignore */ }
   }
   await firebaseSignOut(auth);
 }

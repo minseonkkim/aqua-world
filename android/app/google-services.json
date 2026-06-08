@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "991739230354-qa5eucbg4s29u2bg7bilf0hg748lkv53.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.aquaworld",
+            "certificate_hash": "743dd75c6181afaf132a535c567657830dc5b0f3"
+          }
+        },
+        {
           "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
           "client_type": 3
         }

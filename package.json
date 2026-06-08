@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.0.0",
+    "@capacitor-firebase/authentication": "^8.3.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",
     "@capacitor/core": "^8.3.4",
@@ -32,7 +33,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@sentry/react": "^10.55.0",
-    "firebase": "^11.0.0",
+    "firebase": "^12.14.0",
     "howler": "^2.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

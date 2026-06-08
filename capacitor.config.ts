@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
   },
   plugins: {
+    FirebaseAuthentication: {
+      // JS SDK(firebase/auth) 가 세션의 단일 소스가 되도록 네이티브 자동 로그인은 건너뛴다.
+      // signInWithGoogle() 이 반환한 ID 토큰을 signInWithCredential 로 직접 넘긴다.
+      skipNativeAuth: true,
+      providers: ['google.com'],
+    },
     SplashScreen: {
       launchShowDuration: 2500,
       backgroundColor: '#0a1628',

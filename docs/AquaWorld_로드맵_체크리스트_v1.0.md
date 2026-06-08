@@ -323,7 +323,7 @@
 - [x] 🔴 `cap:build` / `cap:run:android` / `cap:livereload:android` npm 스크립트 추가
 - [x] 🔴 PWA 서비스워커 Capacitor 빌드 시 자동 비활성화 (`VITE_TARGET=capacitor` 분기)
 - [x] 🔴 카카오 로그인 네이티브 분기 — 외부 브라우저(`@capacitor/browser`) + 커스텀 스킴 딥링크(`app.aquaworld://oauth/kakao`) 콜백
-- [x] 🔴 Google 로그인 네이티브 분기 — `signInWithRedirect` + `getRedirectResult` 부팅 시 회수
+- [x] 🔴 Google 로그인 네이티브 분기 — `@capacitor-firebase/authentication` 네이티브 Sign-In → `signInWithCredential` (구 `signInWithRedirect` 는 WebView storage-partitioning 으로 실기기 실패하여 전환). SHA-1 등록 필수, `variables.gradle` `rgcfaIncludeGoogle = true`
 - [x] 🔴 App URL listener 등록 (`@capacitor/app` appUrlOpen → completeKakaoLogin)
 - [x] 🔴 **(사용자 작업)** JDK 21 + Android Studio 설치
 - [x] 🔴 **(사용자 작업)** `npx cap add android` 실행 (Android 네이티브 프로젝트 생성)
