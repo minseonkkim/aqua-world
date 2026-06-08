@@ -43,6 +43,11 @@ export default function DailyRewardModal({ reward }: Props) {
 
   const handleDouble = async () => {
     if (!user || doubling || doubled) return;
+    // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+      return;
+    }
     setDoubling(true);
     try {
       // payload 는 서버에서 그대로 한 번 더 적용된다 — 본 보상 정의를 넘긴다.
@@ -52,7 +57,15 @@ export default function DailyRewardModal({ reward }: Props) {
         tier: reward.tier,
       };
       if (isCloudUser()) {
-        const { nonceId } = await prepareAdReward('daily_double', { reward: rewardPayload });
+        // 오프라인 등으로 nonce 발급(서버 호출)이 실패하면 광고를 띄울 수 없으므로
+        // 광고 로드 실패와 동일하게 재시도 안내한다.
+        let nonceId: string;
+        try {
+          ({ nonceId } = await prepareAdReward('daily_double', { reward: rewardPayload }));
+        } catch {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
         const result = await showRewardedAd(nonceId, user.id);
         if (result === 'load_failed') {
           showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');

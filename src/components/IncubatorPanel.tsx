@@ -185,11 +185,24 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
 
   const handleBoostAd = async (eggId: string) => {
     if (!user || boostingEggId) return;
+    // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+      return;
+    }
     setBoostingEggId(eggId);
     try {
       if (isCloudUser()) {
         // 서버: nonce 발급 → 광고 시청 → SSV 우선, 폴백으로 claimAdReward
-        const { nonceId } = await prepareAdReward('hatch_boost', { eggId });
+        // 오프라인 등으로 nonce 발급(서버 호출)이 실패하면 광고를 띄울 수 없으므로
+        // 광고 로드 실패와 동일하게 재시도 안내한다.
+        let nonceId: string;
+        try {
+          ({ nonceId } = await prepareAdReward('hatch_boost', { eggId }));
+        } catch {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
         const result = await showRewardedAd(nonceId, user.id);
         if (result === 'load_failed') {
           showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
@@ -281,10 +294,10 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
 
       {toast && (
         <div style={{
-          position: 'absolute', left: 12, bottom: 130, width: 280,
+          position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.85)', color: '#fff',
-          padding: '10px 14px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-          border: '1px solid rgba(255,255,255,0.15)', zIndex: 72, textAlign: 'center',
+          padding: '10px 20px', borderRadius: 20, fontSize: 14, fontWeight: 600,
+          whiteSpace: 'nowrap', zIndex: 200, pointerEvents: 'none',
         }}>
           {toast}
         </div>
