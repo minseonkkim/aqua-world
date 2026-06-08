@@ -658,6 +658,7 @@ async function fetchGooglePlayPurchase(productId, purchaseToken) {
 exports.verifyStarCoralPurchase = onCall(
   { secrets: [googlePlaySaKey] },
   async (request) => {
+    try {
     const uid = requireAuth(request);
     const { pkgId, productId, purchaseToken } = request.data || {};
     const pkg = G.STAR_CORAL_PACKAGES[pkgId];
@@ -703,6 +704,15 @@ exports.verifyStarCoralPurchase = onCall(
       tx.set(userRef(uid), user);
       return { user };
     });
+    } catch (err) {
+      // HttpsError 든 raw 예외든 실제 원인을 로그에 남긴다(관측성).
+      console.error("[verify] FAIL", JSON.stringify({
+        code: err && err.code,
+        message: err && err.message,
+        stack: err && err.stack,
+      }));
+      throw err;
+    }
   },
 );
 
