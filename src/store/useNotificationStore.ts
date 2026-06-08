@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { playSFX } from '@/services/audio';
 
-export type NotificationType = 'growth' | 'hatch' | 'daily';
+export type NotificationType = 'growth' | 'hatch' | 'daily' | 'reengage';
 
 export interface AppNotification {
   id: string; // 고유 + 중복 방지 키

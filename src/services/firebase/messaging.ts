@@ -239,7 +239,7 @@ export function listenForeground(): void {
     if (!n) return;
     useNotificationStore.getState().push({
       id: `push_${payload.messageId ?? Date.now()}`,
-      type: (payload.data?.type as 'growth' | 'hatch' | 'daily') ?? 'hatch',
+      type: (payload.data?.type as 'growth' | 'hatch' | 'daily' | 'reengage') ?? 'hatch',
       emoji: payload.data?.emoji ?? '🔔',
       title: n.title ?? 'AquaWorld',
       body: n.body ?? undefined,
@@ -256,7 +256,7 @@ function attachNativeListeners(): void {
       const data = (notification.data ?? {}) as Record<string, string | undefined>;
       useNotificationStore.getState().push({
         id: `push_${notification.id ?? Date.now()}`,
-        type: (data.type as 'growth' | 'hatch' | 'daily') ?? 'hatch',
+        type: (data.type as 'growth' | 'hatch' | 'daily' | 'reengage') ?? 'hatch',
         emoji: data.emoji ?? '🔔',
         title: notification.title ?? 'AquaWorld',
         body: notification.body ?? undefined,

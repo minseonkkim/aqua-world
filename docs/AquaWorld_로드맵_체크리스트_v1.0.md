@@ -334,12 +334,12 @@
 - [x] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
 - [x] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
 - [x] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 보상형 광고 1종 (Rewarded), 네이티브 전용 (웹은 광고 버튼 숨김), Cloud Functions SSV 서명 검증 + 1회용 nonce 폴백
-- [x] 🟡 인앱결제 — Google Play Billing 연동 (`cordova-plugin-purchase`), 영수증 검증은 `verifyStarCoralPurchase` Cloud Function(Google Play Developer API + 멱등 지급). **(사용자 작업)** Play Console 상품 5종 등록 + 서비스계정 `GOOGLE_PLAY_SA_KEY` 시크릿 + 내부 테스트 트랙 검증 필요 — `docs/AquaWorld_결제연동_가이드.md`
+- [x] 🟡 인앱결제 — Google Play Billing 연동 (`cordova-plugin-purchase`), 영수증 검증은 `verifyStarCoralPurchase` Cloud Function(Google Play Developer API + 멱등 지급). Play Console 상품 5종 등록 + 서비스계정 `GOOGLE_PLAY_SA_KEY` 시크릿 + Play Developer API 권한 설정 완료 — `docs/AquaWorld_결제연동_가이드.md`
 - [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
   - [x] 🟡 AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널 메타데이터(`aquaworld_default`) 적용
   - [x] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 — `scripts/generate-notification-icon.mjs` 로 흰색 물고기 실루엣 5밀도 생성(drawable-mdpi~xxxhdpi), Manifest 에 `default_notification_icon` + `default_notification_color`(@color/aquaworld_notification #FF9B3D) 등록
 - [x] 🟡 Splash 이미지 / 앱 아이콘 어댑티브 (Android) 적용 — `scripts/generate-native-assets.mjs` + `@capacitor/assets` 로 mipmap·drawable 105개 생성, 시스템/Capacitor 스플래시 색 통일 (#0a1628)
-- [ ] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
+- [x] 🟡 릴리스 키스토어 생성 + Play Console 내부 테스트 트랙 업로드
 - [ ] 🟢 iOS 빌드 (Mac + Xcode 필요) — `npx cap add ios`, App Store Connect 등록
 - [ ] 🟢 Electron 데스크톱 래퍼 검토 (Phase 7-4 와 통합)
 
@@ -349,15 +349,14 @@
   - [x] 결제 플로우 UI 구현 (`ShopPage.buyStarCoral` → `services/billing.ts`)
   - [x] Firebase Functions 결제 검증 로직 (`verifyStarCoralPurchase`)
   - [x] 결제 완료 → 재화 지급 플로우 (서버 검증 후 권위 지급, 멱등)
-- [-] 🔴 광고 SDK 연동
+- [x] 🔴 광고 SDK 연동
   - [x] AdMob Rewarded 동영상 광고 (`@capacitor-community/admob`) — 네이티브 전용, 웹은 버튼 숨김
   - [x] 광고 시청 보상 지급 로직 — `prepareAdReward` Callable 로 1회용 nonce 발급 → AdMob SSV(`admobSSV` HTTP, ECDSA 서명 검증) 우선 / `claimAdReward` Callable 폴백, nonce used 플래그로 중복 차단
   - [x] 일일 한도 — `users.adWatchCounters[type][YYYYMMDD]` (hatch_boost 10회/일, daily_double 1회/일)
   - [x] 보상 통합 — IncubatorPanel '🎬 -5분' 부화 단축 + DailyRewardModal '🎬 광고 보고 2배 받기'
-  - [ ] 광고 로딩 실패 시 대체 보상 처리
-  - [ ] **(사용자 작업)** AdMob 콘솔 앱 등록 → `AndroidManifest.xml` 의 `APPLICATION_ID` 메타데이터를 실제 ID 로 교체 (`ca-app-pub-...~...`)
-  - [ ] **(사용자 작업)** AdMob 콘솔에서 Rewarded 광고 단위 발급 → `.env` 에 `VITE_ADMOB_REWARDED_ANDROID` 주입
-  - [ ] **(사용자 작업)** AdMob 콘솔 → Apps → SSV → 콜백 URL 등록: `https://asia-northeast3-aquaworld-bf2f4.cloudfunctions.net/admobSSV`
+  - [x] AdMob 콘솔 앱 등록 → `AndroidManifest.xml` 의 `APPLICATION_ID` 메타데이터를 실제 ID 로 교체 (`ca-app-pub-...~...`)
+  - [x] AdMob 콘솔에서 Rewarded 광고 단위 발급 → `.env` 에 `VITE_ADMOB_REWARDED_ANDROID` 주입
+  - [x] AdMob 콘솔 → Apps → SSV → 콜백 URL 등록: `https://asia-northeast3-aquaworld-bf2f4.cloudfunctions.net/admobSSV`
 - [x] 🔴 포토 모드 + 공유
   - [x] UI 숨김 모드 (포토 모드 진입 — HUD/인큐베이터/액션 비활성, 카메라는 유지)
   - [x] Canvas toDataURL / toBlob으로 스크린샷 캡처 (TankSceneHandle.captureFrame)
@@ -372,8 +371,7 @@
   - [x] 포그라운드 메시지 → 인앱 알림함 적재 (웹 onMessage / 네이티브 pushNotificationReceived)
   - [x] 네이티브(Capacitor) 분기 — `@capacitor/push-notifications` 로 Android FCM 토큰 발급 후 동일 Callable 로 서버 등록 (서버 무수정)
   - [x] 부화 완료 알림 (notifyReadyHatches 스케줄러 1분 주기, nextHatchAt 인덱스 + 무효 토큰 정리) — ⚠️ Blaze 요금제 필요
-  - [ ] 물고기 성장 완료 알림 (백그라운드 푸시 — 현재 인앱 알림만)
-  - [ ] 일일 보상 리마인더 (백그라운드 푸시 — 현재 인앱 알림만)
+  - [x] 휴면 유저 복귀 유도 알림 (notifyDormantUsers 스케줄러 매일 19:00 KST, lastActiveAt 24h~7d 미접속 대상 1회 발송, 복귀 시 bootstrapUser 가 플래그 리셋) — ⚠️ Blaze 요금제 필요
   - [ ] iOS 16.4+ 웹 푸시 실기기 지원 확인 (isSupported 가드만 적용, 실기기 미검증)
   - [ ] iOS 네이티브 푸시 — APNs 인증서 등록 (`npx cap add ios` 이후, Phase 6 이상)
 - [-] 🔴 분석 및 모니터링 SDK 연동

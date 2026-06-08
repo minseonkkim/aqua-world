@@ -131,8 +131,12 @@ exports.bootstrapUser = onCall(async (request) => {
     if (!data.tutorialEggGranted) {
       data.inventory = [...(data.inventory || []), makeTutorialEgg()];
       data.tutorialEggGranted = true;
-      await uRef.set(data);
     }
+    // 콜드스타트 = "유저가 앱을 열었다" 신호. 활동 시각을 갱신하고 복귀 알림 플래그를
+    // 해제해 다음 휴면 시 다시 복귀 푸시를 받을 수 있게 한다. (notifyDormantUsers 참조)
+    data.lastActiveAt = Date.now();
+    data.reengageNotified = false;
+    await uRef.set(data, { merge: true });
     return { user: data, created: false };
   }
 
@@ -156,6 +160,8 @@ exports.bootstrapUser = onCall(async (request) => {
     feedCountToday: 0,
     lastFeedResetAt: now,
     tutorialStep: 0,
+    lastActiveAt: now,
+    reengageNotified: false,
   };
   if (auth.picture) user.photoURL = auth.picture;
   const tankId = `tank_${uid}`;
@@ -990,6 +996,64 @@ exports.notifyReadyHatches = onSchedule("every 1 minutes", async () => {
     );
   }
 });
+
+// ─── 휴면 유저 복귀 유도 푸시 (매일 19:00 KST) ───────────────────────────────
+// ⚠️ Cloud Scheduler 사용 — Blaze(종량제) 요금제 + `firebase deploy` 필요.
+// lastActiveAt 이 24시간~7일 전인(하루 이상 미접속, 아직 이탈 전) 유저에게 1회 복귀
+// 알림을 보낸다. 유저가 다시 앱을 열면 bootstrapUser 가 reengageNotified 를 false 로
+// 리셋하므로, 다음 휴면 때 다시 보낼 수 있다(매일 스팸 X — 휴면 구간당 1회).
+const REENGAGE_MESSAGES = [
+  { title: "🐠 물고기들이 기다려요", body: "수조 친구들이 배고파해요. 잠깐 들러서 먹이를 주세요!" },
+  { title: "🐚 오늘의 보상이 쌓였어요", body: "일일 보상과 새 알이 기다리고 있어요. 지금 확인해보세요!" },
+  { title: "🌊 수조가 그리워요", body: "잠깐 들러 물고기들과 인사 나눠요. 새 친구가 부화했을지도 몰라요!" },
+];
+
+exports.notifyDormantUsers = onSchedule(
+  { schedule: "0 19 * * *", timeZone: "Asia/Seoul" },
+  async () => {
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+    // 하루 이상 ~ 일주일 이내 미접속(이탈 전) 유저만 대상. (lastActiveAt 단일 필드 범위)
+    const snap = await db
+      .collection("users")
+      .where("lastActiveAt", ">=", weekAgo)
+      .where("lastActiveAt", "<=", dayAgo)
+      .limit(500)
+      .get();
+
+    for (const docSnap of snap.docs) {
+      const user = docSnap.data();
+      // 이번 휴면 구간에 이미 보냈으면 스킵 (복귀 시 bootstrapUser 가 리셋).
+      if (user.reengageNotified) continue;
+
+      const tokens = (user.fcmTokens || []).filter(Boolean);
+      if (tokens.length === 0) {
+        // 토큰이 없어도 플래그를 세워 매일 재스캔 비용을 줄인다.
+        await docSnap.ref.set({ reengageNotified: true }, { merge: true });
+        continue;
+      }
+
+      const msg = REENGAGE_MESSAGES[Math.floor(Math.random() * REENGAGE_MESSAGES.length)];
+      const res = await admin.messaging().sendEachForMulticast({
+        tokens,
+        notification: { title: msg.title, body: msg.body },
+        data: { type: "reengage", emoji: "🐠", tag: "reengage", link: "/" },
+        webpush: { fcmOptions: { link: "/" } },
+      });
+
+      const invalid = [];
+      res.responses.forEach((r, i) => {
+        if (!r.success) invalid.push(tokens[i]);
+      });
+
+      const patch = { reengageNotified: true };
+      if (invalid.length > 0) patch.fcmTokens = FieldValue.arrayRemove(...invalid);
+      await docSnap.ref.set(patch, { merge: true });
+    }
+  },
+);
 
 // ─── 보상형 광고 (AdMob Rewarded) ───────────────────────────────────────────
 // 흐름:
