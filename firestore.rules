@@ -30,6 +30,11 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 인앱결제 멱등 기록 — 서버(Admin)만 읽고 쓴다. 클라이언트 접근 전면 차단.
+    match /purchases/{purchaseToken} {
+      allow read, write: if false;
+    }
+
     match /tanks/{tankId} {
       allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
       allow create: if false;

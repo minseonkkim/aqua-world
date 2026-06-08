@@ -10,9 +10,13 @@ import {
   optimistic,
   purchaseEgg,
   exchangePearl,
-  purchaseStarCoral,
   purchaseDecoration,
 } from '@/services/firebase/functions';
+import {
+  isBillingAvailable,
+  purchaseStarCoral as billingPurchaseStarCoral,
+  PurchaseCancelledError,
+} from '@/services/billing';
 import { playSFX } from '@/services/audio';
 import { analytics } from '@/services/analytics';
 
@@ -113,29 +117,47 @@ export default function ShopPage() {
   };
 
   const buyStarCoral = async (pkg: (typeof CURRENCY.STAR_CORAL_PACKAGES)[number]) => {
+    const total = pkg.amount + pkg.bonus;
     const ok = await useModalStore.getState().confirm({
       emoji: '🌸',
       title: `${pkg.name} 구매`,
-      message: `₩${pkg.priceKRW.toLocaleString()} → Star Coral ${pkg.amount + pkg.bonus}개`,
+      message: `₩${pkg.priceKRW.toLocaleString()} → Star Coral ${total}개`,
       confirmText: '구매',
     });
     if (!ok) return;
-    analytics.purchaseStarCoral(pkg.id, pkg.amount + pkg.bonus, pkg.priceKRW);
+
+    // 클라우드 유저: 실제 Google Play Billing 결제 → 서버 검증 후 지급.
     if (isCloudUser()) {
-      optimistic(
-        () => {
-          addStarCoral(pkg.amount + pkg.bonus);
-          playSFX('coin');
-          showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
-        },
-        () => purchaseStarCoral({ pkgId: pkg.id }),
-        () => { playSFX('error'); showToast('구매에 실패했습니다'); },
-      );
+      // 웹 등 인앱결제 불가 환경 → 앱으로 안내(서버는 무검증 지급을 더 이상 허용하지 않음).
+      if (!isBillingAvailable()) {
+        playSFX('error');
+        showToast('결제는 앱에서만 가능합니다');
+        return;
+      }
+      showToast('결제를 처리하고 있어요…');
+      try {
+        // 성공 시 서버 검증이 끝나며 user 스토어가 권위 상태로 이미 갱신됨(낙관적 선지급 없음).
+        await billingPurchaseStarCoral(pkg);
+        // 실제 결제+검증이 완료된 뒤에만 매출 이벤트 발화(취소는 집계 제외).
+        analytics.purchaseStarCoral(pkg.id, total, pkg.priceKRW);
+        playSFX('coin');
+        showToast(`🌸 Star Coral ${total}개 획득!`);
+      } catch (err) {
+        if (err instanceof PurchaseCancelledError) {
+          showToast('');
+          return; // 사용자 취소 — 조용히 종료
+        }
+        playSFX('error');
+        showToast('결제에 실패했습니다');
+      }
       return;
     }
-    addStarCoral(pkg.amount + pkg.bonus);
+
+    // 게스트(로컬/오프라인): 실결제 아님 — 본인 단말 데이터에 그대로 지급.
+    analytics.purchaseStarCoral(pkg.id, total, pkg.priceKRW);
+    addStarCoral(total);
     playSFX('coin');
-    showToast(`🌸 Star Coral ${pkg.amount + pkg.bonus}개 획득!`);
+    showToast(`🌸 Star Coral ${total}개 획득!`);
   };
 
   const buyPearl = async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {

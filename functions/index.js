@@ -16,6 +16,9 @@ const kakaoRestKey = defineSecret("KAKAO_REST_API_KEY");
 // 카카오 콘솔 → 보안 → Client Secret 활성화 시 필수.
 // `firebase functions:secrets:set KAKAO_CLIENT_SECRET` 로 주입.
 const kakaoClientSecret = defineSecret("KAKAO_CLIENT_SECRET");
+// Google Play Developer API 서비스계정 키(JSON 문자열 통째로) — 인앱결제 영수증 검증용.
+// `firebase functions:secrets:set GOOGLE_PLAY_SA_KEY` 로 주입(가이드 문서 참조).
+const googlePlaySaKey = defineSecret("GOOGLE_PLAY_SA_KEY");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
 
@@ -596,24 +599,112 @@ exports.exchangePearl = onCall(async (request) => {
   });
 });
 
-// ─── Star Coral 구매 (KRW) ──────────────────────────────────────────────────
-// ⚠️ 현재는 실제 결제 검증이 없음(기존 동작 유지). 실서비스 시 IAP 영수증 검증 필요.
-
-exports.purchaseStarCoral = onCall(async (request) => {
-  const uid = requireAuth(request);
-  const pkgId = request.data && request.data.pkgId;
-  const pkg = G.STAR_CORAL_PACKAGES[pkgId];
-  if (!pkg) throw new HttpsError("invalid-argument", "잘못된 패키지");
-
-  return db.runTransaction(async (tx) => {
-    const snap = await tx.get(userRef(uid));
-    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
-    const user = snap.data();
-    user.starCoral = (user.starCoral || 0) + pkg.amount + pkg.bonus;
-    tx.set(userRef(uid), user);
-    return { user };
-  });
+// ─── Star Coral 구매 (KRW) — Google Play Billing 영수증 검증 ──────────────────
+//
+// 구 purchaseStarCoral 은 무검증 지급이라 누구나 무한 재화를 얻을 수 있었다 → 폐기.
+// 구버전 클라이언트가 호출하면 명확한 에러를 돌려 업데이트를 유도한다.
+exports.purchaseStarCoral = onCall(async () => {
+  throw new HttpsError(
+    "failed-precondition",
+    "결제 방식이 변경되었습니다. 앱을 최신 버전으로 업데이트해 주세요.",
+  );
 });
+
+/**
+ * Play Developer API 로 구매 토큰을 검증한다.
+ * @returns purchaseState (0=구매완료, 1=취소, 2=대기)
+ */
+async function fetchGooglePlayPurchase(productId, purchaseToken) {
+  const saRaw = googlePlaySaKey.value();
+  if (!saRaw) {
+    throw new HttpsError(
+      "failed-precondition",
+      "GOOGLE_PLAY_SA_KEY 시크릿이 설정되지 않았습니다.",
+    );
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(saRaw);
+  } catch (e) {
+    void e;
+    throw new HttpsError("internal", "서비스계정 키 형식이 올바르지 않습니다.");
+  }
+
+  const { google } = require("googleapis");
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+  });
+  const androidpublisher = google.androidpublisher({ version: "v3", auth });
+
+  try {
+    const res = await androidpublisher.purchases.products.get({
+      packageName: G.ANDROID_PACKAGE_NAME,
+      productId,
+      token: purchaseToken,
+    });
+    return res.data; // { purchaseState, consumptionState, orderId, ... }
+  } catch (err) {
+    const status = err && err.response && err.response.status;
+    // 404/410 → 위조되었거나 이미 만료/소비된 토큰.
+    if (status === 404 || status === 410) {
+      throw new HttpsError("permission-denied", "유효하지 않은 구매 토큰입니다.");
+    }
+    console.error("[verifyStarCoralPurchase] Play API 오류", status, err && err.message);
+    throw new HttpsError("internal", "결제 검증 중 오류가 발생했습니다.");
+  }
+}
+
+exports.verifyStarCoralPurchase = onCall(
+  { secrets: [googlePlaySaKey] },
+  async (request) => {
+    const uid = requireAuth(request);
+    const { pkgId, productId, purchaseToken } = request.data || {};
+    const pkg = G.STAR_CORAL_PACKAGES[pkgId];
+    if (!pkg) throw new HttpsError("invalid-argument", "잘못된 패키지");
+    if (productId !== pkg.productId) {
+      throw new HttpsError("invalid-argument", "상품 ID 불일치");
+    }
+    if (!purchaseToken || typeof purchaseToken !== "string") {
+      throw new HttpsError("invalid-argument", "purchaseToken 필요");
+    }
+
+    // 1) Play Developer API 로 토큰 검증
+    const purchase = await fetchGooglePlayPurchase(productId, purchaseToken);
+    if (purchase.purchaseState !== 0) {
+      throw new HttpsError("failed-precondition", "결제가 완료되지 않았습니다.");
+    }
+
+    // 2) 멱등 지급: purchaseToken 1건당 한 번만. (재전송/재설치 replay 차단)
+    const purchaseDocRef = db.doc(`purchases/${purchaseToken}`);
+    return db.runTransaction(async (tx) => {
+      const [userSnap, purchaseSnap] = await Promise.all([
+        tx.get(userRef(uid)),
+        tx.get(purchaseDocRef),
+      ]);
+      if (!userSnap.exists) throw new HttpsError("not-found", "유저 없음");
+      const user = userSnap.data();
+
+      if (purchaseSnap.exists) {
+        // 이미 지급된 토큰 → 추가 지급 없이 현재 권위 상태만 반환(멱등).
+        return { user };
+      }
+
+      const granted = pkg.amount + pkg.bonus;
+      user.starCoral = (user.starCoral || 0) + granted;
+      tx.set(purchaseDocRef, {
+        uid,
+        pkgId,
+        productId,
+        granted,
+        orderId: purchase.orderId || null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(userRef(uid), user);
+      return { user };
+    });
+  },
+);
 
 // ─── 데코 구매 (진주 차감만 서버 검증; 인벤토리 소비/배치는 Phase 2) ────────
 

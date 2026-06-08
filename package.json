@@ -33,6 +33,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@sentry/react": "^10.55.0",
+    "cordova-plugin-purchase": "^13.16.1",
     "firebase": "^12.14.0",
     "howler": "^2.2.4",
     "react": "^18.3.1",

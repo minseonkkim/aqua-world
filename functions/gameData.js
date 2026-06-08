@@ -98,14 +98,18 @@ const PEARL_PACKAGES = {
   pearl_8000: { pearl: 8000, bonus: 1500, starCoral: 50 },
 };
 
-// ─── Star Coral 패키지 (KRW 결제 — 실제 결제 검증은 추후 IAP에서) ───
+// ─── Star Coral 패키지 (KRW 결제 — Google Play Billing 영수증 검증 후 지급) ───
+// productId 는 Play Console 인앱 상품 ID 와 정확히 일치해야 한다(verifyStarCoralPurchase 가 대조).
 const STAR_CORAL_PACKAGES = {
-  sc_60: { amount: 60, bonus: 0 },
-  sc_300: { amount: 300, bonus: 30 },
-  sc_600: { amount: 600, bonus: 90 },
-  sc_1200: { amount: 1200, bonus: 240 },
-  sc_3000: { amount: 3000, bonus: 900 },
+  sc_60: { productId: "sc_60", amount: 60, bonus: 0 },
+  sc_300: { productId: "sc_300", amount: 300, bonus: 30 },
+  sc_600: { productId: "sc_600", amount: 600, bonus: 90 },
+  sc_1200: { productId: "sc_1200", amount: 1200, bonus: 240 },
+  sc_3000: { productId: "sc_3000", amount: 3000, bonus: 900 },
 };
+
+// Google Play 결제 검증 시 사용할 앱 패키지명 (capacitor.config.ts appId 와 동일).
+const ANDROID_PACKAGE_NAME = "app.aquaworld";
 
 // ─── 도감 마일스톤 보상 ───
 const COMPENDIUM_REWARDS = {
@@ -154,6 +158,7 @@ module.exports = {
   DAILY_LOGIN_REWARDS,
   PEARL_PACKAGES,
   STAR_CORAL_PACKAGES,
+  ANDROID_PACKAGE_NAME,
   COMPENDIUM_REWARDS,
   DECORATION_PRICES,
 };

@@ -13,6 +13,7 @@ import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
 import { initAds, preloadRewardedAd } from '@/services/ads';
+import { initBilling } from '@/services/billing';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -158,6 +159,12 @@ export default function App() {
     void initAds()
       .then(() => preloadRewardedAd())
       .catch(() => undefined);
+  }, []);
+
+  // 네이티브 빌드: Google Play Billing 초기화(상품 등록 + 이벤트 리스너).
+  // 웹에서는 no-op. 결제창은 사용자가 상점에서 직접 트리거한다.
+  useEffect(() => {
+    void initBilling().catch(() => undefined);
   }, []);
 
   // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을

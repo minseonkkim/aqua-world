@@ -188,7 +188,7 @@
     - [x] feedFish / sprinkleFeed (일일 제한 + 성장 가속 + Pearl 보상)
     - [x] exchangePearl / purchaseStarCoral / purchaseDecoration (재화 검증·차감)
     - [x] claimMilestone (도감 진행도 서버 재계산 후 보상)
-    - [ ] purchaseStarCoral 실제 결제(IAP) 영수증 검증 (현재 검증 없이 지급)
+    - [x] purchaseStarCoral 실제 결제(IAP) 영수증 검증 — `verifyStarCoralPurchase` 가 Google Play Developer API 로 purchaseToken 검증 + `purchases/{token}` 멱등 지급, 구 무검증 함수 폐기 (가이드: `docs/AquaWorld_결제연동_가이드.md`)
   - [x] 서버 경제 동작에 낙관적 UI 적용 (요청 즉시 UI 반영, 실패 시 롤백 — 체감 지연 제거)
   - [-] Firebase Storage 설정 (SDK init 완료, 업/다운로드 로직 미구현)
 - [x] 🔴 라우팅 구조 구현 (React Router v6)
@@ -334,7 +334,7 @@
 - [x] 🔴 **(사용자 작업)** Firebase Console 에 Android 앱 등록 + SHA-1 지문 업로드 (+ `google-services.json`)
 - [x] 🔴 **(사용자 작업)** Android 실기기에서 디버그 빌드 실행 검증 (USB 디버깅)
 - [x] 🟡 AdMob 네이티브 광고 SDK 연동 (`@capacitor-community/admob`) — 보상형 광고 1종 (Rewarded), 네이티브 전용 (웹은 광고 버튼 숨김), Cloud Functions SSV 서명 검증 + 1회용 nonce 폴백
-- [ ] 🟡 인앱결제 — Google Play Billing 연동 (`@capacitor-community/in-app-purchases`), 영수증 검증은 기존 `purchaseStarCoral` Cloud Function 확장
+- [x] 🟡 인앱결제 — Google Play Billing 연동 (`cordova-plugin-purchase`), 영수증 검증은 `verifyStarCoralPurchase` Cloud Function(Google Play Developer API + 멱등 지급). **(사용자 작업)** Play Console 상품 5종 등록 + 서비스계정 `GOOGLE_PLAY_SA_KEY` 시크릿 + 내부 테스트 트랙 검증 필요 — `docs/AquaWorld_결제연동_가이드.md`
 - [x] 🟡 푸시 알림 네이티브 채널 — `@capacitor/push-notifications` 로 FCM Android 토큰 발급, 기존 `registerPushToken` Callable + `sendEachForMulticast` 흐름에 통합 (Cloud Functions 무수정)
   - [x] 🟡 AndroidManifest 에 `POST_NOTIFICATIONS` 권한 + 기본 알림 채널 메타데이터(`aquaworld_default`) 적용
   - [x] 🟢 알림 아이콘 `ic_stat_notify.png` (단색 흰색 24dp) 디자인·배치 — `scripts/generate-notification-icon.mjs` 로 흰색 물고기 실루엣 5밀도 생성(drawable-mdpi~xxxhdpi), Manifest 에 `default_notification_icon` + `default_notification_color`(@color/aquaworld_notification #FF9B3D) 등록
@@ -345,10 +345,10 @@
 
 ### 2-5. 외부 SDK 연동 & 마무리 (Week 9~10)
 
-- [ ] 🔴 인앱 결제 연동 (Web Payments API + 서버 검증)
-  - [ ] 결제 플로우 UI 구현
-  - [ ] Firebase Functions 결제 검증 로직
-  - [ ] 결제 완료 → 재화 즉시 지급 플로우
+- [x] 🔴 인앱 결제 연동 (Google Play Billing + 서버 검증) — Web Payments API 대신 Play Billing 채택
+  - [x] 결제 플로우 UI 구현 (`ShopPage.buyStarCoral` → `services/billing.ts`)
+  - [x] Firebase Functions 결제 검증 로직 (`verifyStarCoralPurchase`)
+  - [x] 결제 완료 → 재화 지급 플로우 (서버 검증 후 권위 지급, 멱등)
 - [-] 🔴 광고 SDK 연동
   - [x] AdMob Rewarded 동영상 광고 (`@capacitor-community/admob`) — 네이티브 전용, 웹은 버튼 숨김
   - [x] 광고 시청 보상 지급 로직 — `prepareAdReward` Callable 로 1회용 nonce 발급 → AdMob SSV(`admobSSV` HTTP, ECDSA 서명 검증) 우선 / `claimAdReward` Callable 폴백, nonce used 플래그로 중복 차단

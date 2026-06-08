@@ -64,12 +64,14 @@ export const CURRENCY = {
   FEED_MAX_PER_DAY: 3,
   AD_MAX_PER_DAY: 10,
 
+  // playProductId 는 Google Play Console 의 인앱 상품 ID 와 정확히 일치해야 한다(가이드 참조).
+  // 현재는 패키지 id 와 동일하게 둔다.
   STAR_CORAL_PACKAGES: [
-    { id: 'sc_60', name: '작은 산호', amount: 60, bonus: 0, priceKRW: 1200 },
-    { id: 'sc_300', name: '평범한 산호', amount: 300, bonus: 30, priceKRW: 5500 },
-    { id: 'sc_600', name: '아름다운 산호', amount: 600, bonus: 90, priceKRW: 11000 },
-    { id: 'sc_1200', name: '화려한 산호', amount: 1200, bonus: 240, priceKRW: 22000 },
-    { id: 'sc_3000', name: '전설의 산호', amount: 3000, bonus: 900, priceKRW: 55000 },
+    { id: 'sc_60', playProductId: 'sc_60', name: '작은 산호', amount: 60, bonus: 0, priceKRW: 1200 },
+    { id: 'sc_300', playProductId: 'sc_300', name: '평범한 산호', amount: 300, bonus: 30, priceKRW: 5500 },
+    { id: 'sc_600', playProductId: 'sc_600', name: '아름다운 산호', amount: 600, bonus: 90, priceKRW: 11000 },
+    { id: 'sc_1200', playProductId: 'sc_1200', name: '화려한 산호', amount: 1200, bonus: 240, priceKRW: 22000 },
+    { id: 'sc_3000', playProductId: 'sc_3000', name: '전설의 산호', amount: 3000, bonus: 900, priceKRW: 55000 },
   ],
 
   // Star Coral → Pearl 환전 패키지 (큰 패키지일수록 환율이 좋아짐)
