@@ -42,15 +42,15 @@ interface ServerResult {
 export function optimistic(
   apply: () => void,
   server: () => Promise<unknown>,
-  onError?: () => void,
+  onError?: (err: unknown) => void,
 ): void {
   const prevUser = useUserStore.getState().user;
   const prevTanks = useTankStore.getState().tanks;
   apply();
-  server().catch(() => {
+  server().catch((err) => {
     useUserStore.getState().setUser(prevUser);
     useTankStore.getState().setTanks(prevTanks);
-    onError?.();
+    onError?.(err);
   });
 }
 

@@ -489,9 +489,11 @@ export default function TankPage() {
       tickMoodAndCleanliness(activeTankId);
     };
     if (isCloudUser()) {
-      optimistic(clean, () => cleanTankServer({ tankId: activeTankId }), () =>
-        showToast('청소에 실패했어요 — 다시 시도해주세요'),
-      );
+      optimistic(clean, () => cleanTankServer({ tankId: activeTankId }), (e) => {
+        const err = e as { code?: string; message?: string };
+        console.error('cleanTank failed', { tankId: activeTankId, code: err.code, message: err.message, error: e });
+        showToast(err.message ?? '청소에 실패했어요 — 다시 시도해주세요');
+      });
     } else {
       if (!spendPearl(CLEAN_TANK_COST_PEARL)) {
         showToast(`Pearl이 부족합니다 (${CLEAN_TANK_COST_PEARL} 🪙 필요)`);

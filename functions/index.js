@@ -110,9 +110,15 @@ const tankRef = (tankId) => db.doc(`tanks/${tankId}`);
 /** tank 문서를 읽고 소유권을 검증. ownerId 는 Tank 타입에 없는 Firestore 전용 필드. */
 async function readOwnedTank(tx, uid, tankId) {
   const snap = await tx.get(tankRef(tankId));
-  if (!snap.exists) throw new HttpsError("not-found", "수조를 찾을 수 없습니다.");
+  if (!snap.exists) {
+    logger.warn("readOwnedTank rejected: tank not found", { uid, tankId });
+    throw new HttpsError("not-found", "수조를 찾을 수 없습니다.");
+  }
   const data = snap.data();
-  if (data.ownerId !== uid) throw new HttpsError("permission-denied", "본인 수조가 아닙니다.");
+  if (data.ownerId !== uid) {
+    logger.warn("readOwnedTank rejected: owner mismatch", { uid, tankId, ownerId: data.ownerId });
+    throw new HttpsError("permission-denied", "본인 수조가 아닙니다.");
+  }
   return data;
 }
 
@@ -533,11 +539,12 @@ exports.cleanTank = onCall(async (request) => {
     const user = uSnap.data();
     const tankData = await readOwnedTank(tx, uid, tankId);
 
-    if ((tankData.cleanliness || 0) >= 95) {
-      throw new HttpsError("failed-precondition", "이미 깨끗합니다.");
-    }
+    // 서버는 청결도 감쇠·먹이 오염을 추적하지 않아(항상 100으로만 기록) 더러움의 권위가 없다.
+    // 따라서 '이미 깨끗' 판단은 클라(로컬 감쇠+오염을 아는 쪽, TankPage 의 >=95 가드)에 맡기고,
+    // 서버 청소는 멱등하게 실행만 한다. 과거엔 여기서 >=95 로 거절해 정상 청소가 막혔다.
     const cost = G.CLEAN_TANK_COST_PEARL;
     if ((user.pearl || 0) < cost) {
+      logger.warn("cleanTank rejected: insufficient pearl", { uid, tankId, pearl: user.pearl, cost });
       throw new HttpsError("failed-precondition", "Pearl이 부족합니다.");
     }
 
