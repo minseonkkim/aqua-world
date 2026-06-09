@@ -370,13 +370,12 @@
   - [x] 설정 화면 푸시 알림 ON/OFF 토글 (SettingsPage) — 웹/네이티브 공용
   - [x] 포그라운드 메시지 → 인앱 알림함 적재 (웹 onMessage / 네이티브 pushNotificationReceived)
   - [x] 네이티브(Capacitor) 분기 — `@capacitor/push-notifications` 로 Android FCM 토큰 발급 후 동일 Callable 로 서버 등록 (서버 무수정)
-  - [x] 부화 완료 알림 (notifyReadyHatches 스케줄러 1분 주기, nextHatchAt 인덱스 + 무효 토큰 정리) — ⚠️ Blaze 요금제 필요
-  - [x] 휴면 유저 복귀 유도 알림 (notifyDormantUsers 스케줄러 매일 19:00 KST, lastActiveAt 24h~7d 미접속 대상 1회 발송, 복귀 시 bootstrapUser 가 플래그 리셋) — ⚠️ Blaze 요금제 필요
+  - [x] 부화 완료 알림 (notifyReadyHatches 스케줄러 1분 주기, nextHatchAt 인덱스 + 무효 토큰 정리) — ✅ Blaze 적용 + 배포 완료 (Cloud Scheduler 등록 확인)
+  - [x] 휴면 유저 복귀 유도 알림 (notifyDormantUsers 스케줄러 매일 19:00 KST, lastActiveAt 24h~7d 미접속 대상 1회 발송, 복귀 시 bootstrapUser 가 플래그 리셋) — ✅ Blaze 적용 + 배포 완료 (Cloud Scheduler 등록 확인)
   - [ ] iOS 16.4+ 웹 푸시 실기기 지원 확인 (isSupported 가드만 적용, 실기기 미검증)
   - [ ] iOS 네이티브 푸시 — APNs 인증서 등록 (`npx cap add ios` 이후, Phase 6 이상)
-- [-] 🔴 분석 및 모니터링 SDK 연동
+- [x] 🔴 분석 및 모니터링 SDK 연동
   - [x] Firebase Analytics 이벤트 정의 및 구현 (핵심 20개 이벤트)
-  - [ ] Amplitude 코호트 분석 세팅
   - [x] Sentry 크래시 리포팅 연동 (@sentry/react + ErrorBoundary, Replay 에러 세션 100%, identifyUser 에 setUser 묶음, @sentry/vite-plugin 소스맵 자동 업로드)
 - [ ] 🔴 전체 기기/브라우저 테스트
   - [ ] iPhone SE (소형 화면, iOS Safari)

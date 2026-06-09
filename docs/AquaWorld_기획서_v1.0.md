@@ -369,7 +369,7 @@
 | **인증** | Firebase Auth + 소셜 SDK | Google, 카카오 로그인 통합 |
 | **결제** | Web Payments API + 서버 검증 | 크로스 플랫폼 결제 |
 | **광고** | Google AdSense / AdMob Web | 웹 기반 광고 |
-| **분석** | Firebase Analytics + Amplitude | 사용자 행동 분석, 코호트 분석 |
+| **분석** | Firebase Analytics | 사용자 행동 분석, 코호트 분석 |
 | **크래시 리포팅** | Sentry | 실시간 오류 추적, 성능 모니터링 |
 | **푸시 알림** | Web Push API + FCM | 브라우저 푸시 알림 |
 
