@@ -10,7 +10,6 @@ import {
   CLEANLINESS_PER_FEED,
 } from '../utils/mood';
 import { useUserStore } from './useUserStore';
-import { useFishStore } from './useFishStore';
 
 interface TankState {
   tanks: Tank[];
@@ -268,13 +267,11 @@ export const useTankStore = create<TankState>()(
         const now = Date.now();
         const lastTick = tank.lastCleanlinessTickAt ?? tank.updatedAt ?? now;
         const nextClean = decayCleanliness(tank.cleanliness, lastTick, now);
-        const species = useFishStore.getState().allSpecies;
         // mood 계산용 임시 tank (감쇠된 청결도 반영)
         const tankForCalc: Tank = { ...tank, cleanliness: nextClean };
         let moodChanged = false;
         const nextFish = tank.fish.map(f => {
-          const sp = species.find(s => s.id === f.speciesId);
-          const comfort = computeFishComfort(f, tankForCalc, sp?.habitat, now);
+          const comfort = computeFishComfort(f, tankForCalc, now);
           const mood = comfortToMood(comfort.total);
           if (mood === f.mood) return f;
           moodChanged = true;

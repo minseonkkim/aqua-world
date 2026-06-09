@@ -1,4 +1,4 @@
-import { Fish, FishMood, Tank, TankEnvironment } from '@/types';
+import { Fish, FishMood, Tank } from '@/types';
 
 export const CLEANLINESS_DECAY_PER_HOUR = 2; // 100점이면 약 2일에 걸쳐 0
 export const CLEANLINESS_PER_FEED = 1.5;     // 먹이 1회당 오염
@@ -7,14 +7,6 @@ export const MOOD_BORED_THRESHOLD = 35;
 
 /** 청소 비용(Pearl) — UI에서 사용 */
 export const CLEAN_TANK_COST_PEARL = 50;
-
-const HABITAT_KEYWORDS: Record<TankEnvironment, string[]> = {
-  coral_reef:   ['산호초', '열대'],
-  deep_sea:     ['심해', '온대'],
-  korean_river: ['담수', '강'],
-  amazon:       ['아마존', '담수'],
-  space:        [], // 우주는 어종 무관 — 항상 보너스
-};
 
 export interface ComfortBreakdown {
   total: number;        // 0~100
@@ -33,7 +25,6 @@ export interface ComfortBreakdown {
 export function computeFishComfort(
   fish: Fish,
   tank: Tank,
-  habitatLabel: string | undefined,
   now: number = Date.now(),
 ): ComfortBreakdown {
   const tips: string[] = [];
@@ -50,12 +41,8 @@ export function computeFishComfort(
   else if (count > 6) densityScore = 14;
   if (count > 8) tips.push('수조가 너무 붐벼요');
 
-  // 3) Habitat — 20점 만점 (불일치 시 8점 부분점수)
-  const keywords = HABITAT_KEYWORDS[tank.environment] ?? [];
-  const habitat = habitatLabel ?? '';
-  const habitatMatch = tank.environment === 'space' || keywords.some(k => habitat.includes(k));
-  const habitatScore = habitatMatch ? 20 : 8;
-  if (!habitatMatch && habitatLabel) tips.push(`${habitatLabel} 출신이라 환경이 안 맞아요`);
+  // 3) Habitat — 항상 만점. 환경 변경·이주 수단이 없어 페널티가 막다른 길이라 제거함.
+  const habitatScore = 20;
 
   // 4) Schooling — 10점 (같은 종 2마리 이상이면 만점)
   const sameCount = tank.fish.filter(f => f.speciesId === fish.speciesId).length;

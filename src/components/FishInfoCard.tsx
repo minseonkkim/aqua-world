@@ -55,8 +55,8 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed, onS
 
   // 쾌적도 — 카드 열 때 한 번 계산 (tank/fish 의존성으로 갱신)
   const comfort = useMemo(
-    () => activeTank ? computeFishComfort(fish, activeTank, species?.habitat) : null,
-    [fish, activeTank, species?.habitat],
+    () => activeTank ? computeFishComfort(fish, activeTank) : null,
+    [fish, activeTank],
   );
   const displayMood = comfort ? comfortToMood(comfort.total) : fish.mood;
   const comfortColor =
