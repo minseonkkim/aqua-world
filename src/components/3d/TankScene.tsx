@@ -665,7 +665,11 @@ function TankSceneImpl({
 
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
-    const t = clock.current.getElapsedTime();
+    // delta-time 정규화 — 60fps 기준(k=1). 기기·빌드별 FPS 차이로
+    // 물고기 속도가 달라지지 않도록 모든 프레임 단위 이동을 k로 스케일한다.
+    const dt = clock.current.getDelta();
+    const t = clock.current.elapsedTime;
+    const k = Math.min(dt * 60, 3); // 백그라운드 복귀 등 큰 끊김 시 순간이동 방지 상한
     const now = performance.now();
     if (waterRef.current) {
       (waterRef.current.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
@@ -678,9 +682,9 @@ function TankSceneImpl({
       for (let i = foods.length - 1; i >= 0; i--) {
         const fp = foods[i];
         if (fp.eaten) continue;
-        fp.mesh.position.add(fp.vel);
+        fp.mesh.position.addScaledVector(fp.vel, k);
         // 물 저항 — y vel 점진 가속
-        fp.vel.y = Math.max(fp.vel.y - 0.0003, -0.05);
+        fp.vel.y = Math.max(fp.vel.y - 0.0003 * k, -0.05);
         // 바닥/수명 도달 → 제거
         if (fp.mesh.position.y < FLOOR_Y + 0.1 || now - fp.bornAt > FOOD_LIFETIME_MS) {
           scene?.remove(fp.mesh);
@@ -722,7 +726,7 @@ function TankSceneImpl({
 
       if (nearestFood) {
         tmp.copy(nearestFood.mesh.position).sub(f.position).normalize().multiplyScalar(BOID_MAX_SPEED);
-        vel.lerp(tmp, 0.18);
+        vel.lerp(tmp, 1 - Math.pow(1 - 0.18, k));
         if (nearestDist < 0.25) {
           nearestFood.eaten = true;
           sceneRef.current?.remove(nearestFood.mesh);
@@ -769,20 +773,20 @@ function TankSceneImpl({
           accel.addScaledVector(limitVec(separation, BOID_MAX_FORCE), BOID_W_SEPARATION);
         }
         // bored 물고기는 천천히 바닥으로 가라앉음
-        if (sinkBias !== 0) vel.y += sinkBias;
-        vel.add(accel);
+        if (sinkBias !== 0) vel.y += sinkBias * k;
+        vel.addScaledVector(accel, k);
       }
 
       // 3) 경계 회피 — 벽 근처에서 중심 쪽으로 부드럽게 조향
       const m = BOID_BOUND_MARGIN;
       const halfX = boundsRef.current.halfX;
       const halfZ = boundsRef.current.halfZ;
-      if (f.position.x >  halfX - m) vel.x -= BOID_BOUND_FORCE;
-      else if (f.position.x < -halfX + m) vel.x += BOID_BOUND_FORCE;
-      if (f.position.y >  TANK_HALF_Y - m) vel.y -= BOID_BOUND_FORCE;
-      else if (f.position.y < -TANK_HALF_Y + m) vel.y += BOID_BOUND_FORCE;
-      if (f.position.z >  halfZ - m) vel.z -= BOID_BOUND_FORCE;
-      else if (f.position.z < -halfZ + m) vel.z += BOID_BOUND_FORCE;
+      if (f.position.x >  halfX - m) vel.x -= BOID_BOUND_FORCE * k;
+      else if (f.position.x < -halfX + m) vel.x += BOID_BOUND_FORCE * k;
+      if (f.position.y >  TANK_HALF_Y - m) vel.y -= BOID_BOUND_FORCE * k;
+      else if (f.position.y < -TANK_HALF_Y + m) vel.y += BOID_BOUND_FORCE * k;
+      if (f.position.z >  halfZ - m) vel.z -= BOID_BOUND_FORCE * k;
+      else if (f.position.z < -halfZ + m) vel.z += BOID_BOUND_FORCE * k;
 
       // 4) 속도 제한 (mood 가중치 반영)
       const speed = vel.length();
@@ -790,9 +794,9 @@ function TankSceneImpl({
       else if (speed > 1e-5 && speed < minSpeed) vel.multiplyScalar(minSpeed / speed);
 
       // 5) 위치 갱신 + 수직 미세 흔들림
-      f.position.x += vel.x;
-      f.position.y += vel.y + Math.sin(t * 1.5 + f.userData.phase) * 0.002;
-      f.position.z += vel.z;
+      f.position.x += vel.x * k;
+      f.position.y += (vel.y + Math.sin(t * 1.5 + f.userData.phase) * 0.002) * k;
+      f.position.z += vel.z * k;
 
       // 6) 하드 클램프 — 수조 밖 이탈 방지 (안전망)
       f.position.x = THREE.MathUtils.clamp(f.position.x, -halfX, halfX);
@@ -804,14 +808,14 @@ function TankSceneImpl({
         const targetYaw = Math.atan2(vel.x, vel.z);
         let delta = targetYaw - f.rotation.y;
         delta = Math.atan2(Math.sin(delta), Math.cos(delta));
-        f.rotation.y += delta * 0.12;
+        f.rotation.y += delta * (1 - Math.pow(1 - 0.12, k));
       }
     }
 
     // 거품 상승 + 좌우 흔들림 + 수면 도달 시 리셋
     bubblesRef.current.forEach(b => {
       const d = b.userData.bubble as BubbleData;
-      b.position.y += 0.008 * d.speed;
+      b.position.y += 0.008 * d.speed * k;
       b.position.x = d.baseX + Math.sin(t * 1.5 + d.wobblePhase) * d.wobbleAmp;
       b.position.z = d.baseZ + Math.cos(t * 1.2 + d.wobblePhase) * d.wobbleAmp * 0.6;
       if (b.position.y > WATER_Y - 0.05) {
