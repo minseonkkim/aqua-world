@@ -51,6 +51,8 @@ interface UserState {
   addExperience: (exp: number) => void;
   claimDailyLogin: () => void;
   recordFeed: () => boolean;
+  /** 날짜 변경(자정 리셋)을 반영한 오늘 남은 먹이주기 횟수 */
+  feedRemaining: () => number;
 
   addCollectedSpecies: (speciesId: string) => void;
 
@@ -240,6 +242,19 @@ export const useUserStore = create<UserState>()(
           },
         });
         return true;
+      },
+
+      feedRemaining: () => {
+        const { user } = get();
+        if (!user) return 0;
+        const lastReset = new Date(user.lastFeedResetAt);
+        const today = new Date();
+        const isNewDay =
+          lastReset.getDate() !== today.getDate() ||
+          lastReset.getMonth() !== today.getMonth() ||
+          lastReset.getFullYear() !== today.getFullYear();
+        const count = isNewDay ? 0 : user.feedCountToday;
+        return Math.max(0, CURRENCY.FEED_MAX_PER_DAY - count);
       },
 
       addCollectedSpecies: speciesId => {

@@ -48,6 +48,7 @@ export default function TankPage() {
     addPearl,
     spendPearl,
     recordFeed,
+    feedRemaining,
     pendingDailyReward,
     collectHatchedEgg,
     addCollectedSpecies,
@@ -471,7 +472,7 @@ export default function TankPage() {
     showToast(`🔧 수조 확장! 최대 ${getTankCapacity(lvl + 1)}마리`);
   }, [activeTankId, user?.pearl, spendPearl, expandTankCapacity]);
 
-  const remaining = 3 - (user?.feedCountToday ?? 0);
+  const remaining = feedRemaining();
 
   const handleCleanTank = () => {
     if (!activeTankId) return;
