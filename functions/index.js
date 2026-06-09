@@ -9,6 +9,7 @@ const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https")
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret } = require("firebase-functions/params");
+const logger = require("firebase-functions/logger");
 
 // 카카오 REST API 키 — `firebase functions:secrets:set KAKAO_REST_API_KEY` 로 주입.
 // 에뮬레이터에서는 functions/.env.local 의 KAKAO_REST_API_KEY 값을 사용한다.
@@ -29,6 +30,9 @@ admin.initializeApp();
 const db = admin.firestore();
 
 setGlobalOptions({ region: "asia-northeast3", maxInstances: 10 });
+
+// 부화 완료 판정 유예(초). 클라 UI(serverNow)와 서버 사이의 경계 떨림을 흡수한다.
+const HATCH_READY_GRACE_SECONDS = 2;
 
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────
 
@@ -136,8 +140,30 @@ exports.bootstrapUser = onCall(async (request) => {
     // 해제해 다음 휴면 시 다시 복귀 푸시를 받을 수 있게 한다. (notifyDormantUsers 참조)
     data.lastActiveAt = Date.now();
     data.reengageNotified = false;
+
+    // 본인 소유 탱크를 항상 함께 반환한다. 클라가 탱크를 못 받으면 게스트 잔재인 공유 id
+    // 'tank_default' 로 폴백해 다른 유저 탱크에 접근 → "본인 수조가 아닙니다" 가 났다.
+    // 탱크가 없거나(과거 손상/고아 계정) 소유자 불일치면 본인 것으로 복구한다(idempotent).
+    let tank = null;
+    const firstTankId = (data.tanks || [])[0];
+    if (firstTankId) {
+      const tSnap = await tankRef(firstTankId).get();
+      if (tSnap.exists && tSnap.data().ownerId === uid) tank = stripTank(tSnap.data());
+    }
+    if (!tank) {
+      const tankId = `tank_${uid}`;
+      const recovered = {
+        id: tankId, name: "나의 수조", environment: "coral_reef",
+        fish: [], decorations: [], cleanliness: 100, lightMode: "auto",
+        createdAt: Date.now(), updatedAt: Date.now(), ownerId: uid,
+      };
+      await tankRef(tankId).set(recovered, { merge: true });
+      if (!(data.tanks || []).includes(tankId)) data.tanks = [...(data.tanks || []), tankId];
+      tank = stripTank(recovered);
+    }
+
     await uRef.set(data, { merge: true });
-    return { user: data, created: false };
+    return { user: data, tank, created: false, serverTime: Date.now() };
   }
 
   const now = Date.now();
@@ -183,7 +209,7 @@ exports.bootstrapUser = onCall(async (request) => {
   batch.set(tankRef(tankId), { ...tank, ownerId: uid });
   await batch.commit();
 
-  return { user, tank, created: true };
+  return { user, tank, created: true, serverTime: Date.now() };
 });
 
 // ─── 일일 로그인 보상 ────────────────────────────────────────────────────────
@@ -275,9 +301,30 @@ exports.hatchEgg = onCall(async (request) => {
     const tankData = await readOwnedTank(tx, uid, tankId);
 
     const egg = user.inventory.find((e) => e.id === eggId);
-    if (!egg || !egg.isHatching) throw new HttpsError("failed-precondition", "부화 중인 알이 아닙니다.");
-    const elapsed = (Date.now() - egg.startedAt) / 1000;
-    if (elapsed < egg.hatchDuration) throw new HttpsError("failed-precondition", "아직 부화 중입니다.");
+    if (!egg) {
+      logger.warn("hatchEgg rejected: egg not found", {
+        uid, eggId,
+        inventoryIds: (user.inventory || []).map((e) => e.id),
+      });
+      throw new HttpsError("failed-precondition", "부화 중인 알이 아닙니다.");
+    }
+    if (!egg.isHatching) {
+      logger.warn("hatchEgg rejected: not hatching", { uid, eggId, tier: egg.tier });
+      throw new HttpsError("failed-precondition", "부화 중인 알이 아닙니다.");
+    }
+    // 클라 UI 가 serverNow() 로 완료를 판정하지만 편도 지연/세션 중 드리프트로 경계가 흔들릴 수
+    // 있다. 2초 유예로 그 떨림을 흡수 — 치팅 이득은 없으면서 "UI 완료/서버 거절" 찰나를 막는다.
+    const nowMs = Date.now();
+    const elapsed = (nowMs - egg.startedAt) / 1000;
+    if (elapsed < egg.hatchDuration - HATCH_READY_GRACE_SECONDS) {
+      logger.warn("hatchEgg rejected: not ready", {
+        uid, eggId, tier: egg.tier,
+        elapsed, hatchDuration: egg.hatchDuration,
+        shortBy: egg.hatchDuration - elapsed,
+        startedAt: egg.startedAt, now: nowMs,
+      });
+      throw new HttpsError("failed-precondition", "아직 부화 중입니다.");
+    }
 
     // ★ 종 추첨은 반드시 서버에서
     const speciesId = rollSpecies(egg.tier);

@@ -32,6 +32,7 @@ import {
   cleanTank as cleanTankServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
+import { serverNow } from '@/services/clock';
 
 interface PendingHatch {
   speciesId: string;
@@ -134,7 +135,7 @@ export default function TankPage() {
 
       // 부화 완료 감지 — 수확 가능 상태가 된 알에 1회 알림
       const inv = useUserStore.getState().user?.inventory ?? [];
-      const now = Date.now();
+      const now = serverNow();
       inv.forEach(egg => {
         if (!egg.isHatching) return;
         const elapsed = (now - egg.startedAt) / 1000;
@@ -321,8 +322,12 @@ export default function TankPage() {
       try {
         const res = await hatchEggServer({ eggId, tankId: activeTankId });
         setPendingHatch({ speciesId: res.speciesId, eggTier, storedInInventory: res.storedInInventory });
-      } catch {
-        showToast('아직 부화하지 않았습니다');
+      } catch (e) {
+        const err = e as { code?: string; message?: string };
+        console.error('hatchEgg failed', { eggId, tankId: activeTankId, code: err.code, message: err.message, error: e });
+        // 부화 미완료가 아닌 에러(수조 등)는 메시지를 그대로 보여줘 원인을 숨기지 않는다.
+        const ready = err.code === 'functions/failed-precondition' && err.message?.includes('부화');
+        showToast(ready ? '아직 부화하지 않았습니다' : (err.message ?? '수확에 실패했어요'));
       }
       return;
     }

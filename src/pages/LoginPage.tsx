@@ -95,7 +95,9 @@ export default function LoginPage() {
       ]);
       setUser(res.user);
       const loadedTanks = firestoreTanks.length > 0 ? firestoreTanks : res.tank ? [res.tank] : [];
-      if (loadedTanks.length > 0) setTanks(loadedTanks);
+      // 항상 setTanks 로 덮어쓴다 — 게스트로 먼저 플레이했을 때 남은 activeTankId('tank_default')
+      // 잔재를 지우기 위함. 그대로 두면 다른 유저 탱크로 요청해 "본인 수조가 아닙니다" 가 난다.
+      setTanks(loadedTanks);
       // 과거 클라-only 이동으로 생긴 손상(수조 초과·중복) 보정 (idempotent)
       if (loadedTanks[0]) reconcileFish({ tankId: loadedTanks[0].id }).catch(() => {});
 

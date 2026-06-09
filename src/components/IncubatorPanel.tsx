@@ -10,6 +10,7 @@ import {
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
 import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
+import { serverNow } from '@/services/clock';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -41,7 +42,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
   useEffect(() => {
     if (!egg.isHatching) return;
     const tick = () => {
-      const elapsed = (Date.now() - egg.startedAt) / 1000;
+      const elapsed = (serverNow() - egg.startedAt) / 1000;
       setRemaining(Math.max(0, egg.hatchDuration - elapsed));
     };
     tick();
@@ -51,7 +52,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
 
   const isReady = egg.isHatching && remaining <= 0;
   const pct = egg.isHatching
-    ? Math.min(100, ((Date.now() - egg.startedAt) / 1000 / egg.hatchDuration) * 100)
+    ? Math.min(100, ((serverNow() - egg.startedAt) / 1000 / egg.hatchDuration) * 100)
     : 0;
 
   return (

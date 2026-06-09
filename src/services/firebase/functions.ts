@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from './config';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
+import { syncServerClock } from '@/services/clock';
 import { User, Tank, EggTier, Fish, FishGrowthStage } from '@/types';
 
 /**
@@ -28,6 +29,8 @@ export function isCloudUser(): boolean {
 interface ServerResult {
   user: User;
   tank?: Tank;
+  /** 서버가 응답을 만든 시각(ms). 클럭 오프셋 동기화에 사용. */
+  serverTime?: number;
 }
 
 /**
@@ -57,6 +60,7 @@ function call<TData, TResult extends ServerResult>(name: string) {
     const fn = httpsCallable<TData, TResult>(functions, name);
     const res = await fn(data as TData);
     const result = res.data;
+    if (typeof result.serverTime === 'number') syncServerClock(result.serverTime);
     if (result.user) {
       // tutorialStep / decorationInventory 는 클라 UI 권위 — 서버 응답의 stale 값으로 덮어쓰지 않는다.
       const prev = useUserStore.getState().user;
@@ -72,7 +76,7 @@ function call<TData, TResult extends ServerResult>(name: string) {
 
 // ─── 부트스트랩 / 보상 ──────────────────────────────────────────────────────
 
-export const bootstrapUser = call<void, { user: User; tank?: Tank; created: boolean }>(
+export const bootstrapUser = call<void, { user: User; tank?: Tank; created: boolean; serverTime: number }>(
   'bootstrapUser',
 );
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, Egg, EggTier, FishRarity, Fish } from '../types';
+import { serverNow } from '../services/clock';
 import {
   COMPENDIUM_REWARDS,
   CompendiumReward,
@@ -167,7 +168,8 @@ export const useUserStore = create<UserState>()(
         if (!user) return null;
         const egg = user.inventory.find(e => e.id === eggId);
         if (!egg || !egg.isHatching) return null;
-        const elapsed = (Date.now() - egg.startedAt) / 1000;
+        // UI 게이트(IncubatorPanel)와 같은 시계 기준으로 판정 — 게스트는 오프셋 0.
+        const elapsed = (serverNow() - egg.startedAt) / 1000;
         if (elapsed < egg.hatchDuration) return null;
 
         const speciesId = rollSpecies(egg.tier);

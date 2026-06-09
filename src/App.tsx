@@ -25,20 +25,6 @@ import { unlockAudio } from '@/services/audio';
 import { analytics, identifyUser, setUserProps } from '@/services/analytics';
 import '@/store/useAudioStore'; // 영속 설정 복원 (rehydrate)
 
-function createDefaultTank() {
-  return {
-    id: 'tank_default',
-    name: '나의 수조',
-    environment: 'coral_reef' as const,
-    fish: [],
-    decorations: [],
-    cleanliness: 100,
-    lightMode: 'auto' as const,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-}
-
 export default function App() {
   const { isAuthenticated, isLoading, setLoading } = useUserStore();
   useFirestoreSync();
@@ -225,9 +211,10 @@ export default function App() {
               loadUserTanks(firebaseUser.uid),
             ]);
             store.setUser(res.user);
-            const tanks = fsTanks.length
-              ? fsTanks
-              : res.tank ? [res.tank] : [createDefaultTank()];
+            // 클라우드 유저는 항상 서버 권위 탱크를 쓴다. 공유 id 'tank_default' 로 폴백하면
+            // 다른 유저 탱크에 접근하게 되므로(=본인 수조 아님) 절대 fabricate 하지 않는다.
+            // bootstrapUser 가 기존 유저에게도 본인 탱크를 보장 반환한다.
+            const tanks = fsTanks.length ? fsTanks : res.tank ? [res.tank] : [];
             useTankStore.getState().setTanks(tanks);
             // 과거 클라-only 이동으로 생긴 손상(수조 초과·중복) 보정 (idempotent)
             if (tanks[0]) reconcileFish({ tankId: tanks[0].id }).catch(() => {});
