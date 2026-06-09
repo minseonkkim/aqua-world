@@ -938,6 +938,55 @@ exports.unregisterPushToken = onCall(async (request) => {
   return { ok: true };
 });
 
+// ─── 베타 인앱 피드백 수집 ───────────────────────────────────────────────────
+// 의견/버그 리포트를 feedback 컬렉션에 적재한다. 경제와 무관하므로 게스트(미인증)도
+// 제출할 수 있게 두되, 입력은 서버에서 검증·절단(slice)하고 메타데이터는 화이트리스트만 저장한다.
+// 읽기/쓰기는 Admin 만 가능(firestore.rules 에서 클라 접근 차단) — 콘솔에서 확인.
+exports.submitFeedback = onCall(async (request) => {
+  const data = request.data || {};
+  const type = ["bug", "suggestion", "other"].includes(data.type) ? data.type : "other";
+  const message = typeof data.message === "string" ? data.message.trim() : "";
+  if (!message) throw new HttpsError("invalid-argument", "내용을 입력해주세요.");
+  if (message.length > 2000) {
+    throw new HttpsError("invalid-argument", "내용이 너무 깁니다 (최대 2000자).");
+  }
+  const contact = typeof data.contact === "string" ? data.contact.trim().slice(0, 200) : "";
+  const m = data.meta && typeof data.meta === "object" ? data.meta : {};
+  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : null);
+
+  const uid = (request.auth && request.auth.uid) || null;
+  let displayName = null;
+  if (uid) {
+    try {
+      const snap = await userRef(uid).get();
+      if (snap.exists) displayName = snap.data().displayName || null;
+    } catch (_) {
+      /* 유저 조회 실패는 무시 — 피드백 본문은 저장한다. */
+    }
+  }
+
+  await db.collection("feedback").add({
+    uid,
+    displayName,
+    type,
+    message: message.slice(0, 2000),
+    contact: contact || null,
+    meta: {
+      platform: str(m.platform, 20),
+      native: !!m.native,
+      appVersion: str(m.appVersion, 20),
+      route: str(m.route, 100),
+      userAgent: str(m.userAgent, 300),
+      language: str(m.language, 20),
+      screen: str(m.screen, 30),
+    },
+    status: "new",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return { ok: true };
+});
+
 // ─── 부화 완료 백그라운드 푸시 (1분 주기 스케줄) ─────────────────────────────
 // ⚠️ Cloud Scheduler 사용 — Blaze(종량제) 요금제 + `firebase deploy` 필요.
 

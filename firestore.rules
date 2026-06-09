@@ -35,6 +35,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // 베타 피드백 — 서버(submitFeedback, Admin)만 기록한다. 클라이언트 직접 접근 전면 차단.
+    match /feedback/{feedbackId} {
+      allow read, write: if false;
+    }
+
     match /tanks/{tankId} {
       allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
       allow create: if false;

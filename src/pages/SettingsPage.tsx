@@ -10,6 +10,8 @@ import { deleteAccount } from '@/services/firebase/functions';
 import { isPushSupported, enablePush, disablePush, getPushPermission } from '@/services/firebase/messaging';
 import { analytics, identifyUser } from '@/services/analytics';
 import { isNative } from '@/services/platform';
+import { APP_VERSION } from '@/services/feedback';
+import FeedbackModal from '@/components/FeedbackModal';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -19,6 +21,7 @@ export default function SettingsPage() {
   const [pushSupported, setPushSupported] = useState(false);
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     isPushSupported().then(setPushSupported);
@@ -177,9 +180,20 @@ export default function SettingsPage() {
         </>
       )}
 
+      <Section title="피드백" />
+      <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
+        <div
+          onClick={() => { playSFX('click'); setFeedbackOpen(true); }}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
+        >
+          <span style={{ fontSize: 15 }}>💬 의견 보내기</span>
+          <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
+        </div>
+      </div>
+
       <Section title="정보" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
-        <Row label="버전"><span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>1.0.0</span></Row>
+        <Row label="버전"><span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{APP_VERSION}</span></Row>
         <div
           onClick={() => navigate('/privacy')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
@@ -228,6 +242,8 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ height: 24 }} />
+
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </div>
   );
 }
