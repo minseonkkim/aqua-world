@@ -7,6 +7,7 @@ import { signInWithGoogle, startKakaoLogin } from '@/services/firebase/auth';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/firebase/functions';
 import { analytics, identifyUser, setUserProps } from '@/services/analytics';
+import { isNative } from '@/services/platform';
 import { Tank } from '@/types';
 import { DailyRewardResult } from '@/store/useUserStore';
 
@@ -196,7 +197,7 @@ export default function LoginPage() {
 
   return (
     <div style={{
-      flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+      flex: 1, display: 'flex', flexDirection: 'column',
       padding: '48px 32px', background: 'var(--color-bg)',
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
@@ -205,11 +206,11 @@ export default function LoginPage() {
         <p style={{ color: 'var(--color-text-secondary)' }}>나만의 3D 수족관</p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <button className="btn" style={{ background: '#000', color: '#fff', gap: 10 }} onClick={() => comingSoon('Apple')} disabled={loading}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 'auto', marginBottom: 40 }}>
+        {/* <button className="btn" style={{ background: '#000', color: '#fff', gap: 10 }} onClick={() => comingSoon('Apple')} disabled={loading}>
           <AppleLogo />
           Apple로 계속하기
-        </button>
+        </button> */}
         <button className="btn" style={{ background: '#fff', color: '#1f1f1f', gap: 10 }} onClick={handleGoogleLogin} disabled={loading}>
           <GoogleLogo />
           Google로 계속하기
@@ -218,9 +219,13 @@ export default function LoginPage() {
           <KakaoLogo />
           카카오로 계속하기
         </button>
-        <button className="btn btn-ghost" onClick={guestLogin} disabled={loading}>
-          {loading ? '로딩...' : '게스트로 시작 (Pearl 200 지급)'}
-        </button>
+        {/* 게스트 로그인은 웹에서만 노출.
+            네이티브 앱(Capacitor)에서는 서버 미동기화로 데이터 유실·추적 단절 우려가 있어 숨김. */}
+        {!isNative() && (
+          <button className="btn btn-ghost" onClick={guestLogin} disabled={loading}>
+            {loading ? '로딩...' : '게스트로 시작 (Pearl 200 지급)'}
+          </button>
+        )}
       </div>
 
       <p style={{ textAlign: 'center', color: 'var(--color-text-disabled)', fontSize: 12, lineHeight: 1.6 }}>
