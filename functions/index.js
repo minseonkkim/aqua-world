@@ -872,6 +872,124 @@ exports.purchaseDecoration = onCall(async (request) => {
   });
 });
 
+// ─── 수조 꾸미기 저장 (데코 배치/이동/삭제 + 조명/환경/프리셋) ─────────────────
+// 외형이지만 데코 배치는 구매한 decorationInventory 를 소비하므로 서버가 권위로 관리한다.
+// 클라가 '현재 수조 외형 전체 스냅샷'을 보내면, 서버는 기존 저장본과의 modelId 증감(delta)을
+// 계산해 인벤토리를 가감한다(증가분=소비, 감소분=환불). 전체 스냅샷 방식이라 호출이 디바운스로
+// 합쳐지거나 순서가 바뀌어도 항상 같은 상태로 수렴한다.
+
+const VALID_ENVIRONMENTS = new Set(["coral_reef", "deep_sea", "korean_river", "amazon", "space"]);
+const VALID_LIGHT_MODES = new Set(["auto", "day", "night", "sunset"]);
+const VALID_DECO_TYPES = new Set(["plant", "rock", "driftwood", "ornament"]);
+const MAX_DECORATIONS_PER_TANK = 60;
+const MAX_PRESET_SLOTS = 3;
+
+function finiteNum(v, fallback = 0) {
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/** 클라가 보낸 데코 1건을 정제. 미지의 modelId 는 null 반환(거부). */
+function sanitizeDecoration(d) {
+  if (!d || typeof d !== "object") return null;
+  if (G.DECORATION_PRICES[d.modelId] == null) return null;
+  const p = d.position || {};
+  const r = d.rotation || {};
+  return {
+    id: typeof d.id === "string" && d.id ? d.id : genId("deco"),
+    type: VALID_DECO_TYPES.has(d.type) ? d.type : "ornament",
+    modelId: d.modelId,
+    position: { x: finiteNum(p.x), y: finiteNum(p.y), z: finiteNum(p.z) },
+    rotation: { x: finiteNum(r.x), y: finiteNum(r.y), z: finiteNum(r.z) },
+    scale: Math.max(0.2, Math.min(3, finiteNum(d.scale, 1))),
+  };
+}
+
+function modelCounts(list) {
+  const m = {};
+  for (const d of list || []) m[d.modelId] = (m[d.modelId] || 0) + 1;
+  return m;
+}
+
+exports.saveTankCosmetics = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const data = request.data || {};
+  const tankId = data.tankId;
+  if (!tankId) throw new HttpsError("invalid-argument", "tankId 필요");
+
+  // 입력 정제는 트랜잭션 밖에서 먼저 (트랜잭션은 재시도될 수 있으므로 가볍게 유지).
+  const rawDecos = Array.isArray(data.decorations) ? data.decorations : [];
+  if (rawDecos.length > MAX_DECORATIONS_PER_TANK) {
+    throw new HttpsError("invalid-argument", "데코가 너무 많습니다.");
+  }
+  const newDecos = rawDecos.map(sanitizeDecoration).filter(Boolean);
+
+  const rawPresets = Array.isArray(data.decorationPresets) ? data.decorationPresets : [];
+  const presets = rawPresets.slice(0, MAX_PRESET_SLOTS).map((p) => ({
+    slot: Math.max(0, Math.min(MAX_PRESET_SLOTS - 1, Math.floor(finiteNum(p && p.slot)))),
+    decorations: (Array.isArray(p && p.decorations) ? p.decorations : [])
+      .slice(0, MAX_DECORATIONS_PER_TANK)
+      .map(sanitizeDecoration)
+      .filter(Boolean),
+    savedAt: finiteNum(p && p.savedAt) || Date.now(),
+  }));
+
+  const lightMode = VALID_LIGHT_MODES.has(data.lightMode) ? data.lightMode : undefined;
+  const environment = VALID_ENVIRONMENTS.has(data.environment) ? data.environment : undefined;
+  // 청결도는 클라가 감쇠/오염을 계산하는 클라 권위 필드(서버는 감쇠 모델이 없음).
+  // 그대로 저장한다(기존 클라 직접쓰기와 동일 신뢰 수준). 청소(100 복구)는 cleanTank 가
+  // Pearl 을 받고 처리하므로, 여기서 raise 를 막아도 청소-동시성에서 되레 청소가 씹힐 수 있어
+  // last-write-wins(passthrough)로 둔다.
+  const cleanliness =
+    typeof data.cleanliness === "number" && Number.isFinite(data.cleanliness)
+      ? Math.max(0, Math.min(100, data.cleanliness))
+      : undefined;
+  const lastCleanlinessTickAt =
+    typeof data.lastCleanlinessTickAt === "number" && Number.isFinite(data.lastCleanlinessTickAt)
+      ? data.lastCleanlinessTickAt
+      : undefined;
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    // 인벤토리 delta: (새 배치 - 기존 저장 배치) 만큼 소비(>0)/환불(<0).
+    const oldCounts = modelCounts(tankData.decorations);
+    const newCounts = modelCounts(newDecos);
+    const inv = { ...(user.decorationInventory || {}) };
+    const models = new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)]);
+    for (const modelId of models) {
+      const delta = (newCounts[modelId] || 0) - (oldCounts[modelId] || 0);
+      if (delta === 0) continue;
+      const have = inv[modelId] || 0;
+      if (delta > 0 && have < delta) {
+        throw new HttpsError("failed-precondition", "데코 인벤토리가 부족합니다.");
+      }
+      const next = have - delta; // delta>0 → 소비, delta<0 → 환불
+      if (next > 0) inv[modelId] = next;
+      else delete inv[modelId];
+    }
+
+    const now = Date.now();
+    user.decorationInventory = inv;
+    const newTank = {
+      ...tankData,
+      decorations: newDecos,
+      decorationPresets: presets,
+      updatedAt: now,
+    };
+    if (lightMode) newTank.lightMode = lightMode;
+    if (environment) newTank.environment = environment;
+    if (cleanliness !== undefined) newTank.cleanliness = cleanliness;
+    if (lastCleanlinessTickAt !== undefined) newTank.lastCleanlinessTickAt = lastCleanlinessTickAt;
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), newTank);
+    return { user, tank: stripTank(newTank) };
+  });
+});
+
 // ─── 먹이 티켓 구매 (Pearl 차감 + feedTickets 증가) ──────────────────────────
 
 exports.purchaseFeedTicket = onCall(async (request) => {

@@ -3,7 +3,7 @@ import { functions } from './config';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { syncServerClock } from '@/services/clock';
-import { User, Tank, EggTier, Fish, FishGrowthStage } from '@/types';
+import { User, Tank, EggTier, Fish, FishGrowthStage, TankDecoration, DecorationPreset, TankEnvironment } from '@/types';
 
 /**
  * 모든 경제 연산은 서버(Cloud Functions)에서 실행된다.
@@ -157,6 +157,37 @@ export async function prepareAdReward(
 export const claimAdReward = call<{ nonceId: string }, { user: User; applied: unknown }>(
   'claimAdReward',
 );
+
+// ─── 수조 꾸미기 영속화 (데코 배치/조명/환경/프리셋) ─────────────────────────
+// 클라가 활성 수조의 외형 전체 스냅샷을 보내면 서버가 decorationInventory 를 권위로
+// 가감(배치=소비/삭제=환불)하고 저장한다. 응답의 tank 는 적용하지 않는다 — 디바운스
+// 저장이 도는 동안 사용자가 만든 더 최신 낙관적 편집을 되돌리지 않기 위함.
+// 대신 인벤토리만 서버 권위로 반영한다.
+export interface TankCosmeticsPayload {
+  tankId: string;
+  decorations: TankDecoration[];
+  decorationPresets: DecorationPreset[];
+  lightMode: Tank['lightMode'];
+  environment: TankEnvironment;
+  cleanliness: number;
+  lastCleanlinessTickAt?: number;
+}
+export async function saveTankCosmetics(data: TankCosmeticsPayload): Promise<void> {
+  if (!functions) throw new FunctionsUnavailableError();
+  const fn = httpsCallable<TankCosmeticsPayload, ServerResult>(functions, 'saveTankCosmetics');
+  const res = await fn(data);
+  if (typeof res.data.serverTime === 'number') syncServerClock(res.data.serverTime);
+  // 데코 인벤토리만 서버 권위로 반영(진행 중인 낙관적 외형 편집은 덮어쓰지 않음).
+  // 실제로 달라진 경우에만 setUser 해 불필요한 리렌더를 막는다.
+  const prev = useUserStore.getState().user;
+  if (prev && res.data.user) {
+    const serverInv = res.data.user.decorationInventory ?? {};
+    const localInv = prev.decorationInventory ?? {};
+    if (JSON.stringify(serverInv) !== JSON.stringify(localInv)) {
+      useUserStore.getState().setUser({ ...prev, decorationInventory: serverInv });
+    }
+  }
+}
 
 // ─── 튜토리얼 진행도 영속화 ──────────────────────────────────────────────────
 // 완료/스킵(-1) 신호를 서버에 저장해 재설치(localStorage 소실) 후에도 다시 뜨지 않게 한다.

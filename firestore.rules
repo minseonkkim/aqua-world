@@ -2,32 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 클라이언트 쓰기에서 해당 필드가 그대로(변경 없음)인지 검사.
-    // 서버(Admin SDK / Cloud Functions)는 규칙을 우회하므로 이 함수들만 해당 필드를 바꿀 수 있다.
-    function userUnchanged() {
-      return request.resource.data.pearl == resource.data.pearl
-        && request.resource.data.starCoral == resource.data.starCoral
-        && request.resource.data.inventory == resource.data.inventory
-        && request.resource.data.level == resource.data.level
-        && request.resource.data.experience == resource.data.experience
-        && request.resource.data.loginStreak == resource.data.loginStreak
-        && request.resource.data.lastLoginAt == resource.data.lastLoginAt
-        && request.resource.data.collectedSpecies == resource.data.collectedSpecies
-        && request.resource.data.feedCountToday == resource.data.feedCountToday
-        && request.resource.data.lastFeedResetAt == resource.data.lastFeedResetAt
-        && request.resource.data.claimedCompendiumMilestones == resource.data.claimedCompendiumMilestones
-        && request.resource.data.fishInventory == resource.data.fishInventory;
-    }
+    // 모든 쓰기는 서버(Cloud Functions / Admin SDK)만 수행한다 — Admin SDK 는 규칙을
+    // 우회하므로 클라이언트 직접 쓰기는 전면 차단한다. 클라는 본인 문서 읽기만 가능.
+    // (경제·어종은 전용 함수, 꾸미기/청결도/데코 인벤토리는 saveTankCosmetics,
+    //  튜토리얼 완료 신호는 setTutorialStep 으로만 변경된다.)
 
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
-      // 신규 유저 생성은 서버(bootstrapUser)만
-      allow create: if false;
-      // 본인 문서만, 그리고 경제 필드는 변경 불가 (꾸미기/튜토리얼 등만 허용)
-      allow update: if request.auth != null
-        && request.auth.uid == uid
-        && userUnchanged();
-      allow delete: if false;
+      allow write: if false;
     }
 
     // 인앱결제 멱등 기록 — 서버(Admin)만 읽고 쓴다. 클라이언트 접근 전면 차단.
@@ -42,14 +24,7 @@ service cloud.firestore {
 
     match /tanks/{tankId} {
       allow read: if request.auth != null && resource.data.ownerId == request.auth.uid;
-      allow create: if false;
-      // 본인 수조만, fish 배열(성장·보유 어종)은 변경 불가. 꾸미기/환경/조명은 허용.
-      allow update: if request.auth != null
-        && resource.data.ownerId == request.auth.uid
-        && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.fish == resource.data.fish
-        && request.resource.data.capacityLevel == resource.data.capacityLevel;
-      allow delete: if false;
+      allow write: if false;
     }
   }
 }

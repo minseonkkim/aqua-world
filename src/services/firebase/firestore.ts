@@ -1,7 +1,6 @@
 import {
   doc,
   getDoc,
-  setDoc,
   collection,
   query,
   where,
@@ -10,6 +9,12 @@ import {
 import { db } from './config';
 import { User, Tank } from '@/types';
 
+// 쓰기는 전부 Cloud Functions(서버 권위)를 거치고, 클라이언트 직접 쓰기는 보안 규칙으로
+// 전면 차단된다. 여기서는 읽기(부트스트랩 복원)만 제공한다.
+// - 경제/어종: bootstrapUser·feedFish·placeFish 등 전용 함수
+// - 꾸미기/청결도/데코 인벤토리: saveTankCosmetics
+// - 튜토리얼 완료 신호: setTutorialStep
+
 // ─── User ────────────────────────────────────────────────────────────────────
 
 export async function loadUserFromFirestore(uid: string): Promise<User | null> {
@@ -17,33 +22,6 @@ export async function loadUserFromFirestore(uid: string): Promise<User | null> {
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return null;
   return snap.data() as User;
-}
-
-// 서버 권위 필드 — 클라이언트는 절대 쓰지 않는다(보안 규칙으로도 차단됨).
-const USER_SERVER_OWNED_FIELDS = [
-  'pearl',
-  'starCoral',
-  'inventory',
-  'level',
-  'experience',
-  'loginStreak',
-  'lastLoginAt',
-  'collectedSpecies',
-  'feedCountToday',
-  'lastFeedResetAt',
-  'feedTickets',
-  'claimedCompendiumMilestones',
-  'fcmTokens',
-  'nextHatchAt',
-  'fishInventory',
-] as const;
-
-export async function saveUserToFirestore(user: User): Promise<void> {
-  if (!db || user.id.startsWith('guest_')) return;
-  // 꾸미기/튜토리얼 등 클라 소유 필드만 저장 (경제 필드는 서버가 소유)
-  const payload: Record<string, unknown> = { ...user };
-  for (const f of USER_SERVER_OWNED_FIELDS) delete payload[f];
-  await setDoc(doc(db, 'users', user.id), payload, { merge: true });
 }
 
 // ─── Tank ────────────────────────────────────────────────────────────────────
@@ -59,13 +37,4 @@ export async function loadUserTanks(uid: string): Promise<Tank[]> {
     void _o;
     return tank;
   });
-}
-
-export async function saveTankToFirestore(tank: Tank, ownerId: string): Promise<void> {
-  if (!db) return;
-  // fish(성장·보유 어종) / capacityLevel(Pearl 비용 확장)은 서버 소유 — 클라는 꾸미기/환경/조명만 저장
-  const { fish: _fish, capacityLevel: _cap, ...rest } = tank;
-  void _fish;
-  void _cap;
-  await setDoc(doc(db, 'tanks', tank.id), { ...rest, ownerId }, { merge: true });
 }
