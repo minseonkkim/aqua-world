@@ -46,13 +46,17 @@ function genId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+// 일일 리셋(먹이/로그인 보상)은 KST(Asia/Seoul) 자정 기준. Cloud Functions 런타임은 UTC라
+// 그냥 getDate() 를 쓰면 클라(브라우저 로컬 TZ)와 '날짜'가 어긋나 일일 카운터가 desync 된다.
+// 한국은 DST 가 없어 고정 +9h 오프셋이 안전. 클라 src/utils/day.ts isNewDayKst 와 동일 규칙.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 function isNewDay(lastMs, nowMs) {
-  const a = new Date(lastMs);
-  const b = new Date(nowMs);
+  const a = new Date(lastMs + KST_OFFSET_MS);
+  const b = new Date(nowMs + KST_OFFSET_MS);
   return (
-    a.getDate() !== b.getDate() ||
-    a.getMonth() !== b.getMonth() ||
-    a.getFullYear() !== b.getFullYear()
+    a.getUTCDate() !== b.getUTCDate() ||
+    a.getUTCMonth() !== b.getUTCMonth() ||
+    a.getUTCFullYear() !== b.getUTCFullYear()
   );
 }
 

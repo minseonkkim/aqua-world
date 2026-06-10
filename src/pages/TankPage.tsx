@@ -16,7 +16,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
-import { Fish, TankDecoration, TankEnvironment, EggTier } from '@/types';
+import { Fish, TankDecoration, TankEnvironment, EggTier, User, Tank } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
 import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL } from '@/constants';
@@ -107,6 +107,33 @@ export default function TankPage() {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
   };
+
+  // 먹이 서버 호출 실패 시 공통 처리.
+  // - '오늘 먹이 소진'(failed-precondition): 서버 권위. 클라 카운터가 서버보다 낮게 스테일하면
+  //   계속 헛탭→400→롤백이 반복되므로, 클라 feedCountToday 를 한도로 맞춰 UI 를 즉시 동기화한다.
+  // - 그 외 에러: 진짜 사유를 가리지 않도록 별도 메시지. (기존엔 모든 에러를 '소진'으로 위장했음)
+  const handleFeedError = useCallback(
+    (err: unknown, prevUser: User | null, prevTanks: Tank[]) => {
+      useTankStore.getState().setTanks(prevTanks);
+      const code = (err as { code?: string } | null)?.code;
+      const exhausted = code === 'functions/failed-precondition' || code === 'failed-precondition';
+      if (exhausted) {
+        const base = prevUser ?? useUserStore.getState().user;
+        if (base) {
+          useUserStore.getState().setUser({
+            ...base,
+            feedCountToday: feedMax(tanks),
+            lastFeedResetAt: Date.now(),
+          });
+        }
+        showToast('오늘 먹이를 모두 사용했어요 🐟');
+      } else {
+        useUserStore.getState().setUser(prevUser);
+        showToast('먹이주기에 실패했어요. 잠시 후 다시 시도해주세요 🐟');
+      }
+    },
+    [feedMax, tanks],
+  );
 
   const handleFishClick = useCallback((f: Fish) => setSelectedFishId(f.id), []);
 
@@ -233,11 +260,7 @@ export default function TankPage() {
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
-      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(() => {
-        useUserStore.getState().setUser(prevUser);
-        useTankStore.getState().setTanks(prevTanks);
-        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
-      });
+      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
       return;
     }
     if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
@@ -260,11 +283,7 @@ export default function TankPage() {
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
-      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(() => {
-        useUserStore.getState().setUser(prevUser);
-        useTankStore.getState().setTanks(prevTanks);
-        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
-      });
+      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
       return true;
     }
     if (!recordFeed(tanks)) {
@@ -276,7 +295,7 @@ export default function TankPage() {
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
     return true;
-  }, [recordFeed, addPearl, activeTankId, contaminate, feedAllFish, tanks]);
+  }, [recordFeed, addPearl, activeTankId, contaminate, feedAllFish, tanks, handleFeedError]);
 
   const handleFeedFish = async (fish: Fish) => {
     if (!activeTankId) return;
@@ -300,11 +319,7 @@ export default function TankPage() {
         analytics.fishGrowStage(result.newStage);
         showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
       } else showToast(fedToast);
-      feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(() => {
-        useUserStore.getState().setUser(prevUser);
-        useTankStore.getState().setTanks(prevTanks);
-        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
-      });
+      feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(err => handleFeedError(err, prevUser, prevTanks));
       return;
     }
     if (!recordFeed(tanks)) {

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User, Egg, EggTier, FishRarity, Fish, Tank } from '../types';
 import { serverNow } from '../services/clock';
+import { isNewDayKst } from '../utils/day';
 import {
   COMPENDIUM_REWARDS,
   CompendiumReward,
@@ -205,14 +206,7 @@ export const useUserStore = create<UserState>()(
         if (!user) return;
 
         const now = Date.now();
-        const lastLogin = new Date(user.lastLoginAt);
-        const today = new Date(now);
-        const isNewDay =
-          lastLogin.getDate() !== today.getDate() ||
-          lastLogin.getMonth() !== today.getMonth() ||
-          lastLogin.getFullYear() !== today.getFullYear();
-
-        if (!isNewDay) return;
+        if (!isNewDayKst(user.lastLoginAt, now)) return;
 
         const streak = (user.loginStreak % 7) + 1;
         const reward = DAILY_LOGIN_REWARDS[streak - 1];
@@ -231,12 +225,7 @@ export const useUserStore = create<UserState>()(
         const { user } = get();
         if (!user) return false;
         const now = Date.now();
-        const lastReset = new Date(user.lastFeedResetAt);
-        const today = new Date(now);
-        const isNewDay =
-          lastReset.getDate() !== today.getDate() ||
-          lastReset.getMonth() !== today.getMonth() ||
-          lastReset.getFullYear() !== today.getFullYear();
+        const isNewDay = isNewDayKst(user.lastFeedResetAt, now);
 
         const count = isNewDay ? 0 : user.feedCountToday;
         const max = computeFeedMaxPerDay(tanks);
@@ -273,12 +262,7 @@ export const useUserStore = create<UserState>()(
       feedRemaining: tanks => {
         const { user } = get();
         if (!user) return 0;
-        const lastReset = new Date(user.lastFeedResetAt);
-        const today = new Date();
-        const isNewDay =
-          lastReset.getDate() !== today.getDate() ||
-          lastReset.getMonth() !== today.getMonth() ||
-          lastReset.getFullYear() !== today.getFullYear();
+        const isNewDay = isNewDayKst(user.lastFeedResetAt, Date.now());
         const count = isNewDay ? 0 : user.feedCountToday;
         const max = computeFeedMaxPerDay(tanks);
         return Math.max(0, max - count);
