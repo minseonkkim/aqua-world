@@ -40,6 +40,8 @@ interface TankState {
 
   /** 특정 물고기에 먹이를 줘서 성장 가속. 승급 가능하면 즉시 다음 단계로. */
   feedFish: (tankId: string, fishId: string) => { newStage: FishGrowthStage | null } | null;
+  /** 먹이 뿌리기 — 수조 전체 물고기 배고픔 해소(lastFedAt 갱신 + mood). 성장 가속은 없음. */
+  feedAllFish: (tankId: string) => void;
   /** 활성 수조의 모든 물고기 성장 상태를 검사하여 승급 처리. 승급된 fish id 목록 반환. */
   tickFishGrowth: (tankId: string) => string[];
 
@@ -204,6 +206,26 @@ export const useTankStore = create<TankState>()(
           ),
         }));
         return { newStage: advanced ? advanced.growthStage : null };
+      },
+
+      feedAllFish: tankId => {
+        const now = Date.now();
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? {
+                  ...t,
+                  fish: t.fish.map(f => ({
+                    ...f,
+                    lastFedAt: now,
+                    mood: 'happy',
+                    feedCount: f.feedCount + 1,
+                  })),
+                  updatedAt: now,
+                }
+              : t,
+          ),
+        }));
       },
 
       savePreset: (tankId, slot) => {

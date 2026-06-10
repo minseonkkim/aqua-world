@@ -107,6 +107,8 @@ export const analytics = {
   // 경제/상점
   purchaseDecoration: (modelId: string, price: number) =>
     track('purchase_decoration', { model_id: modelId, price }),
+  purchaseFeedTicket: (pkgId: string, amount: number, price: number) =>
+    track('purchase_feed_ticket', { pkg_id: pkgId, amount, price }),
   purchaseStarCoral: (pkgId: string, amount: number, priceKrw: number) =>
     track('purchase_star_coral', { pkg_id: pkgId, amount, price_krw: priceKrw }),
   exchangePearl: (pkgId: string) => track('exchange_pearl', { pkg_id: pkgId }),

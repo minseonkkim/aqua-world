@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User, Egg, EggTier, FishRarity, Fish } from '../types';
+import { User, Egg, EggTier, FishRarity, Fish, Tank } from '../types';
 import { serverNow } from '../services/clock';
 import {
   COMPENDIUM_REWARDS,
@@ -10,6 +10,7 @@ import {
   LEVEL_EXP_TABLE,
   RARITY_BY_EGG,
   SPECIES_BY_RARITY,
+  computeFeedMaxPerDay,
 } from '../constants';
 
 export interface DailyRewardResult {
@@ -50,9 +51,15 @@ interface UserState {
 
   addExperience: (exp: number) => void;
   claimDailyLogin: () => void;
-  recordFeed: () => boolean;
-  /** 날짜 변경(자정 리셋)을 반영한 오늘 남은 먹이주기 횟수 */
-  feedRemaining: () => number;
+  // 먹이 한도는 수조 규모(모든 수조 합산)에 의존한다. 스토어 간 순환참조를 피하려고
+  // 호출 측(수조 보유)이 tanks 를 넘긴다.
+  recordFeed: (tanks: Tank[]) => boolean;
+  /** 보유 수조 규모로 결정되는 하루 무료 먹이 횟수 */
+  feedMax: (tanks: Tank[]) => number;
+  /** 날짜 변경(자정 리셋)을 반영한 오늘 남은 무료 먹이주기 횟수 */
+  feedRemaining: (tanks: Tank[]) => number;
+  /** 먹이 티켓 추가 (상점 구매) */
+  addFeedTickets: (n: number) => void;
 
   addCollectedSpecies: (speciesId: string) => void;
 
@@ -220,7 +227,7 @@ export const useUserStore = create<UserState>()(
         }));
       },
 
-      recordFeed: () => {
+      recordFeed: tanks => {
         const { user } = get();
         if (!user) return false;
         const now = Date.now();
@@ -232,19 +239,38 @@ export const useUserStore = create<UserState>()(
           lastReset.getFullYear() !== today.getFullYear();
 
         const count = isNewDay ? 0 : user.feedCountToday;
-        if (count >= CURRENCY.FEED_MAX_PER_DAY) return false;
+        const max = computeFeedMaxPerDay(tanks);
 
-        set({
-          user: {
-            ...user,
-            feedCountToday: count + 1,
-            lastFeedResetAt: isNewDay ? now : user.lastFeedResetAt,
-          },
-        });
-        return true;
+        // 무료 횟수가 남았으면 무료 우선 소비
+        if (count < max) {
+          set({
+            user: {
+              ...user,
+              feedCountToday: count + 1,
+              lastFeedResetAt: isNewDay ? now : user.lastFeedResetAt,
+            },
+          });
+          return true;
+        }
+        // 무료 소진 → 먹이 티켓 소비
+        if ((user.feedTickets ?? 0) > 0) {
+          set({
+            user: {
+              ...user,
+              feedTickets: (user.feedTickets ?? 0) - 1,
+              // 새 날이면 무료 카운터도 리셋해 둔다(이후 무료부터 소비)
+              feedCountToday: isNewDay ? 0 : user.feedCountToday,
+              lastFeedResetAt: isNewDay ? now : user.lastFeedResetAt,
+            },
+          });
+          return true;
+        }
+        return false;
       },
 
-      feedRemaining: () => {
+      feedMax: tanks => computeFeedMaxPerDay(tanks),
+
+      feedRemaining: tanks => {
         const { user } = get();
         if (!user) return 0;
         const lastReset = new Date(user.lastFeedResetAt);
@@ -254,7 +280,14 @@ export const useUserStore = create<UserState>()(
           lastReset.getMonth() !== today.getMonth() ||
           lastReset.getFullYear() !== today.getFullYear();
         const count = isNewDay ? 0 : user.feedCountToday;
-        return Math.max(0, CURRENCY.FEED_MAX_PER_DAY - count);
+        const max = computeFeedMaxPerDay(tanks);
+        return Math.max(0, max - count);
+      },
+
+      addFeedTickets: n => {
+        const { user } = get();
+        if (!user) return;
+        set({ user: { ...user, feedTickets: (user.feedTickets ?? 0) + n } });
       },
 
       addCollectedSpecies: speciesId => {

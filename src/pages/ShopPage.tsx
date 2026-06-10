@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useModalStore } from '@/store/useModalStore';
-import { CURRENCY, EGG_HATCH_TIME } from '@/constants';
+import { CURRENCY, EGG_HATCH_TIME, FEED_TICKET_PACKAGES } from '@/constants';
 import { EggTier } from '@/types';
 import { DECORATION_CATALOG } from '@/utils/decorationModels';
 import {
@@ -11,6 +11,7 @@ import {
   purchaseEgg,
   exchangePearl,
   purchaseDecoration,
+  purchaseFeedTicket,
 } from '@/services/firebase/functions';
 import {
   isBillingAvailable,
@@ -68,7 +69,7 @@ const RARITY_BG: Record<EggTier, string> = {
 };
 
 const TAB_LABEL: Record<ShopTab, string> = {
-  egg: '🥚 알',
+  egg: '🥚 알·먹이',
   decoration: '🪴 꾸미기',
   pearl: '🪙 코인',
   star_coral: '🌸 Star Coral',
@@ -90,6 +91,7 @@ export default function ShopPage() {
     spendStarCoral,
     addEggToInventory,
     addDecorationInventory,
+    addFeedTickets,
   } = useUserStore();
   const [toast, setToast] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -230,6 +232,39 @@ export default function ShopPage() {
     showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
   };
 
+  const buyFeedTicket = async (pkg: (typeof FEED_TICKET_PACKAGES)[number]) => {
+    if ((user?.pearl ?? 0) < pkg.price) {
+      playSFX('error');
+      showToast(`🪙 코인 ${pkg.price - (user?.pearl ?? 0)} 부족`);
+      return;
+    }
+    const confirmed = await useModalStore.getState().confirm({
+      emoji: '🍖',
+      title: `먹이 티켓 ${pkg.amount}장 구매`,
+      message: `🪙 ${pkg.price} 로 먹이 티켓 ${pkg.amount}장을 구매할까요?`,
+      confirmText: '구매',
+    });
+    if (!confirmed) return;
+    analytics.purchaseFeedTicket(pkg.id, pkg.amount, pkg.price);
+    if (isCloudUser()) {
+      optimistic(
+        () => {
+          spendPearl(pkg.price);
+          addFeedTickets(pkg.amount);
+          playSFX('coin');
+          showToast(`🍖 먹이 티켓 ${pkg.amount}장 획득!`);
+        },
+        () => purchaseFeedTicket({ pkgId: pkg.id }),
+        () => { playSFX('error'); showToast('구매에 실패했습니다'); },
+      );
+      return;
+    }
+    if (!spendPearl(pkg.price)) return;
+    addFeedTickets(pkg.amount);
+    playSFX('coin');
+    showToast(`🍖 먹이 티켓 ${pkg.amount}장 획득!`);
+  };
+
   const buyDecoration = async (modelId: string, name: string, price: number, emoji: string) => {
     if ((user?.pearl ?? 0) < price) {
       playSFX('error');
@@ -314,6 +349,7 @@ export default function ShopPage() {
 
       {tab === 'egg' && (
         <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginTop: 2 }}>🥚 부화 알</div>
           {EGG_ITEMS.map(item => (
             <div
               key={item.tier}
@@ -364,6 +400,72 @@ export default function ShopPage() {
               </button>
             </div>
           ))}
+
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginTop: 12 }}>🍖 먹이 티켓</div>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--color-text-secondary)',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 10,
+              padding: '8px 12px',
+            }}
+          >
+            🎟️ 보유 티켓 {user?.feedTickets ?? 0}장 · 하루 무료 횟수를 다 쓰면 1장씩 사용돼요
+          </div>
+          {FEED_TICKET_PACKAGES.map(pkg => {
+            const canAfford = (user?.pearl ?? 0) >= pkg.price;
+            const unit = Math.round(pkg.price / pkg.amount);
+            return (
+              <div
+                key={pkg.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'var(--color-surface)',
+                  borderRadius: 14,
+                  padding: '14px 16px',
+                  color: '#fff',
+                  textAlign: 'left',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  opacity: canAfford ? 1 : 0.6,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 36 }}>🍖</span>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>먹이 티켓 {pkg.amount}장</div>
+                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                      장당 🪙 {unit}
+                      {pkg.amount > 1 && (
+                        <span style={{ color: 'var(--color-success)', fontWeight: 600 }}> · 묶음 할인</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => buyFeedTicket(pkg)}
+                  style={{
+                    background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
+                    color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    whiteSpace: 'nowrap',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  🪙 {pkg.price}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 

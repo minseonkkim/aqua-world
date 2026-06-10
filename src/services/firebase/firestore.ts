@@ -31,6 +31,7 @@ const USER_SERVER_OWNED_FIELDS = [
   'collectedSpecies',
   'feedCountToday',
   'lastFeedResetAt',
+  'feedTickets',
   'claimedCompendiumMilestones',
   'fcmTokens',
   'nextHatchAt',

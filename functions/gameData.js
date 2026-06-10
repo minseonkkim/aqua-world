@@ -76,8 +76,31 @@ const NEXT_STAGE = {
 const FEED_GROWTH_BOOST_SECONDS = 300;
 
 // ─── 먹이 ───
-const FEED_MAX_PER_DAY = 3;
+// 하루 무료 먹이 횟수는 보유 수조 규모에 비례(클라 src/constants 의 computeFeedMaxPerDay 와 일치).
+//   기본 3회 + 추가 수조 1개당 +2회 + 수조 확장 레벨 1당 +1회 (상한 20)
+const FEED_MAX_PER_DAY = 3; // 기본값(수조 0개 폴백)
+const FEED_BASE_PER_DAY = 3;
+const FEED_EXTRA_TANK_BONUS = 2;
+const FEED_MAX_CAP = 20;
 const FEED_PEARL_REWARD = 10;
+
+/** 수조 capacityLevel 배열로부터 하루 무료 먹이 횟수 계산 */
+function computeFeedMaxPerDay(capacityLevels) {
+  if (!capacityLevels || capacityLevels.length === 0) return FEED_BASE_PER_DAY;
+  const sumLevel = capacityLevels.reduce(
+    (s, lv) => s + Math.max(0, Math.min(TANK_MAX_CAPACITY_LEVEL, lv || 0)),
+    0,
+  );
+  const extraTanks = Math.max(0, capacityLevels.length - 1);
+  return Math.min(FEED_MAX_CAP, FEED_BASE_PER_DAY + extraTanks * FEED_EXTRA_TANK_BONUS + sumLevel);
+}
+
+// 먹이 티켓 — 무료 소진 후 1장씩 소비(코인 구매). 클라 src/constants FEED_TICKET_PACKAGES 와 일치.
+const FEED_TICKET_PACKAGES = {
+  feed_ticket_1: { amount: 1, price: 30 },
+  feed_ticket_5: { amount: 5, price: 135 },
+  feed_ticket_15: { amount: 15, price: 360 },
+};
 
 // ─── 일일 로그인 보상 (7일 주기) ───
 const DAILY_LOGIN_REWARDS = [
@@ -154,6 +177,11 @@ module.exports = {
   NEXT_STAGE,
   FEED_GROWTH_BOOST_SECONDS,
   FEED_MAX_PER_DAY,
+  FEED_BASE_PER_DAY,
+  FEED_EXTRA_TANK_BONUS,
+  FEED_MAX_CAP,
+  computeFeedMaxPerDay,
+  FEED_TICKET_PACKAGES,
   FEED_PEARL_REWARD,
   DAILY_LOGIN_REWARDS,
   PEARL_PACKAGES,

@@ -38,6 +38,31 @@ export const NEXT_STAGE: Record<FishGrowthStage, FishGrowthStage | null> = {
 // 먹이 한 번이 성장을 가속하는 시간 (초) — 5분
 export const FEED_GROWTH_BOOST_SECONDS = 300;
 
+// ==================== 먹이 한도 ====================
+// 하루 무료 먹이 횟수는 보유 수조 규모에 비례한다(모든 수조 합산).
+//   기본 3회 + 추가 수조 1개당 +2회 + 수조 확장 레벨 1당 +1회
+export const FEED_BASE_PER_DAY = 3;
+export const FEED_EXTRA_TANK_BONUS = 2;
+export const FEED_MAX_CAP = 20; // 과도한 누적 방지 상한
+
+/** 보유 수조들로부터 하루 무료 먹이 횟수를 계산 (클라/서버 공통 규칙) */
+export function computeFeedMaxPerDay(tanks: { capacityLevel?: number }[]): number {
+  if (!tanks.length) return FEED_BASE_PER_DAY;
+  const sumLevel = tanks.reduce(
+    (s, t) => s + Math.max(0, Math.min(TANK_MAX_CAPACITY_LEVEL, t.capacityLevel ?? 0)),
+    0,
+  );
+  const extraTanks = Math.max(0, tanks.length - 1);
+  return Math.min(FEED_MAX_CAP, FEED_BASE_PER_DAY + extraTanks * FEED_EXTRA_TANK_BONUS + sumLevel);
+}
+
+// 먹이 티켓 — 무료 횟수 소진 후 1회씩 소비하는 소모성 아이템 (코인 구매)
+export const FEED_TICKET_PACKAGES = [
+  { id: 'feed_ticket_1', amount: 1, price: 30 },
+  { id: 'feed_ticket_5', amount: 5, price: 135 },
+  { id: 'feed_ticket_15', amount: 15, price: 360 },
+] as const;
+
 // 성장 스테이지별 메시 스케일
 export const STAGE_SCALE: Record<FishGrowthStage, number> = {
   egg: 0.3,

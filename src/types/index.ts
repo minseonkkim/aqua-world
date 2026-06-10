@@ -101,6 +101,8 @@ export interface User {
   collectedSpecies: string[]; // species IDs
   feedCountToday: number;
   lastFeedResetAt: number;
+  /** 먹이 티켓 보유 수 — 무료 횟수 소진 후 1장씩 소비 */
+  feedTickets?: number;
   /** 튜토리얼 진행도: 0=시작 전, 1~5=진행 중, -1=완료/스킵 */
   tutorialStep?: number;
   /** 데코 인벤토리: modelId → 보유 수량 */

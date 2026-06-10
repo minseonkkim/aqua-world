@@ -49,6 +49,7 @@ export default function TankPage() {
     spendPearl,
     recordFeed,
     feedRemaining,
+    feedMax,
     pendingDailyReward,
     collectHatchedEgg,
     addCollectedSpecies,
@@ -59,7 +60,7 @@ export default function TankPage() {
     removeFishFromInventory,
   } = useUserStore();
   const {
-    tanks, activeTankId, addFishToTank, removeFish, feedFish, tickFishGrowth,
+    tanks, activeTankId, addFishToTank, removeFish, feedFish, feedAllFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
     savePreset, loadPreset, deletePreset, setLightMode,
     tickMoodAndCleanliness, cleanTank, contaminate, expandTankCapacity,
@@ -226,21 +227,23 @@ export default function TankPage() {
   const handleFeed = () => {
     if (isCloudUser()) {
       const prevUser = useUserStore.getState().user;
-      if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
+      const prevTanks = useTankStore.getState().tanks;
+      if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
       addPearl(10);
-      if (activeTankId) contaminate(activeTankId);
-      showToast('+10 🪙 Pearl 획득!');
+      if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
+      showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
-      sprinkleFeed().catch(() => {
+      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(() => {
         useUserStore.getState().setUser(prevUser);
+        useTankStore.getState().setTanks(prevTanks);
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       });
       return;
     }
-    if (!recordFeed()) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
+    if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
-    if (activeTankId) contaminate(activeTankId);
-    showToast('+10 🪙 Pearl 획득!');
+    if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
+    showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
   };
 
@@ -248,41 +251,44 @@ export default function TankPage() {
   const handleSurfaceFeed = useCallback((): boolean => {
     if (isCloudUser()) {
       const prevUser = useUserStore.getState().user;
-      if (!recordFeed()) {
+      const prevTanks = useTankStore.getState().tanks;
+      if (!recordFeed(tanks)) {
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
         return false;
       }
       addPearl(10);
-      if (activeTankId) contaminate(activeTankId);
+      if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
-      sprinkleFeed().catch(() => {
+      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(() => {
         useUserStore.getState().setUser(prevUser);
+        useTankStore.getState().setTanks(prevTanks);
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       });
       return true;
     }
-    if (!recordFeed()) {
+    if (!recordFeed(tanks)) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       return false;
     }
     addPearl(10);
-    if (activeTankId) contaminate(activeTankId);
+    if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
     return true;
-  }, [recordFeed, addPearl, activeTankId, contaminate]);
+  }, [recordFeed, addPearl, activeTankId, contaminate, feedAllFish, tanks]);
 
   const handleFeedFish = async (fish: Fish) => {
     if (!activeTankId) return;
-    if (fish.growthStage === 'large') {
-      showToast('이미 최대 성장 단계입니다');
-      return;
-    }
+    // 다 자란(large) 물고기도 먹일 수 있다 — 성장은 멈췄지만 배고픔/기분에 영향을 준다.
+    const fedToast =
+      fish.growthStage === 'large'
+        ? `🍖 ${fish.name} 배부르게 먹었어요 · +10 🪙`
+        : `🍖 +5분 성장 가속 · +10 🪙`;
     if (isCloudUser()) {
       const prevUser = useUserStore.getState().user;
       const prevTanks = useTankStore.getState().tanks;
-      if (!recordFeed()) {
+      if (!recordFeed(tanks)) {
         showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
         return;
       }
@@ -293,7 +299,7 @@ export default function TankPage() {
       if (result?.newStage) {
         analytics.fishGrowStage(result.newStage);
         showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
-      } else showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+      } else showToast(fedToast);
       feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(() => {
         useUserStore.getState().setUser(prevUser);
         useTankStore.getState().setTanks(prevTanks);
@@ -301,7 +307,7 @@ export default function TankPage() {
       });
       return;
     }
-    if (!recordFeed()) {
+    if (!recordFeed(tanks)) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       return;
     }
@@ -313,7 +319,7 @@ export default function TankPage() {
       analytics.fishGrowStage(result.newStage);
       showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
     } else {
-      showToast(`🍖 +5분 성장 가속 · +10 🪙`);
+      showToast(fedToast);
     }
   };
 
@@ -472,7 +478,7 @@ export default function TankPage() {
     showToast(`🔧 수조 확장! 최대 ${getTankCapacity(lvl + 1)}마리`);
   }, [activeTankId, user?.pearl, spendPearl, expandTankCapacity]);
 
-  const remaining = feedRemaining();
+  const remaining = feedRemaining(tanks);
 
   const handleCleanTank = () => {
     if (!activeTankId) return;
@@ -728,7 +734,16 @@ export default function TankPage() {
       {!decorationMode && !photoMode && (
         <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { icon: '🍖', label: `먹이\n${remaining}/3`, action: handleFeed },
+            {
+              icon: '🍖',
+              label:
+                remaining > 0
+                  ? `먹이\n${remaining}/${feedMax(tanks)}`
+                  : (user?.feedTickets ?? 0) > 0
+                    ? `먹이\n🎟️${user?.feedTickets ?? 0}`
+                    : `먹이\n0/${feedMax(tanks)}`,
+              action: handleFeed,
+            },
             {
               icon: '💧',
               label: `청소\n${CLEAN_TANK_COST_PEARL}🪙`,
@@ -860,6 +875,8 @@ export default function TankPage() {
         <FishInfoCard
           fish={selectedFish}
           feedRemaining={remaining}
+          feedMax={feedMax(tanks)}
+          feedTickets={user?.feedTickets ?? 0}
           onClose={() => setSelectedFishId(null)}
           onFeed={() => handleFeedFish(selectedFish)}
           onStore={() => handleStoreFish(selectedFish)}

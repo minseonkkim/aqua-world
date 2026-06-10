@@ -181,6 +181,7 @@ export default function LoginPage() {
       collectedSpecies: [],
       feedCountToday: 0,
       lastFeedResetAt: Date.now(),
+      feedTickets: 0,
       tutorialStep: 0,
     });
 

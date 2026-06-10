@@ -95,6 +95,7 @@ export const claimMilestone = call<{ pct: number }, { user: User; reward: unknow
 export const purchaseEgg = call<{ tier: EggTier }, { user: User }>('purchaseEgg');
 export const exchangePearl = call<{ pkgId: string }, { user: User }>('exchangePearl');
 export const purchaseDecoration = call<{ modelId: string }, { user: User }>('purchaseDecoration');
+export const purchaseFeedTicket = call<{ pkgId: string }, { user: User }>('purchaseFeedTicket');
 
 // Star Coral 구매: Google Play Billing 영수증(purchaseToken)을 서버가 Play Developer API 로
 // 검증한 뒤에만 지급한다. 무검증 지급(구 purchaseStarCoral)은 서버에서 폐기됨.
@@ -105,7 +106,7 @@ export const verifyStarCoralPurchase = call<
 
 // ─── 부화 / 먹이 ────────────────────────────────────────────────────────────
 
-export const sprinkleFeed = call<void, { user: User }>('sprinkleFeed');
+export const sprinkleFeed = call<{ tankId: string }, { user: User; tank?: Tank }>('sprinkleFeed');
 
 export const startHatching = call<{ eggId: string }, { user: User }>('startHatching');
 

@@ -31,13 +31,17 @@ const GROWTH_EMOJI: Record<string, string> = {
 interface Props {
   fish: Fish;
   feedRemaining: number;
+  /** 오늘 무료 먹이 최대 횟수(수조 규모 기반) */
+  feedMax: number;
+  /** 보유 먹이 티켓 수 */
+  feedTickets: number;
   onClose: () => void;
   onFeed: () => void;
   /** 이 물고기를 수조에서 빼서 보관함으로 이동 */
   onStore?: () => void;
 }
 
-export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed, onStore }: Props) {
+export default function FishInfoCard({ fish, feedRemaining, feedMax, feedTickets, onClose, onFeed, onStore }: Props) {
   const { getSpeciesById } = useFishStore();
   const species = getSpeciesById(fish.speciesId);
   const activeTank = useTankStore(s => s.tanks.find(t => t.id === s.activeTankId) ?? null);
@@ -66,7 +70,9 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed, onS
     : '#e57373';
 
   const isMax = fish.growthStage === 'large';
-  const canFeed = feedRemaining > 0 && !isMax;
+  const usingTicket = feedRemaining <= 0 && feedTickets > 0;
+  // large(최종 단계)도 먹일 수 있다 — 성장은 멈췄지만 배고픔/기분에 영향을 준다.
+  const canFeed = feedRemaining > 0 || feedTickets > 0;
 
   return (
     <div
@@ -246,7 +252,9 @@ export default function FishInfoCard({ fish, feedRemaining, onClose, onFeed, onS
               cursor: canFeed ? 'pointer' : 'not-allowed',
             }}
           >
-            🍖 먹이주기 {isMax ? '' : `(${feedRemaining}/3)`}
+            {usingTicket
+              ? `🎟️ 티켓 먹이주기 (${feedTickets}장)`
+              : `🍖 먹이주기 (${feedRemaining}/${feedMax})`}
           </button>
           <button
             className="btn"

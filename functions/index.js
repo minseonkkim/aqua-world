@@ -129,6 +129,23 @@ function stripTank(tankWithOwner) {
   return tank;
 }
 
+/**
+ * 유저 보유 수조들을 읽어 하루 무료 먹이 횟수를 계산.
+ * 트랜잭션 규칙상 모든 read 는 write 이전에 호출해야 한다.
+ */
+async function userFeedMax(tx, uid, user) {
+  const ids = Array.isArray(user.tanks) ? user.tanks : [];
+  if (ids.length === 0) return G.FEED_BASE_PER_DAY;
+  const levels = [];
+  for (const id of ids) {
+    const snap = await tx.get(tankRef(id));
+    if (snap.exists && snap.data().ownerId === uid) {
+      levels.push(snap.data().capacityLevel || 0);
+    }
+  }
+  return G.computeFeedMaxPerDay(levels);
+}
+
 // ─── 신규 유저 부트스트랩 ────────────────────────────────────────────────────
 
 exports.bootstrapUser = onCall(async (request) => {
@@ -191,6 +208,7 @@ exports.bootstrapUser = onCall(async (request) => {
     collectedSpecies: [],
     feedCountToday: 0,
     lastFeedResetAt: now,
+    feedTickets: 0,
     tutorialStep: 0,
     lastActiveAt: now,
     reengageNotified: false,
@@ -392,14 +410,20 @@ exports.feedFish = onCall(async (request) => {
 
     const target = (tankData.fish || []).find((f) => f.id === fishId);
     if (!target) throw new HttpsError("not-found", "물고기 없음");
-    if (target.growthStage === "large") throw new HttpsError("failed-precondition", "이미 최대 성장");
+    // large(최종 단계)도 먹일 수 있다 — 성장 가속은 무효지만 배고픔/기분에 반영된다.
+
+    // 수조 규모 기반 무료 한도(모든 read 는 아래 write 이전에 수행)
+    const feedMax = await userFeedMax(tx, uid, user);
 
     const now = Date.now();
-    // 일일 먹이 제한
+    // 일일 먹이 제한 — 무료 우선, 소진 시 티켓 1장 소비
     const lastReset = user.lastFeedResetAt || 0;
     const newDay = isNewDay(lastReset, now);
     const count = newDay ? 0 : user.feedCountToday || 0;
-    if (count >= G.FEED_MAX_PER_DAY) throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+    const useFree = count < feedMax;
+    if (!useFree && (user.feedTickets || 0) <= 0) {
+      throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+    }
 
     // 성장 가속 적용
     const boosted = {
@@ -415,7 +439,12 @@ exports.feedFish = onCall(async (request) => {
 
     // 재화·카운트 갱신
     user.pearl = (user.pearl || 0) + G.FEED_PEARL_REWARD;
-    user.feedCountToday = count + 1;
+    if (useFree) {
+      user.feedCountToday = count + 1;
+    } else {
+      user.feedTickets = (user.feedTickets || 0) - 1;
+      user.feedCountToday = newDay ? 0 : user.feedCountToday || 0;
+    }
     user.lastFeedResetAt = newDay ? now : lastReset;
 
     tx.set(userRef(uid), user);
@@ -615,24 +644,50 @@ exports.reconcileFish = onCall(async (request) => {
   });
 });
 
-// ─── 먹이 뿌리기 (특정 물고기 없이 일일 제한 + 진주 보상만) ──────────────────
+// ─── 먹이 뿌리기 (수조 전체 물고기 배고픔 해소 + 일일 제한 + 진주 보상) ────────
 
 exports.sprinkleFeed = onCall(async (request) => {
   const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef(uid));
     if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
     const user = snap.data();
+    // 모든 read 는 write 이전에. 대상 수조(있으면)와 한도 계산용 수조들을 먼저 읽는다.
+    const tankData = tankId ? await readOwnedTank(tx, uid, tankId) : null;
+    const feedMax = await userFeedMax(tx, uid, user);
+
     const now = Date.now();
     const lastReset = user.lastFeedResetAt || 0;
     const newDay = isNewDay(lastReset, now);
     const count = newDay ? 0 : user.feedCountToday || 0;
-    if (count >= G.FEED_MAX_PER_DAY) throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+    const useFree = count < feedMax;
+    if (!useFree && (user.feedTickets || 0) <= 0) {
+      throw new HttpsError("failed-precondition", "오늘 먹이 소진");
+    }
 
     user.pearl = (user.pearl || 0) + G.FEED_PEARL_REWARD;
-    user.feedCountToday = count + 1;
+    if (useFree) {
+      user.feedCountToday = count + 1;
+    } else {
+      user.feedTickets = (user.feedTickets || 0) - 1;
+      user.feedCountToday = newDay ? 0 : user.feedCountToday || 0;
+    }
     user.lastFeedResetAt = newDay ? now : lastReset;
     tx.set(userRef(uid), user);
+
+    // 뿌리기는 수조 전체를 먹인다 — 모든 물고기 배고픔 해소(성장 가속은 개별 먹이주기 전용).
+    if (tankData) {
+      const fedFish = (tankData.fish || []).map((f) => ({
+        ...f,
+        lastFedAt: now,
+        mood: "happy",
+        feedCount: (f.feedCount || 0) + 1,
+      }));
+      const newTank = { ...tankData, fish: fedFish, updatedAt: now };
+      tx.set(tankRef(tankId), newTank);
+      return { user, tank: stripTank(newTank) };
+    }
     return { user };
   });
 });
@@ -793,6 +848,26 @@ exports.purchaseDecoration = onCall(async (request) => {
     const inv = { ...(user.decorationInventory || {}) };
     inv[modelId] = (inv[modelId] || 0) + 1;
     user.decorationInventory = inv;
+    tx.set(userRef(uid), user);
+    return { user };
+  });
+});
+
+// ─── 먹이 티켓 구매 (Pearl 차감 + feedTickets 증가) ──────────────────────────
+
+exports.purchaseFeedTicket = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const pkgId = request.data && request.data.pkgId;
+  const pkg = G.FEED_TICKET_PACKAGES[pkgId];
+  if (!pkg) throw new HttpsError("invalid-argument", "잘못된 패키지");
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef(uid));
+    if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = snap.data();
+    if ((user.pearl || 0) < pkg.price) throw new HttpsError("failed-precondition", "Pearl 부족");
+    user.pearl -= pkg.price;
+    user.feedTickets = (user.feedTickets || 0) + pkg.amount;
     tx.set(userRef(uid), user);
     return { user };
   });
