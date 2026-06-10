@@ -100,9 +100,26 @@ export default function FishInfoCard({ fish, feedRemaining, feedMax, feedTickets
             background: `${color}33`,
             border: `2px solid ${color}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28,
+            fontSize: 28, overflow: 'hidden',
           }}>
-            {GROWTH_EMOJI[fish.growthStage]}
+            {species?.thumbnailPath ? (
+              <img
+                src={`${import.meta.env.BASE_URL}${species.thumbnailPath}`}
+                alt={species.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  img.style.display = 'none';
+                  const parent = img.parentElement;
+                  if (parent && !parent.querySelector('.fish-icon-fallback')) {
+                    const span = document.createElement('span');
+                    span.className = 'fish-icon-fallback';
+                    span.textContent = GROWTH_EMOJI[fish.growthStage];
+                    parent.appendChild(span);
+                  }
+                }}
+              />
+            ) : GROWTH_EMOJI[fish.growthStage]}
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
