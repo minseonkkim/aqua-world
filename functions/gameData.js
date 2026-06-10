@@ -83,6 +83,8 @@ const FEED_BASE_PER_DAY = 3;
 const FEED_EXTRA_TANK_BONUS = 2;
 const FEED_MAX_CAP = 20;
 const FEED_PEARL_REWARD = 10;
+// 먹이 1회당 수조 오염량(청결도 감소). 클라 src/utils/mood.ts 의 CLEANLINESS_PER_FEED 와 일치.
+const CLEANLINESS_PER_FEED = 1.5;
 
 /** 수조 capacityLevel 배열로부터 하루 무료 먹이 횟수 계산 */
 function computeFeedMaxPerDay(capacityLevels) {
@@ -183,6 +185,7 @@ module.exports = {
   computeFeedMaxPerDay,
   FEED_TICKET_PACKAGES,
   FEED_PEARL_REWARD,
+  CLEANLINESS_PER_FEED,
   DAILY_LOGIN_REWARDS,
   PEARL_PACKAGES,
   STAR_CORAL_PACKAGES,

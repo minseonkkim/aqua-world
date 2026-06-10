@@ -456,6 +456,12 @@ exports.feedFish = onCall(async (request) => {
     const finalFish = advanced || boosted;
     const fishList = (tankData.fish || []).map((f) => (f.id === fishId ? finalFish : f));
 
+    // 먹이는 수조를 오염시킨다 — 클라 contaminate() 와 동일하게 청결도를 감소(서버 권위).
+    const cleanliness = Math.max(
+      0,
+      (typeof tankData.cleanliness === "number" ? tankData.cleanliness : 100) - G.CLEANLINESS_PER_FEED,
+    );
+
     // 재화·카운트 갱신
     user.pearl = (user.pearl || 0) + G.FEED_PEARL_REWARD;
     if (useFree) {
@@ -466,11 +472,12 @@ exports.feedFish = onCall(async (request) => {
     }
     user.lastFeedResetAt = newDay ? now : lastReset;
 
+    const newTank = { ...tankData, fish: fishList, cleanliness, updatedAt: now };
     tx.set(userRef(uid), user);
-    tx.set(tankRef(tankId), { ...tankData, fish: fishList, updatedAt: now });
+    tx.set(tankRef(tankId), newTank);
     return {
       user,
-      tank: stripTank({ ...tankData, fish: fishList, updatedAt: now }),
+      tank: stripTank(newTank),
       newStage: advanced ? advanced.growthStage : null,
     };
   });
@@ -703,7 +710,12 @@ exports.sprinkleFeed = onCall(async (request) => {
         mood: "happy",
         feedCount: (f.feedCount || 0) + 1,
       }));
-      const newTank = { ...tankData, fish: fedFish, updatedAt: now };
+      // 먹이는 수조를 오염시킨다 — 클라 contaminate() 와 동일하게 청결도 감소(서버 권위).
+      const cleanliness = Math.max(
+        0,
+        (typeof tankData.cleanliness === "number" ? tankData.cleanliness : 100) - G.CLEANLINESS_PER_FEED,
+      );
+      const newTank = { ...tankData, fish: fedFish, cleanliness, updatedAt: now };
       tx.set(tankRef(tankId), newTank);
       return { user, tank: stripTank(newTank) };
     }
