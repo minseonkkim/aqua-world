@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const EFFECTIVE_DATE = '2026년 6월 1일';
+const REVISED_DATE = '2026년 6월 10일';
 const OPERATOR_NAME = '김민선';
 const OPERATOR_EMAIL = 'minsun9856@gmail.com';
 const OPERATOR_PHONE = '010-7176-9856';
@@ -65,7 +66,7 @@ export default function TermsPage() {
 
       <div style={{ padding: '0 16px 32px' }}>
         <p style={{ ...pStyle, color: 'var(--color-text-secondary)', fontSize: 12 }}>
-          시행일 {EFFECTIVE_DATE} · 최종 개정 {EFFECTIVE_DATE}
+          시행일 {EFFECTIVE_DATE} · 최종 개정 {REVISED_DATE}
         </p>
 
         <h2 style={sectionStyle}>제1조 (목적)</h2>
@@ -83,7 +84,7 @@ export default function TermsPage() {
           <li style={liStyle}><strong>"게스트"</strong>란 회원가입 없이 기기 내 로컬 데이터만으로 서비스를 이용하는 자를 말합니다.</li>
           <li style={liStyle}><strong>"콘텐츠"</strong>란 서비스 내에 게시되거나 송신되는 모든 정보·텍스트·이미지·캡처 이미지를 말합니다.</li>
           <li style={liStyle}><strong>"게임 재화"</strong>란 서비스 내에서 사용되는 가상의 화폐(Pearl 및 Star Coral)와 아이템(알·꾸미기 오브젝트·물고기 등)을 말합니다.</li>
-          <li style={liStyle}><strong>"유료 재화"</strong>란 향후 도입될 예정인 결제를 통해 충전되는 Star Coral 및 유료 패키지를 말합니다.</li>
+          <li style={liStyle}><strong>"유료 재화"</strong>란 Google Play 인앱결제를 통해 충전되는 Star Coral 및 유료 패키지를 말합니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제3조 (약관의 명시와 개정)</h2>
@@ -102,12 +103,14 @@ export default function TermsPage() {
               <li style={liStyle}>알 부화·물고기 성장·도감 수집 기능</li>
               <li style={liStyle}>어항 꾸미기 및 사진 캡처·공유 기능</li>
               <li style={liStyle}>일일 보상·이벤트·미션 기능</li>
+              <li style={liStyle}>보상형 광고 시청을 통한 게임 재화 획득</li>
               <li style={liStyle}>친구·시즌 패스 등 향후 확장 기능</li>
               <li style={liStyle}>기타 운영자가 추가로 개발하거나 제휴를 통해 제공하는 일체의 서비스</li>
             </ul>
           </li>
           <li style={liStyle}>서비스는 연중무휴, 1일 24시간 제공함을 원칙으로 합니다. 다만 정기 점검, 시스템 업그레이드, 천재지변, 통신 장애 등 부득이한 경우에는 일시적으로 중단될 수 있습니다.</li>
           <li style={liStyle}>운영자는 서비스의 내용을 변경할 수 있으며, 중대한 변경의 경우 사전에 공지합니다.</li>
+          <li style={liStyle}>서비스에는 보상형 광고(AdMob 등 제3자 광고)가 포함될 수 있으며, 광고 시청 시 게임 재화가 지급될 수 있습니다. 광고 제공 과정에서 광고 식별자 등이 수집·이용되는 사항은 개인정보 처리방침에 따릅니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제5조 (서비스의 중단)</h2>
@@ -161,7 +164,7 @@ export default function TermsPage() {
           <li style={liStyle}>서비스 내 사용되는 게임 재화는 다음과 같이 구분됩니다.
             <ul style={{ paddingLeft: 18, marginTop: 4 }}>
               <li style={liStyle}><strong>Pearl(진주):</strong> 무료 재화. 일일 보상, 먹이주기 보상, 도감 마일스톤 등으로 획득.</li>
-              <li style={liStyle}><strong>Star Coral(스타산호):</strong> 향후 결제를 통해 충전될 예정인 유료 재화. 현재는 무료 보상으로만 지급됩니다.</li>
+              <li style={liStyle}><strong>Star Coral(스타산호):</strong> Google Play 인앱결제로 충전하거나 보상형 광고·이벤트 보상으로 획득할 수 있는 유료 재화.</li>
             </ul>
           </li>
           <li style={liStyle}>게임 재화는 운영자가 제공하는 가상의 데이터이며 현금화·환전이 불가능합니다. 이용자는 게임 재화에 대해 소유권이 아닌 이용권만을 가집니다.</li>
@@ -171,7 +174,7 @@ export default function TermsPage() {
 
         <h2 style={sectionStyle}>제11조 (결제 및 환불)</h2>
         <ol style={olStyle}>
-          <li style={liStyle}>현재 서비스는 무료로 제공되며, 결제 기능은 도입되지 않았습니다. 향후 유료 재화(Star Coral 등) 결제 기능이 추가될 경우 본 약관 개정을 통해 결제 수단·환불 정책을 사전 공지합니다.</li>
+          <li style={liStyle}>서비스는 기본적으로 무료로 제공되며, 일부 유료 재화(Star Coral 등)는 Google Play 인앱결제를 통해 구매할 수 있습니다. 결제는 Google Play 결제 시스템을 통해 이루어지며, 결제 금액·수단은 결제 시점에 화면에 표시됩니다.</li>
           <li style={liStyle}>유료 결제 도입 후, 이용자는 「전자상거래 등에서의 소비자보호에 관한 법률」 제17조에 따라 결제일로부터 7일 이내에 청약을 철회할 수 있습니다. 다만 다음의 경우에는 청약철회가 제한될 수 있습니다.
             <ul style={{ paddingLeft: 18, marginTop: 4 }}>
               <li style={liStyle}>이용자가 유료 재화를 일부 또는 전부 사용한 경우</li>
@@ -226,6 +229,7 @@ export default function TermsPage() {
 
         <h2 style={sectionStyle}>부칙</h2>
         <p style={pStyle}>본 약관은 {EFFECTIVE_DATE}부터 시행됩니다.</p>
+        <p style={pStyle}>본 약관은 {REVISED_DATE} 개정되어 같은 날부터 시행됩니다. (인앱결제·보상형 광고 도입 반영)</p>
 
         <div style={{
           marginTop: 32,
@@ -238,7 +242,7 @@ export default function TermsPage() {
           color: 'rgba(255,255,255,0.7)',
         }}>
           본 이용약관은 공정거래위원회 전자상거래 표준약관(제10023호) 및 「게임산업진흥에 관한
-          법률」을 참고하여 작성된 초안입니다. 결제 도입, 친구 시스템 도입 등 서비스 확장 시 약관을
+          법률」을 참고하여 작성되었습니다. 친구 시스템 도입 등 서비스 확장 시 약관을
           개정합니다. 정식 배포 전 법률 자문을 권장합니다.
         </div>
       </div>
