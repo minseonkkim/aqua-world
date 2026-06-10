@@ -22,13 +22,13 @@ const SFX_SRC: Record<SFXKey, string> = {
   modal_open: `${BASE}audio/sfx/modal_open.ogg`,
   modal_close: `${BASE}audio/sfx/modal_close.ogg`,
   confirm: `${BASE}audio/sfx/confirm.ogg`,
-  hatch: `${BASE}audio/sfx/hatch.wav`,
+  hatch: `${BASE}audio/sfx/hatch.ogg`,
   reward: `${BASE}audio/sfx/reward.ogg`,
   notify: `${BASE}audio/sfx/notify.ogg`,
-  shutter: `${BASE}audio/sfx/shutter.wav`,
+  shutter: `${BASE}audio/sfx/shutter.ogg`,
   place: `${BASE}audio/sfx/place.ogg`,
   error: `${BASE}audio/sfx/error.ogg`,
-  coin: `${BASE}audio/sfx/coin.wav`,
+  coin: `${BASE}audio/sfx/coin.ogg`,
 };
 
 // Kenney/freesound 파일별 라우드니스가 들쭉날쭉해서 키별로 보정.
@@ -47,7 +47,7 @@ const SFX_GAIN: Record<SFXKey, number> = {
   coin: 0.55,
 };
 
-const BGM_SRC = `${BASE}audio/bgm/main.mp3`;
+const BGM_SRC = `${BASE}audio/bgm/main.ogg`;
 const BGM_TARGET_VOL = 0.25;
 const BGM_FADE_MS = 1500;
 
