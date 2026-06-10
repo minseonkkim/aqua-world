@@ -158,6 +158,14 @@ export const claimAdReward = call<{ nonceId: string }, { user: User; applied: un
   'claimAdReward',
 );
 
+// ─── 튜토리얼 진행도 영속화 ──────────────────────────────────────────────────
+// 완료/스킵(-1) 신호를 서버에 저장해 재설치(localStorage 소실) 후에도 다시 뜨지 않게 한다.
+// 응답에 user/tank 가 없으므로 call 헬퍼(권위 상태 반영)를 쓰지 않고 직접 호출한다.
+export async function syncTutorialStep(step: number): Promise<void> {
+  if (!functions) throw new FunctionsUnavailableError();
+  await httpsCallable<{ step: number }, { ok: boolean }>(functions, 'setTutorialStep')({ step });
+}
+
 // ─── 회원 탈퇴 ─────────────────────────────────────────────────────────────
 // 서버에서 user 문서 + 소유 tanks + Auth 계정까지 영구 삭제한다.
 // 응답에 user/tank 가 없으므로 call 헬퍼를 쓰지 않고 직접 호출한다.

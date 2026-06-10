@@ -240,6 +240,21 @@ exports.bootstrapUser = onCall(async (request) => {
   return { user, tank, created: true, serverTime: Date.now() };
 });
 
+// ─── 튜토리얼 진행도 영속화 ──────────────────────────────────────────────────
+// 튜토리얼은 가입 직후 1회만 노출되어야 한다. 진행도(tutorialStep)는 평소 클라 UI 권위
+// 필드라 서버에 동기화하지 않지만, 완료/스킵(-1) 신호만은 서버에 저장해 둔다.
+// 그래야 앱을 삭제 후 재설치해(=localStorage 소실) bootstrapUser 가 기존 유저를 돌려줄 때
+// stale 한 0 이 아니라 -1 을 받아 튜토리얼이 다시 뜨지 않는다.
+exports.setTutorialStep = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const step = request.data && request.data.step;
+  if (typeof step !== "number" || !Number.isFinite(step)) {
+    throw new HttpsError("invalid-argument", "step must be a number");
+  }
+  await userRef(uid).set({ tutorialStep: step }, { merge: true });
+  return { ok: true, serverTime: Date.now() };
+});
+
 // ─── 일일 로그인 보상 ────────────────────────────────────────────────────────
 
 exports.claimDailyReward = onCall(async (request) => {

@@ -23,6 +23,7 @@ import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COS
 import {
   isCloudUser,
   optimistic,
+  syncTutorialStep,
   sprinkleFeed,
   feedFish as feedFishServer,
   hatchEgg as hatchEggServer,
@@ -214,6 +215,20 @@ export default function TankPage() {
   // 튜토리얼 단계 진입 시마다 analytics 로 funnel 추적 — auto/manual 모두 한 곳에서.
   useEffect(() => {
     if (tutorialStep >= 1 && tutorialStep <= 5) analytics.tutorialStep(tutorialStep);
+  }, [tutorialStep]);
+
+  // 진행 중(1~5) → 완료/스킵(-1) 전환 순간 서버에 한 번 영속화한다.
+  // 평소엔 tutorialStep 을 서버에 안 올리지만(클라 UI 권위), 완료 신호만은 저장해 둬야
+  // 앱 재설치(localStorage 소실) 후 bootstrapUser 가 -1 을 돌려줘 다시 안 뜬다.
+  const prevTutorialStepRef = useRef(tutorialStep);
+  useEffect(() => {
+    const prev = prevTutorialStepRef.current;
+    prevTutorialStepRef.current = tutorialStep;
+    if (tutorialStep === -1 && prev >= 1 && prev <= 5 && isCloudUser()) {
+      syncTutorialStep(-1).catch(() => {
+        /* 비치명적: 실패해도 로컬 persistedTutorialStep 이 막아준다. 다음 기회에 재시도됨 */
+      });
+    }
   }, [tutorialStep]);
 
   // Step 4 → 5: 부화 시작 감지
