@@ -3,7 +3,7 @@ import { getAuth, Auth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions } from 'firebase/functions';
-import { Analytics, getAnalytics, isSupported as analyticsSupported } from 'firebase/analytics';
+import type { Analytics } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
@@ -40,12 +40,20 @@ if (isConfigured) {
 
   // Analytics 는 브라우저 환경 + measurementId 가 있을 때만 동작.
   // SSR/Node, 일부 in-app 브라우저, DNT 등에서는 isSupported() 가 false 를 반환한다.
+  // firebase/analytics 모듈은 동적 import — 초기 firebase 청크에서 분리(번들 절감).
+  // idle 시점에 로드해 첫 페인트를 차단하지 않는다.
   if (firebaseConfig.measurementId) {
-    analyticsSupported()
-      .then(ok => {
-        if (ok && app) analytics = getAnalytics(app);
-      })
-      .catch(() => { /* 미지원 환경은 조용히 무시 */ });
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number })
+      .requestIdleCallback;
+    const idle = (cb: () => void) => (ric ? ric(cb) : setTimeout(cb, 300));
+    idle(() => {
+      void import('firebase/analytics')
+        .then(async ({ isSupported, getAnalytics }) => {
+          const ok = await isSupported();
+          if (ok && app) analytics = getAnalytics(app);
+        })
+        .catch(() => { /* 미지원 환경은 조용히 무시 */ });
+    });
   }
 } else {
   console.warn('[Firebase] .env 파일에 실제 Firebase 설정값을 입력해주세요. 현재 게스트 모드로 동작합니다.');

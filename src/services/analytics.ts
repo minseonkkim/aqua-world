@@ -10,12 +10,16 @@
  * 추적되는 이벤트 이름은 모두 snake_case (GA4 권장).
  */
 
-import {
-  logEvent as fbLogEvent,
-  setUserId as fbSetUserId,
-  setUserProperties as fbSetUserProperties,
-} from 'firebase/analytics';
 import { getAnalyticsInstance } from './firebase/config';
+
+// firebase/analytics 모듈도 동적 로드 — 초기 firebase 청크에서 분리(번들 절감).
+// getAnalyticsInstance() 가 non-null 이면 config.ts 가 이미 이 모듈을 로드해둔
+// 상태이므로, 아래 import()는 캐시된 청크를 즉시 반환한다(추가 지연 없음).
+let fbAnalyticsMod: Promise<typeof import('firebase/analytics')> | null = null;
+function loadAnalyticsMod() {
+  if (!fbAnalyticsMod) fbAnalyticsMod = import('firebase/analytics');
+  return fbAnalyticsMod;
+}
 
 // Sentry는 main.tsx와 동일하게 lazy — analytics 사용 시점에 동적 로드.
 let sentryPromise: Promise<typeof import('@sentry/react')> | null = null;
@@ -42,12 +46,14 @@ export function track(name: string, params?: EventParams): void {
 
   const inst = getAnalyticsInstance();
   if (!inst) return;
-  try {
-    fbLogEvent(inst, name, cleaned as Record<string, unknown> | undefined);
-  } catch (err) {
-    // GA4 호출 실패는 게임 동작에 영향이 없어야 한다.
-    if (import.meta.env.DEV) console.warn('[analytics] logEvent failed', err);
-  }
+  void loadAnalyticsMod()
+    .then(({ logEvent }) => {
+      logEvent(inst, name, cleaned as Record<string, unknown> | undefined);
+    })
+    .catch(err => {
+      // GA4 호출 실패는 게임 동작에 영향이 없어야 한다.
+      if (import.meta.env.DEV) console.warn('[analytics] logEvent failed', err);
+    });
 }
 
 /** 로그인/로그아웃 시 호출. null → 사용자 식별 해제. */
@@ -55,22 +61,22 @@ export function identifyUser(uid: string | null): void {
   void getSentry().then(S => S.setUser(uid ? { id: uid } : null)).catch(() => {});
   const inst = getAnalyticsInstance();
   if (!inst) return;
-  try {
-    fbSetUserId(inst, uid);
-  } catch (err) {
-    if (import.meta.env.DEV) console.warn('[analytics] setUserId failed', err);
-  }
+  void loadAnalyticsMod()
+    .then(({ setUserId }) => setUserId(inst, uid))
+    .catch(err => {
+      if (import.meta.env.DEV) console.warn('[analytics] setUserId failed', err);
+    });
 }
 
 /** 코호트 분석용 user properties (account_type, level 등). */
 export function setUserProps(props: Record<string, string | number | boolean | null>): void {
   const inst = getAnalyticsInstance();
   if (!inst) return;
-  try {
-    fbSetUserProperties(inst, props);
-  } catch (err) {
-    if (import.meta.env.DEV) console.warn('[analytics] setUserProperties failed', err);
-  }
+  void loadAnalyticsMod()
+    .then(({ setUserProperties }) => setUserProperties(inst, props))
+    .catch(err => {
+      if (import.meta.env.DEV) console.warn('[analytics] setUserProperties failed', err);
+    });
 }
 
 // ─── 이벤트 헬퍼 ────────────────────────────────────────────────────────────

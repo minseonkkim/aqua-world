@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
         manualChunks: (id) => {
           if (!id.includes('node_modules')) return undefined;
           if (id.includes('three')) return 'three';
+          // analytics 는 동적 import 로 별도 청크 분리 — firebase 청크에 묶이지 않게 먼저 가로챈다.
+          if (id.includes('firebase/analytics') || id.includes('@firebase/analytics')) return 'firebase-analytics';
           if (id.includes('firebase') || id.includes('@firebase')) return 'firebase';
           if (id.includes('@sentry')) return 'sentry';
           if (id.includes('howler')) return 'audio';
