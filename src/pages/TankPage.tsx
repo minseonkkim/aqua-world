@@ -672,6 +672,8 @@ export default function TankPage() {
           lightMode={activeTank?.lightMode ?? 'auto'}
           onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
           tankScale={getTankScale(capacityLevel)}
+          // 모달/패널로 수조가 가려질 때 30fps로 낮춰 배터리 절약 (포토 모드는 수조가 주인공이라 제외)
+          lowPower={!photoMode && (notifOpen || !!selectedFish || !!pendingDailyReward || !!pendingHatch)}
           style={{ position: 'absolute', inset: 0 }}
         />
       </Suspense>

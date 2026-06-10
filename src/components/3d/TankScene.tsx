@@ -33,6 +33,8 @@ interface Props {
   onSurfaceFeed?: (x: number, z: number) => boolean | void;
   /** 수조 확장 시각 배율 — 가로·세로(바닥 면적)를 확대. 기본 1 */
   tankScale?: number;
+  /** true이면 렌더를 30fps로 throttle (모달/패널 오픈 등 가려진 상태에서 배터리 절약) */
+  lowPower?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -56,6 +58,8 @@ const BASE_BOX_D = 8;
 const BOX_H = 6;
 const BUBBLE_COUNT = 35;
 const FOOD_LIFETIME_MS = 8000;
+// 저전력 모드 목표 프레임 간격 (≈30fps). 모달/패널로 수조가 가려질 때 렌더 빈도를 낮춰 배터리 절약
+const LOW_POWER_FRAME_MS = 1000 / 30;
 
 // ===== Boids 무리 행동 파라미터 =====
 const BOID_PERCEPTION = 1.8;      // 같은 종 이웃 인지 반경 (정렬/응집)
@@ -106,7 +110,7 @@ function TankSceneImpl({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
   onDecorationSelect, onDecorationMove,
-  lightMode = 'auto', onSurfaceFeed, tankScale = 1, style,
+  lightMode = 'auto', onSurfaceFeed, tankScale = 1, lowPower = false, style,
 }: Props, ref: React.Ref<TankSceneHandle>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -125,6 +129,9 @@ function TankSceneImpl({
   const foodsRef = useRef<FoodParticle[]>([]);
   const lastLightTickRef = useRef(0);
   const rafRef = useRef(0);
+  // 저전력 throttle — 최신 lowPower 값과 마지막 렌더 시각을 animate에서 참조
+  const lowPowerRef = useRef(lowPower);
+  const lastRenderRef = useRef(0);
   const clock = useRef(new THREE.Clock());
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
@@ -144,6 +151,7 @@ function TankSceneImpl({
   }, [lightMode]);
   const onSurfaceFeedRef = useRef(onSurfaceFeed);
   useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
+  useEffect(() => { lowPowerRef.current = lowPower; }, [lowPower]);
 
   const { bindCanvas, apply, setEnabled } = useCameraControls(cameraRef);
   const env = ENV[environment];
@@ -713,6 +721,13 @@ function TankSceneImpl({
 
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
+    // 저전력 모드: 30fps로 throttle. getDelta 호출 전에 건너뛰어야 dt가 누적되고,
+    // animate의 delta-time 정규화(k)가 이를 보상해 물고기 속도가 그대로 유지된다.
+    if (lowPowerRef.current) {
+      const nowMs = performance.now();
+      if (nowMs - lastRenderRef.current < LOW_POWER_FRAME_MS) return;
+      lastRenderRef.current = nowMs;
+    }
     // delta-time 정규화 — 60fps 기준(k=1). 기기·빌드별 FPS 차이로
     // 물고기 속도가 달라지지 않도록 모든 프레임 단위 이동을 k로 스케일한다.
     const dt = clock.current.getDelta();
