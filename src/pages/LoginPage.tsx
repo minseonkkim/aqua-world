@@ -52,6 +52,11 @@ export default function LoginPage() {
   // signIn() 이 성공해 실제 계정 bootstrap 이 진행 중일 때만 true.
   // 팝업/외부 브라우저를 사용자가 그냥 닫고 돌아온 경우와 구분하기 위함.
   const bootstrappingRef = useRef(false);
+  // 빠른 연타로 로그인 핸들러가 중복 진입하는 것을 막는 동기 가드.
+  // disabled={loading} 는 리렌더 후에야 적용돼, 진입 직후 기기가 바쁠 때(초기화 effect 다발)
+  // 첫 탭과 리렌더 사이에 두 번째 탭이 들어가 signInWithGoogle 이 두 번 호출되며
+  // 'cancelled-popup-request' 로 조용히 취소돼 "로그인이 안 되는" 증상이 났다.
+  const loginInFlightRef = useRef(false);
   const { setUser, claimDailyLogin, setPendingReward } = useUserStore();
   const { tanks, addTank, setTanks } = useTankStore();
 
@@ -64,6 +69,8 @@ export default function LoginPage() {
   useEffect(() => {
     const restore = () => {
       if (document.visibilityState === 'visible' && !bootstrappingRef.current) {
+        // OAuth 로 떠났다가 로그인을 끝내지 않고 돌아온 경우 — 가드도 함께 풀어 재시도 가능하게.
+        loginInFlightRef.current = false;
         setLoading(false);
       }
     };
@@ -81,6 +88,8 @@ export default function LoginPage() {
     signIn: () => Promise<{ uid: string }>,
     silentErrorCodes: string[] = [],
   ) => {
+    if (loginInFlightRef.current) return; // 중복 진입(빠른 연타) 차단
+    loginInFlightRef.current = true;
     setLoading(true);
     try {
       const firebaseUser = await signIn();
@@ -119,6 +128,7 @@ export default function LoginPage() {
       });
     } finally {
       bootstrappingRef.current = false;
+      loginInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -136,12 +146,17 @@ export default function LoginPage() {
   // 카카오는 리다이렉트 흐름 — 즉시 페이지가 카카오로 떠나므로 try/catch 가 의미 없다.
   // SDK 초기화 실패만 잡아 모달로 보여준다. 콜백 후 토큰 교환은 App.tsx 에서 처리.
   const handleKakaoLogin = async () => {
+    if (loginInFlightRef.current) return; // 중복 진입(빠른 연타) 차단
+    loginInFlightRef.current = true;
     try {
       setLoading(true);
       sessionStorage.setItem('aw:auth_action', 'kakao');
       await startKakaoLogin();
+      // 성공 시 웹은 카카오로 리다이렉트(페이지 언로드), 네이티브는 외부 브라우저가 열린다.
+      // 둘 다 이 컴포넌트를 떠나거나 restore() 가 가드를 풀어주므로 여기서 해제하지 않는다.
     } catch (err) {
       sessionStorage.removeItem('aw:auth_action');
+      loginInFlightRef.current = false;
       setLoading(false);
       const msg = err instanceof Error ? err.message : String(err);
       void useModalStore.getState().alert({
@@ -154,8 +169,9 @@ export default function LoginPage() {
   };
 
   const guestLogin = async () => {
-    // 소셜 로그인 bootstrap 이 진행 중이면 게스트 생성으로 상태가 꼬이지 않게 막는다.
-    if (bootstrappingRef.current) return;
+    // 소셜 로그인이 진행 중이면 게스트 생성으로 상태가 꼬이지 않게 막는다. (빠른 연타 포함)
+    if (bootstrappingRef.current || loginInFlightRef.current) return;
+    loginInFlightRef.current = true;
     setLoading(true);
     await new Promise(r => setTimeout(r, 400));
 
