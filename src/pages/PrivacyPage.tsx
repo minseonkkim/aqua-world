@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const EFFECTIVE_DATE = '2026년 6월 1일';
+const REVISED_DATE = '2026년 6월 10일';
 const OPERATOR_NAME = '김민선 (개인 운영)';
 const CPO_NAME = '김민선';
 const CPO_EMAIL = 'minsun9856@gmail.com';
@@ -82,7 +83,7 @@ export default function PrivacyPage() {
 
       <div style={{ padding: '0 16px 32px' }}>
         <p style={{ ...pStyle, color: 'var(--color-text-secondary)', fontSize: 12 }}>
-          시행일 {EFFECTIVE_DATE} · 최종 개정 {EFFECTIVE_DATE}
+          시행일 {EFFECTIVE_DATE} · 최종 개정 {REVISED_DATE}
         </p>
 
         <p style={pStyle}>
@@ -103,7 +104,9 @@ export default function PrivacyPage() {
           <li style={liStyle}><strong>서비스 제공</strong> — 어항 데이터 저장·동기화, 물고기 부화·성장 진행도 관리, 일일 보상 지급, 도감 진행도 관리</li>
           <li style={liStyle}><strong>알림 발송</strong> — 부화 완료·성장 완료·일일 보상 등 서비스 알림 전송</li>
           <li style={liStyle}><strong>고객 문의 응대</strong> — 이메일 문의 접수 및 회신</li>
-          <li style={liStyle}><strong>서비스 개선</strong> — 오류 진단, 사용성 분석, 신규 기능 개발 참고 (분석 도구 도입 시)</li>
+          <li style={liStyle}><strong>서비스 개선</strong> — 오류 진단, 사용성 분석, 신규 기능 개발 참고 (Firebase Analytics)</li>
+          <li style={liStyle}><strong>광고 제공</strong> — 보상형 광고 게재, 광고 식별자 기반 광고 송출 및 광고 실적 측정 (AdMob)</li>
+          <li style={liStyle}><strong>유료 서비스 제공</strong> — 인앱 구매(Star Coral 등) 결제 처리 및 영수증 검증, 부정 결제 방지</li>
           <li style={liStyle}><strong>마케팅 정보 전송</strong> — 별도 동의 시 신규 콘텐츠·이벤트·프로모션 안내 (선택)</li>
         </ul>
 
@@ -123,8 +126,8 @@ export default function PrivacyPage() {
         <p style={subStyle}>다. 자동 수집 항목</p>
         <p style={pStyle}>
           서비스 이용 과정에서 자동으로 생성·수집될 수 있는 정보입니다. IP 주소, 브라우저
-          쿠키(인증 토큰·세션 정보), 기기 정보(OS, 브라우저 종류, 화면 해상도), 서비스 이용 기록을
-          포함합니다.
+          쿠키(인증 토큰·세션 정보), 기기 정보(OS, 브라우저 종류, 화면 해상도), 서비스 이용 기록,
+          광고 식별자(Google 광고 ID, AAID), 앱 이용·이벤트 로그(Firebase Analytics)를 포함합니다.
         </p>
 
         <p style={subStyle}>라. 푸시 알림 (선택)</p>
@@ -132,7 +135,13 @@ export default function PrivacyPage() {
           <li style={liStyle}>FCM(Firebase Cloud Messaging) 토큰 — 푸시 알림 수신을 허용한 경우에만 수집</li>
         </ul>
 
-        <p style={subStyle}>마. 수집하지 않는 정보</p>
+        <p style={subStyle}>마. 인앱 구매 (선택)</p>
+        <ul style={{ paddingLeft: 20 }}>
+          <li style={liStyle}>구매 상품 ID, 구매 토큰(purchaseToken), 구매 내역 — 인앱 구매 시에만 수집·검증</li>
+          <li style={liStyle}>결제 수단·카드 정보 등 실제 결제 정보는 Google Play(Google LLC)가 처리하며, 운영자는 이를 수집·보관하지 않습니다</li>
+        </ul>
+
+        <p style={subStyle}>바. 수집하지 않는 정보</p>
         <ul style={{ paddingLeft: 20 }}>
           <li style={liStyle}>주민등록번호, 여권번호, 운전면허번호, 외국인등록번호 등 고유식별정보</li>
           <li style={liStyle}>건강·생체·종교·정치·범죄경력 등 민감정보</li>
@@ -179,6 +188,11 @@ export default function PrivacyPage() {
                 <td style={tdStyle}>회신 완료 후 1년</td>
                 <td style={tdStyle}>전자상거래법 제6조 (소비자 불만 또는 분쟁처리)</td>
               </tr>
+              <tr>
+                <td style={tdStyle}>인앱 구매·결제 기록</td>
+                <td style={tdStyle}>5년</td>
+                <td style={tdStyle}>전자상거래법 제6조 (대금결제·재화공급 기록)</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -187,7 +201,30 @@ export default function PrivacyPage() {
         <p style={pStyle}>
           운영자는 정보주체의 개인정보를 제1조(개인정보의 처리 목적)에서 명시한 범위 내에서만
           처리하며, 「개인정보 보호법」 제17조 및 제18조에 해당하는 경우(정보주체의 별도 동의,
-          법률의 특별한 규정 등)를 제외하고는 개인정보를 제3자에게 제공하지 않습니다.
+          법률의 특별한 규정 등)를 제외하고는 개인정보를 제3자에게 제공하지 않습니다. 다만 보상형
+          광고 서비스 제공을 위하여 아래와 같이 광고 식별자를 제공합니다.
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}>제공받는 자</th>
+                <th style={thStyle}>제공 항목</th>
+                <th style={thStyle}>제공 목적 / 보유기간</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={tdStyle}>Google LLC (AdMob)</td>
+                <td style={tdStyle}>광고 식별자(AAID), 기기 정보, 대략적 위치(IP 기반)</td>
+                <td style={tdStyle}>보상형 광고 게재 및 광고 실적 측정 / 제공받는 자의 보관정책에 따름</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p style={{ ...pStyle, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          이용자는 기기 설정(Android: 설정 &gt; 개인정보 보호 &gt; 광고)에서 광고 ID를 재설정하거나
+          맞춤 광고를 거부할 수 있습니다.
         </p>
 
         <h2 style={sectionStyle}>제5조 개인정보 처리의 위탁</h2>
@@ -232,13 +269,27 @@ export default function PrivacyPage() {
                 <td style={tdStyle}>정적 리소스·앱 번들 호스팅</td>
                 <td style={tdStyle}>미국</td>
               </tr>
+              <tr>
+                <td style={tdStyle}>Google LLC (Firebase Analytics)</td>
+                <td style={tdStyle}>앱 이용 행태·성능 분석</td>
+                <td style={tdStyle}>미국</td>
+              </tr>
+              <tr>
+                <td style={tdStyle}>Google LLC (AdMob)</td>
+                <td style={tdStyle}>보상형 광고 게재 및 광고 실적 측정</td>
+                <td style={tdStyle}>미국</td>
+              </tr>
+              <tr>
+                <td style={tdStyle}>Google LLC (Google Play 결제)</td>
+                <td style={tdStyle}>인앱 결제 처리 및 영수증 검증</td>
+                <td style={tdStyle}>미국</td>
+              </tr>
             </tbody>
           </table>
         </div>
         <p style={{ ...pStyle, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          위탁 기간: 위탁 계약 종료 시 또는 회원 탈퇴 시까지. 향후 분석 도구(Firebase Analytics 등),
-          오류 추적(Sentry 등), 결제 대행(인앱 결제) 등이 추가될 경우 본 처리방침 개정을 통해 사전
-          공지합니다.
+          위탁 기간: 위탁 계약 종료 시 또는 회원 탈퇴 시까지. 향후 오류 추적(Sentry 등) 등 수탁자가
+          추가될 경우 본 처리방침 개정을 통해 사전 공지합니다.
         </p>
 
         <h2 style={sectionStyle}>제6조 정보주체와 법정대리인의 권리·의무 및 행사 방법</h2>
@@ -347,6 +398,7 @@ export default function PrivacyPage() {
         <p style={subStyle}>개정 이력</p>
         <ul style={{ paddingLeft: 20 }}>
           <li style={liStyle}>2026년 6월 1일 · 최초 제정 및 시행</li>
+          <li style={liStyle}>2026년 6월 10일 · 보상형 광고(AdMob)·인앱결제(Google Play)·분석(Firebase Analytics) 도입 반영, 광고 식별자 제3자 제공 및 위탁 항목 추가</li>
         </ul>
 
         <div style={{
