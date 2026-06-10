@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useFishStore } from '@/store/useFishStore';
 import { Fish } from '@/types';
@@ -47,6 +47,9 @@ function FishRow({ fish, full, onPlace }: { fish: Fish; full: boolean; onPlace: 
   const species = useFishStore(s => s.getSpeciesById(fish.speciesId));
   const rarity = species?.rarity ?? 'common';
   const color = RARITY_COLOR[rarity];
+  // 도감 썸네일 우선 표시 — 누락/로드 실패 시 성장단계 이모지로 폴백 (FishInfoCard 와 동일 규칙)
+  const [imgError, setImgError] = useState(false);
+  const showImage = !!species?.thumbnailPath && !imgError;
   return (
     <div style={{
       background: 'rgba(255,255,255,0.06)',
@@ -57,11 +60,18 @@ function FishRow({ fish, full, onPlace }: { fish: Fish; full: boolean; onPlace: 
       gap: 10,
     }}>
       <div style={{
-        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
         background: `${color}33`, border: `2px solid ${color}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
       }}>
-        {STAGE_EMOJI[fish.growthStage]}
+        {showImage ? (
+          <img
+            src={`${import.meta.env.BASE_URL}${species!.thumbnailPath}`}
+            alt={species!.name}
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            onError={() => setImgError(true)}
+          />
+        ) : STAGE_EMOJI[fish.growthStage]}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
