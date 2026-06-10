@@ -115,6 +115,8 @@ function TankSceneImpl({
   const waterRef = useRef<THREE.Mesh | null>(null);
   const fishMeshesRef = useRef<THREE.Object3D[]>([]);
   const fishDataRef = useRef<(Fish | null)[]>([]);
+  // 물고기 id → 메시. syncFishMeshes에서 diff(추가/제거/스케일)에 사용 — 매 틱 전체 재생성 방지
+  const fishMeshMapRef = useRef<Map<string, THREE.Group>>(new Map());
   const decoMeshesRef = useRef<Map<string, THREE.Group>>(new Map());
   const decoHighlightRef = useRef<THREE.Mesh | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
@@ -187,6 +189,7 @@ function TankSceneImpl({
       const wrapper = new THREE.Group();
       let inner: THREE.Object3D | null = null;
       let baseScale = 1;
+      let usedPlaceholder = true;
 
       if (speciesId) {
         const modelClone = cloneFishModel(speciesId);
@@ -194,6 +197,7 @@ function TankSceneImpl({
         if (modelClone && meta) {
           inner = modelClone;
           baseScale = meta.baseScale;
+          usedPlaceholder = false;
         }
       }
       if (!inner) inner = buildPlaceholderMesh(fallbackColor, 1);
@@ -212,25 +216,69 @@ function TankSceneImpl({
       wrapper.userData.phase = Math.random() * Math.PI * 2;
       wrapper.userData.fishIndex = index;
       wrapper.userData.speciesId = speciesId;
+      // diff용 메타 — baseScale은 성장 단계 변경 시 재스케일에, usedPlaceholder는 모델 로드 후 교체 판단에 사용
+      wrapper.userData.baseScale = baseScale;
+      wrapper.userData.usedPlaceholder = usedPlaceholder;
       return wrapper;
     },
     [buildPlaceholderMesh],
   );
 
+  // 물고기 메시 id 기반 diff 동기화 — 기존 물고기는 메시를 재사용(위치·속도 유지)하고
+  // 추가/제거/성장 스케일·플레이스홀더 교체만 반영한다. (매 mood/청결도 틱마다 전체 재생성 방지)
   const syncFishMeshes = useCallback((scene: THREE.Scene) => {
     const currentFish = fishRef.current;
-    fishMeshesRef.current.forEach(m => scene.remove(m));
-    fishMeshesRef.current = [];
-    fishDataRef.current = [];
+    const map = fishMeshMapRef.current;
+    const currentIds = new Set(currentFish.map(f => f.id));
+
+    // 제거된 물고기 정리 + StrictMode 재마운트 등으로 씬에서 떨어진 스테일 메시 폐기
+    map.forEach((mesh, id) => {
+      if (!currentIds.has(id) || mesh.parent !== scene) {
+        scene.remove(mesh);
+        map.delete(id);
+      }
+    });
+
+    // fish 순서대로 병렬 배열 재구성 (animate/클릭 핸들러가 index로 참조)
+    const meshes: THREE.Object3D[] = [];
+    const data: (Fish | null)[] = [];
 
     currentFish.forEach((f, i) => {
       const stageScale = STAGE_SCALE[f.growthStage] ?? 1;
-      const obj = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
-      obj.position.set(f.position.x, f.position.y, f.position.z);
-      scene.add(obj);
-      fishMeshesRef.current.push(obj);
-      fishDataRef.current.push(f);
+      let mesh = map.get(f.id);
+
+      if (mesh) {
+        // 모델 로드 전 플레이스홀더로 만들어졌고 이제 실제 GLB가 준비됐으면 → 위치·속도 유지하며 교체
+        if (mesh.userData.usedPlaceholder && f.speciesId && getFishModel(f.speciesId)) {
+          const old = mesh;
+          mesh = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
+          mesh.position.copy(old.position);
+          mesh.rotation.copy(old.rotation);
+          (mesh.userData.vel as THREE.Vector3).copy(old.userData.vel as THREE.Vector3);
+          mesh.userData.phase = old.userData.phase;
+          scene.remove(old);
+          scene.add(mesh);
+          map.set(f.id, mesh);
+        } else {
+          // 성장 단계 변경 시 스케일만 갱신 (위치·속도는 그대로)
+          const baseScale = mesh.userData.baseScale as number;
+          mesh.scale.setScalar(baseScale * stageScale);
+        }
+      } else {
+        // 신규 물고기 — 스토어 위치에서 시작
+        mesh = buildFishObject(i, f.speciesId, stageScale, 0xaaaaaa);
+        mesh.position.set(f.position.x, f.position.y, f.position.z);
+        scene.add(mesh);
+        map.set(f.id, mesh);
+      }
+
+      mesh.userData.fishIndex = i;
+      meshes.push(mesh);
+      data.push(f);
     });
+
+    fishMeshesRef.current = meshes;
+    fishDataRef.current = data;
   }, [buildFishObject]);
 
   // 데코레이션 메시 diff 동기화 (추가/제거/transform 업데이트)
