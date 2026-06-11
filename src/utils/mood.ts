@@ -1,4 +1,5 @@
 import { Fish, FishMood, Tank } from '@/types';
+import { getTankCapacity } from '@/constants';
 
 export const CLEANLINESS_DECAY_PER_HOUR = 2; // 100점이면 약 2일에 걸쳐 0
 export const CLEANLINESS_PER_FEED = 1.5;     // 먹이 1회당 오염
@@ -33,13 +34,17 @@ export function computeFishComfort(
   const cleanScore = Math.max(0, Math.min(40, (tank.cleanliness / 100) * 40));
   if (tank.cleanliness < 50) tips.push('수조가 더러워요 — 물을 갈아주세요');
 
-  // 2) Density — 20점 만점 (6마리 이하 만점, 8 초과 감점, 12 초과 0)
+  // 2) Density — 20점 만점. 수조 수용량 비례로 판정(고정값 X).
+  //    수용량의 90% 이상이면 '붐빔'(0점), 그 아래로 단계 감점.
   const count = tank.fish.length;
+  const capacity = getTankCapacity(tank.capacityLevel);
+  const crowdThreshold = Math.ceil(capacity * 0.9); // 예: 20수용→18, 12수용→11
+  const ratio = count / capacity;
   let densityScore = 20;
-  if (count > 12) densityScore = 0;
-  else if (count > 8) densityScore = 8;
-  else if (count > 6) densityScore = 14;
-  if (count > 8) tips.push('수조가 너무 붐벼요');
+  if (count >= crowdThreshold) densityScore = 0;
+  else if (ratio > 0.75) densityScore = 8;
+  else if (ratio > 0.55) densityScore = 14;
+  if (count >= crowdThreshold) tips.push('수조가 너무 붐벼요');
 
   // 3) Habitat — 항상 만점. 환경 변경·이주 수단이 없어 페널티가 막다른 길이라 제거함.
   const habitatScore = 20;
