@@ -22,18 +22,42 @@ export function useCameraControls(
   const lastPinch = useRef<number | null>(null);
   const lastTap = useRef(0);
   const enabledRef = useRef(true);
+  // 시점 Y 오프셋 — 꾸미기 모드에서 타겟을 아래로 내려(바닥을 위로) 화면 중앙에 오게 한다.
+  // current는 매 프레임 desired로 보간(tickCamera), apply가 이를 타겟 Y에 더해 적용.
+  const focusOffsetY = useRef(0);
+  const desiredOffsetY = useRef(0);
 
   const apply = useCallback(() => {
     const cam = cameraRef.current;
     if (!cam) return;
     const { theta, phi, radius } = state.current;
+    const ty = target.y + focusOffsetY.current;
     cam.position.set(
       target.x + radius * Math.sin(phi) * Math.sin(theta),
-      target.y + radius * Math.cos(phi),
+      ty + radius * Math.cos(phi),
       target.z + radius * Math.sin(phi) * Math.cos(theta),
     );
-    cam.lookAt(target);
+    cam.lookAt(target.x, ty, target.z);
   }, [cameraRef, target]);
+
+  // 목표 시점 오프셋 설정 — 실제 이동은 tickCamera가 프레임 단위로 보간
+  const setFocusOffsetY = useCallback((y: number) => {
+    desiredOffsetY.current = y;
+  }, []);
+
+  // animate 루프에서 매 프레임 호출 — 오프셋을 목표로 부드럽게 보간하고 카메라 갱신.
+  // 목표 도달 후에는 apply를 호출하지 않아 사용자 회전/줌 입력과 충돌하지 않는다.
+  const tickCamera = useCallback((k: number) => {
+    const cur = focusOffsetY.current;
+    const tgt = desiredOffsetY.current;
+    const diff = tgt - cur;
+    if (Math.abs(diff) < 0.002) {
+      if (cur !== tgt) { focusOffsetY.current = tgt; apply(); }
+      return;
+    }
+    focusOffsetY.current = cur + diff * Math.min(1, 0.1 * k);
+    apply();
+  }, [apply]);
 
   const reset = useCallback(() => {
     state.current = { ...DEFAULT };
@@ -121,5 +145,5 @@ export function useCameraControls(
     if (!v) { lastMouse.current = null; lastPinch.current = null; }
   }, []);
 
-  return { bindCanvas, apply, reset, setEnabled };
+  return { bindCanvas, apply, reset, setEnabled, setFocusOffsetY, tickCamera };
 }

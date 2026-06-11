@@ -153,7 +153,7 @@ function TankSceneImpl({
   useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
   useEffect(() => { lowPowerRef.current = lowPower; }, [lowPower]);
 
-  const { bindCanvas, apply, setEnabled } = useCameraControls(cameraRef);
+  const { bindCanvas, apply, setEnabled, setFocusOffsetY, tickCamera } = useCameraControls(cameraRef);
   const env = ENV[environment];
 
   // 부모에서 호출 가능한 캡처 — preserveDrawingBuffer 없이도 같은 task에서 render+toDataURL 연속 호출 시 동작
@@ -180,6 +180,9 @@ function TankSceneImpl({
   useEffect(() => { decorationsRef.current = decorations; }, [decorations]);
   const decorationModeRef = useRef(decorationMode);
   useEffect(() => { decorationModeRef.current = decorationMode; }, [decorationMode]);
+  // 꾸미기 모드 진입 시 시점을 아래로 내려 바닥을 화면 중앙으로 끌어올린다 (하단 카탈로그 패널과 안 겹치게).
+  // 종료 시 0으로 복귀 — tickCamera가 부드럽게 보간한다.
+  useEffect(() => { setFocusOffsetY(decorationMode ? -1.8 : 0); }, [decorationMode, setFocusOffsetY]);
   const selectedDecoIdRef = useRef<string | null>(selectedDecorationId);
   useEffect(() => { selectedDecoIdRef.current = selectedDecorationId; }, [selectedDecorationId]);
 
@@ -913,10 +916,12 @@ function TankSceneImpl({
       const s = 1 + Math.sin(t * 4) * 0.1;
       decoHighlightRef.current.scale.setScalar(s);
     }
+    // 꾸미기 모드 시점 전환 보간 (목표 도달 후엔 내부에서 no-op)
+    tickCamera(k);
     if (rendererRef.current && sceneRef.current && cameraRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
-  }, [applyDayNight]);
+  }, [applyDayNight, tickCamera]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
