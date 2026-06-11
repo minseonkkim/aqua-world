@@ -4,8 +4,8 @@
  */
 
 // ─── 신규 유저 시작 재화 ───
-const START_PEARL = 200;
-const START_STAR_CORAL = 20;
+const START_PEARL = 500;
+const START_STAR_CORAL = 50;
 
 // ─── 수조 수용량(마릿수 상한) ───
 // capacityLevel(0~3) → 한 수조에 배치 가능한 최대 물고기 수 (클라 src/constants 와 일치)
