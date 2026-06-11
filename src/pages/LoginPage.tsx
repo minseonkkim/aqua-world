@@ -193,7 +193,15 @@ export default function LoginPage() {
       lastLoginAt: 0,
       createdAt: Date.now(),
       tanks: [],
-      inventory: [],
+      // 클라우드 부트스트랩(makeTutorialEgg)과 동일하게 게스트도 튜토리얼 알 1개로 시작한다.
+      // 이게 없으면 인큐베이터 버튼(inventory 비면 미표시)이 아예 안 떠 첫 부화 동선이 막힌다.
+      inventory: [{
+        id: `egg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        tier: 'basic',
+        hatchDuration: 10,
+        startedAt: 0,
+        isHatching: false,
+      }],
       collectedSpecies: [],
       feedCountToday: 0,
       lastFeedResetAt: Date.now(),
