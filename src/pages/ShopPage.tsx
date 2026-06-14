@@ -120,6 +120,15 @@ export default function ShopPage() {
 
   const buyStarCoral = async (pkg: (typeof CURRENCY.STAR_CORAL_PACKAGES)[number]) => {
     const total = pkg.amount + pkg.bonus;
+    // Star Coral 은 실화폐 재화 — 인앱결제(네이티브 앱)에서만 살 수 있다.
+    // 웹은 Play Billing 인벤토리가 없으므로 게스트/클라우드 구분 없이 차단한다.
+    // (예전엔 게스트가 웹에서도 무료로 지급받는 우회로가 있었다.)
+    if (!isBillingAvailable()) {
+      playSFX('error');
+      showToast('결제는 앱에서만 가능합니다');
+      return;
+    }
+
     const ok = await useModalStore.getState().confirm({
       emoji: '🌸',
       title: `${pkg.name} 구매`,
@@ -130,12 +139,6 @@ export default function ShopPage() {
 
     // 클라우드 유저: 실제 Google Play Billing 결제 → 서버 검증 후 지급.
     if (isCloudUser()) {
-      // 웹 등 인앱결제 불가 환경 → 앱으로 안내(서버는 무검증 지급을 더 이상 허용하지 않음).
-      if (!isBillingAvailable()) {
-        playSFX('error');
-        showToast('결제는 앱에서만 가능합니다');
-        return;
-      }
       showToast('결제를 처리하고 있어요…');
       try {
         // 성공 시 서버 검증이 끝나며 user 스토어가 권위 상태로 이미 갱신됨(낙관적 선지급 없음).
