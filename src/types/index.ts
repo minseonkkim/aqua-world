@@ -109,6 +109,8 @@ export interface User {
   decorationInventory?: Record<string, number>;
   /** 청구 완료한 도감 마일스톤(%) 목록 */
   claimedCompendiumMilestones?: number[];
+  /** 광고 보상 일일 카운터: type → { YYYYMMDD: 사용횟수 }. 남은 횟수 표시에 사용. */
+  adWatchCounters?: Record<string, Record<string, number>>;
 }
 
 // ==================== Shop ====================

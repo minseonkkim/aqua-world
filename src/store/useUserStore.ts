@@ -43,6 +43,8 @@ interface UserState {
   spendPearl: (amount: number) => boolean;
   addStarCoral: (amount: number) => void;
   spendStarCoral: (amount: number) => boolean;
+  /** 게스트용: 광고로 Star Coral 받은 횟수를 오늘 카운터에 +1 (일일 한도 표시/검증용) */
+  recordAdStarCoral: () => void;
 
   addEggToInventory: (tier: EggTier, overrideHatchSeconds?: number) => void;
   removeEggFromInventory: (eggId: string) => void;
@@ -139,6 +141,21 @@ export const useUserStore = create<UserState>()(
         set({ user: { ...user, starCoral: user.starCoral - amount } });
         return true;
       },
+
+      recordAdStarCoral: () =>
+        set(state => {
+          if (!state.user) return {};
+          const d = new Date();
+          const today = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d
+            .getDate()
+            .toString()
+            .padStart(2, '0')}`;
+          const counters = { ...(state.user.adWatchCounters || {}) };
+          const t = { ...(counters.ad_star_coral || {}) };
+          t[today] = (t[today] || 0) + 1;
+          counters.ad_star_coral = t;
+          return { user: { ...state.user, adWatchCounters: counters } };
+        }),
 
       addEggToInventory: (tier, overrideHatchSeconds) => {
         const { user } = get();

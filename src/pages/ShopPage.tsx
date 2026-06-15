@@ -12,12 +12,10 @@ import {
   exchangePearl,
   purchaseDecoration,
   purchaseFeedTicket,
+  prepareAdReward,
+  claimAdReward,
 } from '@/services/firebase/functions';
-import {
-  isBillingAvailable,
-  purchaseStarCoral as billingPurchaseStarCoral,
-  PurchaseCancelledError,
-} from '@/services/billing';
+import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 import { playSFX } from '@/services/audio';
 import { analytics } from '@/services/analytics';
 
@@ -92,8 +90,10 @@ export default function ShopPage() {
     addEggToInventory,
     addDecorationInventory,
     addFeedTickets,
+    recordAdStarCoral,
   } = useUserStore();
   const [toast, setToast] = useState('');
+  const [watchingAd, setWatchingAd] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as ShopTab | null;
   const [tab, setTab] = useState<ShopTab>(tabFromUrl ?? 'egg');
@@ -105,6 +105,23 @@ export default function ShopPage() {
     if (tabFromUrl && tabFromUrl !== tab) setTab(tabFromUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabFromUrl]);
+
+  // Star Coral 탭에 들어오면 광고를 백그라운드로 미리 받아 체감 지연을 없앤다.
+  useEffect(() => {
+    if (tab === 'star_coral' && isAdsAvailable()) void preloadRewardedAd();
+  }, [tab]);
+
+  // 오늘 광고로 받은 Star Coral 횟수 → 남은 횟수. 클라우드는 서버 카운터(setUser 로 갱신),
+  // 게스트는 recordAdStarCoral 로 쌓인 로컬 카운터를 같은 구조로 읽는다.
+  const todayKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d
+      .getDate()
+      .toString()
+      .padStart(2, '0')}`;
+  })();
+  const usedAdStarCoral = user?.adWatchCounters?.ad_star_coral?.[todayKey] ?? 0;
+  const remainingAdStarCoral = Math.max(0, CURRENCY.AD_STAR_CORAL_MAX_PER_DAY - usedAdStarCoral);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -118,51 +135,67 @@ export default function ShopPage() {
     setSearchParams(params, { replace: true });
   };
 
-  const buyStarCoral = async (pkg: (typeof CURRENCY.STAR_CORAL_PACKAGES)[number]) => {
-    const total = pkg.amount + pkg.bonus;
-    // Star Coral 은 실화폐 재화 — 인앱결제(네이티브 앱)에서만 살 수 있다.
-    // 웹은 Play Billing 인벤토리가 없으므로 게스트/클라우드 구분 없이 차단한다.
-    // (예전엔 게스트가 웹에서도 무료로 지급받는 우회로가 있었다.)
-    if (!isBillingAvailable()) {
+  // 광고를 보고 Star Coral 을 받는다. (예전 유료 결제를 대체)
+  // 흐름은 DailyRewardModal 의 보상형 광고 패턴과 동일:
+  //   클라우드 → prepareAdReward(nonce) → 광고 시청 → claimAdReward(서버 권위 지급)
+  //   게스트   → 광고 시청 → 로컬 지급 + 로컬 일일 카운터 증가
+  const AD_AMOUNT = CURRENCY.AD_STAR_CORAL_AMOUNT;
+  const watchAdForStarCoral = async () => {
+    if (!user || watchingAd) return;
+    if (!isAdsAvailable()) {
       playSFX('error');
-      showToast('결제는 앱에서만 가능합니다');
+      showToast('광고는 앱에서만 볼 수 있어요');
+      return;
+    }
+    if (remainingAdStarCoral <= 0) {
+      playSFX('error');
+      showToast('오늘 광고 시청 횟수를 모두 사용했어요');
+      return;
+    }
+    // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
       return;
     }
 
-    const ok = await useModalStore.getState().confirm({
-      emoji: '🌸',
-      title: `${pkg.name} 구매`,
-      message: `₩${pkg.priceKRW.toLocaleString()} → Star Coral ${total}개`,
-      confirmText: '구매',
-    });
-    if (!ok) return;
-
-    // 클라우드 유저: 실제 Google Play Billing 결제 → 서버 검증 후 지급.
-    if (isCloudUser()) {
-      showToast('결제를 처리하고 있어요…');
-      try {
-        // 성공 시 서버 검증이 끝나며 user 스토어가 권위 상태로 이미 갱신됨(낙관적 선지급 없음).
-        await billingPurchaseStarCoral(pkg);
-        // 실제 결제+검증이 완료된 뒤에만 매출 이벤트 발화(취소는 집계 제외).
-        analytics.purchaseStarCoral(pkg.id, total, pkg.priceKRW);
-        playSFX('coin');
-        showToast(`🌸 Star Coral ${total}개 획득!`);
-      } catch (err) {
-        if (err instanceof PurchaseCancelledError) {
-          showToast('');
-          return; // 사용자 취소 — 조용히 종료
+    setWatchingAd(true);
+    try {
+      if (isCloudUser()) {
+        // 서버: nonce 발급(일일 한도 검증 포함) → 광고 시청 → claimAdReward 로 서버 권위 지급.
+        let nonceId: string;
+        try {
+          ({ nonceId } = await prepareAdReward('ad_star_coral'));
+        } catch {
+          showToast('오늘 광고 시청 횟수를 모두 사용했거나 불러오지 못했어요');
+          return;
         }
-        playSFX('error');
-        showToast('결제에 실패했습니다');
+        const result = await showRewardedAd(nonceId, user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return; // 중도 닫기 — 보상 없음, 안내도 없음
+        try {
+          await claimAdReward({ nonceId });
+        } catch {
+          // SSV 가 이미 처리한 경우 — user 상태는 setUser 로 자동 반영됨
+        }
+      } else {
+        // 게스트: 로컬에서 즉시 지급하고 로컬 일일 카운터를 올린다.
+        const result = await showRewardedAd('guest', user.id);
+        if (result === 'load_failed') {
+          showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
+          return;
+        }
+        if (result !== 'rewarded') return;
+        addStarCoral(AD_AMOUNT);
+        recordAdStarCoral();
       }
-      return;
+      playSFX('reward');
+      showToast(`🌸 Star Coral ${AD_AMOUNT}개 획득!`);
+    } finally {
+      setWatchingAd(false);
     }
-
-    // 게스트(로컬/오프라인): 실결제 아님 — 본인 단말 데이터에 그대로 지급.
-    analytics.purchaseStarCoral(pkg.id, total, pkg.priceKRW);
-    addStarCoral(total);
-    playSFX('coin');
-    showToast(`🌸 Star Coral ${total}개 획득!`);
   };
 
   const buyPearl = async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {
@@ -631,53 +664,74 @@ export default function ShopPage() {
       )}
 
       {tab === 'star_coral' && (
-        <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {CURRENCY.STAR_CORAL_PACKAGES.map(pkg => (
-            <div
-              key={pkg.id}
+        <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 10,
+              background: 'var(--color-surface)',
+              borderRadius: 16,
+              padding: '24px 16px',
+              color: '#fff',
+              textAlign: 'center',
+            }}
+          >
+            <span style={{ fontSize: 56 }}>🌸</span>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>광고 보고 Star Coral 받기</div>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
+              광고 1회 시청당 🌸 {AD_AMOUNT}개를 받아요
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-disabled)' }}>
+              오늘 남은 횟수 {remainingAdStarCoral} / {CURRENCY.AD_STAR_CORAL_MAX_PER_DAY}
+            </div>
+            <button
+              onClick={watchAdForStarCoral}
+              disabled={watchingAd || remainingAdStarCoral <= 0 || !isAdsAvailable()}
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'var(--color-surface)',
-                borderRadius: 12,
-                padding: 14,
-                color: '#fff',
-                textAlign: 'left',
+                marginTop: 6,
+                width: '100%',
+                background:
+                  watchingAd || remainingAdStarCoral <= 0 || !isAdsAvailable()
+                    ? 'rgba(255,255,255,0.1)'
+                    : 'var(--color-accent)',
+                color:
+                  watchingAd || remainingAdStarCoral <= 0 || !isAdsAvailable()
+                    ? 'var(--color-text-disabled)'
+                    : '#0a1628',
+                padding: '12px 14px',
+                borderRadius: 10,
+                fontSize: 14,
+                fontWeight: 700,
+                border: 'none',
+                cursor:
+                  watchingAd || remainingAdStarCoral <= 0 || !isAdsAvailable()
+                    ? 'default'
+                    : 'pointer',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 36 }}>🌸</span>
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>{pkg.name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-                    {pkg.amount}개
-                    {pkg.bonus > 0 && (
-                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                        {' '}
-                        +{pkg.bonus} 보너스
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => buyStarCoral(pkg)}
-                style={{
-                  background: 'var(--color-accent)',
-                  color: '#0a1628',
-                  padding: '8px 14px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                ₩{pkg.priceKRW.toLocaleString()}
-              </button>
-            </div>
-          ))}
+              {!isAdsAvailable()
+                ? '앱에서만 이용할 수 있어요'
+                : watchingAd
+                  ? '광고 준비 중…'
+                  : remainingAdStarCoral <= 0
+                    ? '오늘 횟수를 모두 사용했어요'
+                    : `📺 광고 보고 🌸 ${AD_AMOUNT}개 받기`}
+            </button>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--color-text-secondary)',
+              background: 'rgba(255,255,255,0.05)',
+              borderRadius: 10,
+              padding: '10px 12px',
+              lineHeight: 1.5,
+            }}
+          >
+            💡 Star Coral 은 광고를 보면 무료로 받을 수 있어요. 매일 자정에 시청 횟수가 초기화됩니다.
+          </div>
         </div>
       )}
 

@@ -13,7 +13,6 @@ import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
 import { initAds, preloadRewardedAd } from '@/services/ads';
-import { initBilling } from '@/services/billing';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -147,11 +146,12 @@ export default function App() {
       .catch(() => undefined);
   }, []);
 
-  // 네이티브 빌드: Google Play Billing 초기화(상품 등록 + 이벤트 리스너).
-  // 웹에서는 no-op. 결제창은 사용자가 상점에서 직접 트리거한다.
-  useEffect(() => {
-    void initBilling().catch(() => undefined);
-  }, []);
+  // Star Coral 은 유료 결제 대신 보상형 광고로 전환됨 — Play Billing 초기화를 비활성화한다.
+  // (앱을 "유료 결제 없는 앱"으로 유지: 사업자 등록/통신판매업 신고 요구를 피하기 위함)
+  // 결제를 다시 켜려면 아래 주석을 해제하고 ShopPage 의 Star Coral 탭을 결제 UI 로 되돌린다.
+  // useEffect(() => {
+  //   void initBilling().catch(() => undefined);
+  // }, []);
 
   // 로그인 완료 직후 백그라운드 프리페치 — three.js + GLB(Draco) 디코더 + 모델을
   // 사용자가 /tank 로 이동하기 전에 캐시에 올려둔다. 동적 import 라 비로그인 번들에는 포함되지 않음.

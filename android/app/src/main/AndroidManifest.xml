@@ -60,6 +60,4 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ 런타임 알림 권한. 미만 버전은 자동 허용. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Google Play Billing (인앱결제). cordova-plugin-purchase 가 자동 주입하지 않을 때 대비. -->
-    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>

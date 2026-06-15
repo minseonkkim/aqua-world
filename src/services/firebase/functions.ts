@@ -139,7 +139,7 @@ export const reconcileFish = call<{ tankId: string }, { user: User; tank: Tank }
 // claimAdReward:   SSV 가 등록 안 됐거나 실패했을 때 클라가 직접 보상 청구 (폴백)
 // nonce 는 양쪽에서 같은 1회용 키로 동작하므로 중복 지급 위험 없음.
 
-export type AdRewardType = 'hatch_boost' | 'daily_double';
+export type AdRewardType = 'hatch_boost' | 'daily_double' | 'ad_star_coral';
 
 export async function prepareAdReward(
   type: AdRewardType,
