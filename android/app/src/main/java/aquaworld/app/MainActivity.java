@@ -1,4 +1,4 @@
-package app.aquaworld;
+package aquaworld.app;
 
 import com.getcapacitor.BridgeActivity;
 

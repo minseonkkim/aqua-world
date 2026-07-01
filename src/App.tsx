@@ -90,7 +90,7 @@ export default function App() {
   useEffect(() => {
     if (!isNative()) return;
     const sub = CapApp.addListener('appUrlOpen', ({ url: deeplink }) => {
-      // 예: app.aquaworld://oauth/kakao?code=abcd...
+      // 예: aquaworld.app://oauth/kakao?code=abcd...
       try {
         const u = new URL(deeplink);
         const code = u.searchParams.get('code');

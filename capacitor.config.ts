@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.aquaworld',
+  appId: 'aquaworld.app',
   appName: 'AquaWorld',
   webDir: 'dist',
   android: {

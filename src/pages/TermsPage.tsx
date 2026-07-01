@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const EFFECTIVE_DATE = '2026년 6월 1일';
-const REVISED_DATE = '2026년 6월 10일';
+const REVISED_DATE = '2026년 7월 1일';
 const OPERATOR_NAME = '김민선';
 const OPERATOR_EMAIL = 'minsun9856@gmail.com';
 const OPERATOR_PHONE = '010-7176-9856';
@@ -83,8 +83,7 @@ export default function TermsPage() {
           <li style={liStyle}><strong>"회원"</strong>이란 Google 계정 등 소셜 로그인을 통해 가입하여 서비스를 이용하는 자를 말합니다.</li>
           <li style={liStyle}><strong>"게스트"</strong>란 회원가입 없이 기기 내 로컬 데이터만으로 서비스를 이용하는 자를 말합니다.</li>
           <li style={liStyle}><strong>"콘텐츠"</strong>란 서비스 내에 게시되거나 송신되는 모든 정보·텍스트·이미지·캡처 이미지를 말합니다.</li>
-          <li style={liStyle}><strong>"게임 재화"</strong>란 서비스 내에서 사용되는 가상의 화폐(Pearl 및 Star Coral)와 아이템(알·꾸미기 오브젝트·물고기 등)을 말합니다.</li>
-          <li style={liStyle}><strong>"유료 재화"</strong>란 Google Play 인앱결제를 통해 충전되는 Star Coral 및 유료 패키지를 말합니다.</li>
+          <li style={liStyle}><strong>"게임 재화"</strong>란 서비스 내에서 사용되는 가상의 화폐(Pearl 및 Star Coral)와 아이템(알·꾸미기 오브젝트·물고기 등)을 말합니다. 모든 게임 재화는 무상으로만 획득되며 현금으로 구매할 수 없습니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제3조 (약관의 명시와 개정)</h2>
@@ -116,7 +115,7 @@ export default function TermsPage() {
         <h2 style={sectionStyle}>제5조 (서비스의 중단)</h2>
         <ol style={olStyle}>
           <li style={liStyle}>운영자는 시스템 점검, 보수, 교체, 통신 두절, 천재지변 등 운영상 또는 기술상 필요한 경우 서비스 제공을 일시적으로 중단할 수 있습니다.</li>
-          <li style={liStyle}>운영자는 사업 종료, 경영 악화 등 부득이한 사유로 서비스를 영구 종료할 수 있으며, 종료 30일 전에 앱 내 공지 및 이메일로 안내합니다. 유료 재화 잔액이 있는 경우 환불 또는 보상 정책을 함께 안내합니다.</li>
+          <li style={liStyle}>운영자는 사업 종료, 경영 악화 등 부득이한 사유로 서비스를 영구 종료할 수 있으며, 종료 30일 전에 앱 내 공지 및 이메일로 안내합니다.</li>
           <li style={liStyle}>운영자는 본 조에 따른 서비스 중단으로 인하여 이용자에게 발생한 손해에 대하여 운영자의 고의 또는 중대한 과실이 없는 한 책임을 지지 않습니다.</li>
         </ol>
 
@@ -137,13 +136,13 @@ export default function TermsPage() {
         <ol style={olStyle}>
           <li style={liStyle}>회원은 언제든지 앱 내 "설정 &gt; 회원 탈퇴" 메뉴를 통해 직접 탈퇴할 수 있습니다. 탈퇴 요청 시 즉시 처리됩니다.</li>
           <li style={liStyle}>회원 탈퇴 시 회원의 모든 게임 데이터(어항·물고기·재화·도감 등) 및 인증 계정이 즉시 영구 삭제되며, 복구되지 않습니다.</li>
-          <li style={liStyle}>유료 재화(Star Coral 등) 잔액은 환불되지 않으며, 탈퇴와 동시에 소멸합니다. 단, 결제 후 사용하지 않은 유료 재화에 대해서는 제11조에 따른 환불 정책이 적용됩니다.</li>
+          <li style={liStyle}>게임 재화(Pearl·Star Coral 등) 잔액은 현금 가치가 없으며, 탈퇴와 동시에 소멸하고 환불·복구되지 않습니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제8조 (이용자의 의무)</h2>
         <p style={pStyle}>이용자는 다음 행위를 하여서는 안 됩니다.</p>
         <ul style={{ paddingLeft: 20 }}>
-          <li style={liStyle}>타인의 계정·결제 정보를 도용하는 행위</li>
+          <li style={liStyle}>타인의 계정·인증 정보를 도용하는 행위</li>
           <li style={liStyle}>서비스의 운영을 방해할 목적으로 비정상적인 방법(매크로·봇·자동화 도구·취약점 악용)으로 서비스에 접속하거나 게임 재화를 획득하는 행위</li>
           <li style={liStyle}>서비스를 분해·디컴파일·역공학하거나 서비스에 사용된 소스코드·데이터를 무단 추출·복제·배포하는 행위</li>
           <li style={liStyle}>게임 재화·계정을 현금 또는 현물로 거래하는 행위</li>
@@ -164,7 +163,7 @@ export default function TermsPage() {
           <li style={liStyle}>서비스 내 사용되는 게임 재화는 다음과 같이 구분됩니다.
             <ul style={{ paddingLeft: 18, marginTop: 4 }}>
               <li style={liStyle}><strong>Pearl(진주):</strong> 무료 재화. 일일 보상, 먹이주기 보상, 도감 마일스톤 등으로 획득.</li>
-              <li style={liStyle}><strong>Star Coral(스타산호):</strong> Google Play 인앱결제로 충전하거나 보상형 광고·이벤트 보상으로 획득할 수 있는 유료 재화.</li>
+              <li style={liStyle}><strong>Star Coral(스타산호):</strong> 보상형 광고 시청, 이벤트·미션 보상 등으로 무상 획득할 수 있는 게임 재화. 인앱결제·현금 구매는 제공하지 않습니다.</li>
             </ul>
           </li>
           <li style={liStyle}>게임 재화는 운영자가 제공하는 가상의 데이터이며 현금화·환전이 불가능합니다. 이용자는 게임 재화에 대해 소유권이 아닌 이용권만을 가집니다.</li>
@@ -172,17 +171,11 @@ export default function TermsPage() {
           <li style={liStyle}>표시된 확률은 각 아이템(알) 개별 추첨에 적용되며, 서버 측에서 무작위 결정됩니다. 운영자는 표시 확률과 실제 확률이 일치하도록 합리적인 조치를 취합니다.</li>
         </ol>
 
-        <h2 style={sectionStyle}>제11조 (결제 및 환불)</h2>
+        <h2 style={sectionStyle}>제11조 (유료 결제 미제공 및 재화 획득)</h2>
         <ol style={olStyle}>
-          <li style={liStyle}>서비스는 기본적으로 무료로 제공되며, 일부 유료 재화(Star Coral 등)는 Google Play 인앱결제를 통해 구매할 수 있습니다. 결제는 Google Play 결제 시스템을 통해 이루어지며, 결제 금액·수단은 결제 시점에 화면에 표시됩니다.</li>
-          <li style={liStyle}>유료 결제 도입 후, 이용자는 「전자상거래 등에서의 소비자보호에 관한 법률」 제17조에 따라 결제일로부터 7일 이내에 청약을 철회할 수 있습니다. 다만 다음의 경우에는 청약철회가 제한될 수 있습니다.
-            <ul style={{ paddingLeft: 18, marginTop: 4 }}>
-              <li style={liStyle}>이용자가 유료 재화를 일부 또는 전부 사용한 경우</li>
-              <li style={liStyle}>일부만 사용한 경우 미사용분에 한하여 환불 가능</li>
-              <li style={liStyle}>이용자에게 책임이 있는 사유로 재화가 멸실·훼손된 경우</li>
-            </ul>
-          </li>
-          <li style={liStyle}>환불 요청은 위 운영자 이메일로 접수하며, 운영자는 영업일 기준 7일 이내에 처리합니다.</li>
+          <li style={liStyle}>서비스는 전면 무료로 제공되며, 인앱결제 등 유료 구매 기능을 제공하지 않습니다.</li>
+          <li style={liStyle}>모든 게임 재화(Pearl·Star Coral 등)는 보상형 광고 시청, 출석·이벤트·미션 보상 등을 통해 무상으로만 획득할 수 있으며, 현금으로 구매하거나 환전·환불할 수 없습니다.</li>
+          <li style={liStyle}>향후 유료 결제 기능을 도입할 경우, 운영자는 사전에 본 약관을 개정하고 결제·청약철회·환불에 관한 사항을 별도로 고지합니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제12조 (저작권 및 이용자 콘텐츠)</h2>
@@ -204,7 +197,7 @@ export default function TermsPage() {
           <li style={liStyle}>운영자는 천재지변, 전쟁, 통신 두절, 정부의 명령, 노동쟁의 등 운영자의 통제 범위를 벗어난 사유로 서비스를 제공할 수 없는 경우 책임을 지지 않습니다.</li>
           <li style={liStyle}>운영자는 이용자의 귀책사유로 인한 서비스 이용 장애에 대하여 책임을 지지 않습니다.</li>
           <li style={liStyle}>운영자는 무료로 제공되는 서비스 이용과 관련하여 운영자의 고의 또는 중대한 과실이 없는 한 책임을 지지 않습니다.</li>
-          <li style={liStyle}>운영자의 손해배상 책임은 관련 법령에서 달리 정하지 않는 한, 이용자가 직전 1년간 결제한 금액을 한도로 합니다.</li>
+          <li style={liStyle}>본 서비스는 무료로 제공되므로, 운영자의 손해배상 책임은 관련 법령에서 달리 정하지 않는 한 운영자의 고의 또는 중대한 과실로 인해 이용자에게 발생한 직접적인 손해로 한정됩니다.</li>
         </ol>
 
         <h2 style={sectionStyle}>제15조 (분쟁 해결 및 준거법)</h2>
@@ -229,7 +222,7 @@ export default function TermsPage() {
 
         <h2 style={sectionStyle}>부칙</h2>
         <p style={pStyle}>본 약관은 {EFFECTIVE_DATE}부터 시행됩니다.</p>
-        <p style={pStyle}>본 약관은 {REVISED_DATE} 개정되어 같은 날부터 시행됩니다. (인앱결제·보상형 광고 도입 반영)</p>
+        <p style={pStyle}>본 약관은 {REVISED_DATE} 개정되어 같은 날부터 시행됩니다. (인앱결제 기능 제거 및 보상형 광고 전면 전환 반영)</p>
 
         <div style={{
           marginTop: 32,

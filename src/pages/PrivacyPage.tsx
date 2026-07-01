@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const EFFECTIVE_DATE = '2026년 6월 1일';
-const REVISED_DATE = '2026년 6월 10일';
+const REVISED_DATE = '2026년 7월 1일';
 const OPERATOR_NAME = '김민선 (개인 운영)';
 const CPO_NAME = '김민선';
 const CPO_EMAIL = 'minsun9856@gmail.com';
@@ -106,7 +106,6 @@ export default function PrivacyPage() {
           <li style={liStyle}><strong>고객 문의 응대</strong> — 이메일 문의 접수 및 회신</li>
           <li style={liStyle}><strong>서비스 개선</strong> — 오류 진단, 사용성 분석, 신규 기능 개발 참고 (Firebase Analytics)</li>
           <li style={liStyle}><strong>광고 제공</strong> — 보상형 광고 게재, 광고 식별자 기반 광고 송출 및 광고 실적 측정 (AdMob)</li>
-          <li style={liStyle}><strong>유료 서비스 제공</strong> — 인앱 구매(Star Coral 등) 결제 처리 및 영수증 검증, 부정 결제 방지</li>
           <li style={liStyle}><strong>마케팅 정보 전송</strong> — 별도 동의 시 신규 콘텐츠·이벤트·프로모션 안내 (선택)</li>
         </ul>
 
@@ -135,13 +134,7 @@ export default function PrivacyPage() {
           <li style={liStyle}>FCM(Firebase Cloud Messaging) 토큰 — 푸시 알림 수신을 허용한 경우에만 수집</li>
         </ul>
 
-        <p style={subStyle}>마. 인앱 구매 (선택)</p>
-        <ul style={{ paddingLeft: 20 }}>
-          <li style={liStyle}>구매 상품 ID, 구매 토큰(purchaseToken), 구매 내역 — 인앱 구매 시에만 수집·검증</li>
-          <li style={liStyle}>결제 수단·카드 정보 등 실제 결제 정보는 Google Play(Google LLC)가 처리하며, 운영자는 이를 수집·보관하지 않습니다</li>
-        </ul>
-
-        <p style={subStyle}>바. 수집하지 않는 정보</p>
+        <p style={subStyle}>마. 수집하지 않는 정보</p>
         <ul style={{ paddingLeft: 20 }}>
           <li style={liStyle}>주민등록번호, 여권번호, 운전면허번호, 외국인등록번호 등 고유식별정보</li>
           <li style={liStyle}>건강·생체·종교·정치·범죄경력 등 민감정보</li>
@@ -187,11 +180,6 @@ export default function PrivacyPage() {
                 <td style={tdStyle}>이메일 문의 기록</td>
                 <td style={tdStyle}>회신 완료 후 1년</td>
                 <td style={tdStyle}>전자상거래법 제6조 (소비자 불만 또는 분쟁처리)</td>
-              </tr>
-              <tr>
-                <td style={tdStyle}>인앱 구매·결제 기록</td>
-                <td style={tdStyle}>5년</td>
-                <td style={tdStyle}>전자상거래법 제6조 (대금결제·재화공급 기록)</td>
               </tr>
             </tbody>
           </table>
@@ -279,11 +267,6 @@ export default function PrivacyPage() {
                 <td style={tdStyle}>보상형 광고 게재 및 광고 실적 측정</td>
                 <td style={tdStyle}>미국</td>
               </tr>
-              <tr>
-                <td style={tdStyle}>Google LLC (Google Play 결제)</td>
-                <td style={tdStyle}>인앱 결제 처리 및 영수증 검증</td>
-                <td style={tdStyle}>미국</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -315,7 +298,7 @@ export default function PrivacyPage() {
           운영자는 개인정보 보유기간의 경과, 처리목적 달성 등 개인정보가 불필요하게 되었을 때에는
           지체 없이 해당 개인정보를 파기합니다. 회원 탈퇴 요청(앱 내 "설정 &gt; 회원 탈퇴")
           접수 즉시 회원 식별 정보 및 서비스 진행 데이터(어항·재화·도감 등)는 영구 삭제되며,
-          복구가 불가능합니다. 법령에 의해 별도 보존이 필요한 항목(예: 결제 도입 후 거래 기록)은
+          복구가 불가능합니다. 법령에 의해 별도 보존이 필요한 항목(예: 이메일 문의 기록 등)은
           해당 보존 기간 동안 분리 보관 후 자동 파기합니다.
         </p>
         <ul style={{ paddingLeft: 20 }}>
@@ -399,6 +382,7 @@ export default function PrivacyPage() {
         <ul style={{ paddingLeft: 20 }}>
           <li style={liStyle}>2026년 6월 1일 · 최초 제정 및 시행</li>
           <li style={liStyle}>2026년 6월 10일 · 보상형 광고(AdMob)·인앱결제(Google Play)·분석(Firebase Analytics) 도입 반영, 광고 식별자 제3자 제공 및 위탁 항목 추가</li>
+          <li style={liStyle}>2026년 7월 1일 · 인앱결제(Google Play 결제) 기능 제거 및 보상형 광고 전면 전환 반영, 구매·결제 관련 처리 목적·수집 항목·보유 기록·위탁 삭제</li>
         </ul>
 
         <div style={{

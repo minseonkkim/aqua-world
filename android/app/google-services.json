@@ -49,6 +49,35 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991739230354:android:f6350b87c03889c6a70e4b",
+        "android_client_info": {
+          "package_name": "aquaworld.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYqhyw-enxQUIWWI6tIexP5zos7c2DiGU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
