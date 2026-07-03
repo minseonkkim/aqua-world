@@ -59,6 +59,30 @@
       },
       "oauth_client": [
         {
+          "client_id": "991739230354-h794ehhdke32i31ijguoj052qbh92fpf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "aquaworld.app",
+            "certificate_hash": "22694ce02a14fe6fc086ce8373a001b7b5405923"
+          }
+        },
+        {
+          "client_id": "991739230354-n0jbhou0eu5nhjkbtl47k7ktl5qfjg43.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "aquaworld.app",
+            "certificate_hash": "e38e2a367bed282ef05be6ddb46677304727e741"
+          }
+        },
+        {
+          "client_id": "991739230354-vjn73a5d2v2lg67balug6cfgt770j4ur.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "aquaworld.app",
+            "certificate_hash": "743dd75c6181afaf132a535c567657830dc5b0f3"
+          }
+        },
+        {
           "client_id": "991739230354-rngo66a76tapsgodo69s7mj0da3b57qv.apps.googleusercontent.com",
           "client_type": 3
         }
