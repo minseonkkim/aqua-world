@@ -34,8 +34,19 @@ const SPECIES = {
   mandarin_fish: { name: "만다린피시", rarity: "rare" },
   leafy_sea_dragon: { name: "바다용", rarity: "epic" },
   coelacanth: { name: "실러캔스", rarity: "legendary" },
+  // 귀여운 마스코트 확장 10종 (클라 src/store/useFishStore 와 일치)
+  pufferfish: { name: "복어", rarity: "common" },
+  starfish: { name: "불가사리", rarity: "common" },
+  crab: { name: "게", rarity: "common" },
+  jellyfish: { name: "해파리", rarity: "rare" },
+  octopus: { name: "문어", rarity: "rare" },
+  sea_turtle: { name: "바다거북", rarity: "rare" },
+  axolotl: { name: "아홀로틀", rarity: "epic" },
+  manta_ray: { name: "쥐가오리", rarity: "epic" },
+  penguin: { name: "펭귄", rarity: "epic" },
+  narwhal: { name: "일각고래", rarity: "legendary" },
 };
-const SPECIES_COUNT = Object.keys(SPECIES).length; // 도감 총 종 수 (10)
+const SPECIES_COUNT = Object.keys(SPECIES).length; // 도감 총 종 수 (20)
 
 // ─── 가챠: 알 등급별 희귀도 풀 ───
 const RARITY_BY_EGG = {
@@ -44,10 +55,10 @@ const RARITY_BY_EGG = {
   legendary: ["epic", "epic", "epic", "epic", "epic", "legendary", "legendary", "legendary", "legendary", "legendary"],
 };
 const SPECIES_BY_RARITY = {
-  common: ["clownfish", "guppy", "goldfish", "seahorse", "zebrafish"],
-  rare: ["betta", "angelfish", "mandarin_fish"],
-  epic: ["leafy_sea_dragon"],
-  legendary: ["coelacanth"],
+  common: ["clownfish", "guppy", "goldfish", "seahorse", "zebrafish", "pufferfish", "starfish", "crab"],
+  rare: ["betta", "angelfish", "mandarin_fish", "jellyfish", "octopus", "sea_turtle"],
+  epic: ["leafy_sea_dragon", "axolotl", "manta_ray", "penguin"],
+  legendary: ["coelacanth", "narwhal"],
 };
 
 // ─── 알 ───
