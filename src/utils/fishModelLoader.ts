@@ -14,6 +14,16 @@ const SPECIES_TO_MODEL: Record<string, string> = {
   mandarin_fish: 'mandarin',
   leafy_sea_dragon: 'sea_dragon',
   coelacanth: 'coelacanth',
+  pufferfish: 'pufferfish',
+  starfish: 'starfish',
+  crab: 'crab',
+  jellyfish: 'jellyfish',
+  octopus: 'octopus',
+  sea_turtle: 'sea_turtle',
+  axolotl: 'axolotl',
+  manta_ray: 'manta_ray',
+  penguin: 'penguin',
+  narwhal: 'narwhal',
 };
 
 const MODEL_IDS = Array.from(new Set(Object.values(SPECIES_TO_MODEL)));

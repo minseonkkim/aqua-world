@@ -29,6 +29,16 @@ const SPECIES_TO_MODEL = {
   mandarin_fish: 'mandarin',
   leafy_sea_dragon: 'sea_dragon',
   coelacanth: 'coelacanth',
+  pufferfish: 'pufferfish',
+  starfish: 'starfish',
+  crab: 'crab',
+  jellyfish: 'jellyfish',
+  octopus: 'octopus',
+  sea_turtle: 'sea_turtle',
+  axolotl: 'axolotl',
+  manta_ray: 'manta_ray',
+  penguin: 'penguin',
+  narwhal: 'narwhal',
 };
 
 // ---- args ----

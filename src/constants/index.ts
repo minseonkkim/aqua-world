@@ -237,10 +237,10 @@ export const RARITY_BY_EGG: Record<EggTier, FishRarity[]> = {
 };
 
 export const SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
-  common:    ['clownfish', 'guppy', 'goldfish', 'seahorse', 'zebrafish'],
-  rare:      ['betta', 'angelfish', 'mandarin_fish'],
-  epic:      ['leafy_sea_dragon'],
-  legendary: ['coelacanth'],
+  common:    ['clownfish', 'guppy', 'goldfish', 'seahorse', 'zebrafish', 'pufferfish', 'starfish', 'crab'],
+  rare:      ['betta', 'angelfish', 'mandarin_fish', 'jellyfish', 'octopus', 'sea_turtle'],
+  epic:      ['leafy_sea_dragon', 'axolotl', 'manta_ray', 'penguin'],
+  legendary: ['coelacanth', 'narwhal'],
 };
 
 // ==================== 플레이어 레벨 ====================

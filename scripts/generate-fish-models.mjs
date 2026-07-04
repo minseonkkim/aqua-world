@@ -706,6 +706,29 @@ const PRESETS = {
     mouthColor: '#8f7ec0',
     eye:      { x: 0.52, y: 0.04, size: 0.095, z: 0.27 },
   },
+
+  // Near-spherical balloon body — chubby and adorable.
+  pufferfish: {
+    length: 0.86, maxHeight: 0.44, maxWidth: 0.44,
+    bodyColor: '#ffcf7a', finColor: '#f2ba54',
+    emissive: [0.12, 0.088, 0.035],
+    sideProfile: roundProfile(0.44, 0.34),
+    topProfile:  roundProfile(0.44, 0.34),
+    bellyColor: '#fff2d6',
+    belly: { length: 0.34, height: 0.16, width: 0.30, x: 0.04, y: -0.22 },
+    spots: [
+      { x: 0.02, y: 0.16, size: 0.05, color: '#e6a648' },
+      { x: -0.16, y: 0.02, size: 0.05, color: '#e6a648' },
+      { x: 0.14, y: -0.06, size: 0.045, color: '#e6a648' },
+    ],
+    dorsal:   { length: 0.22, height: 0.10, x: -0.04, attach: 0.40 },
+    anal:     { length: 0.18, height: 0.08, x: -0.06, attach: -0.38 },
+    tail:     { spread: 0.18, height: 0.20, fork: 0.05, baseWidth: 0.11 },
+    pectoral: { x: 0.22, y: -0.02, width: 0.13, length: 0.16 },
+    mouthColor: '#d16a4a', mouthScale: 1.1,
+    eye:      { x: 0.34, y: 0.11, size: 0.092, z: 0.24 },
+    blush:    { x: 0.22, y: -0.01, z: 0.31, size: 0.06 },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -806,6 +829,379 @@ function buildSeaDragon() {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers for the cute-mascot custom builders (starfish, crab, jellyfish, …)
+// ---------------------------------------------------------------------------
+
+// Concatenate two geoms into one (offsets the second's indices).
+function mergeGeom(a, b) {
+  const off = a.positions.length / 3;
+  return {
+    positions: a.positions.concat(b.positions),
+    normals: a.normals.concat(b.normals),
+    indices: a.indices.concat(b.indices.map((i) => i + off)),
+  };
+}
+
+const lerp = (a, b, f) => a + (b - a) * f;
+
+// Blobby limb / tentacle / arm: overlapping spheres along a polyline path.
+// path: array of [x,y,z]; radiusFn(t) → radius for t in [0,1]. Cute & robust
+// (each sphere is closed, so no winding/cap math). Optionally squash per-axis.
+// `steps` resamples the polyline into that many evenly-spaced beads so limbs stay
+// smooth (dense overlap) instead of reading as a scatter of separate balls.
+function limbGeom(path, radiusFn, { lat = 6, lon = 8, sx = 1, sy = 1, sz = 1, steps = null } = {}) {
+  let pts = path;
+  if (steps) {
+    pts = [];
+    for (let k = 0; k < steps; k++) {
+      const u = (k / (steps - 1)) * (path.length - 1);
+      const i = Math.min(Math.floor(u), path.length - 2);
+      const f = u - i;
+      pts.push([lerp(path[i][0], path[i + 1][0], f), lerp(path[i][1], path[i + 1][1], f), lerp(path[i][2], path[i + 1][2], f)]);
+    }
+  }
+  let g = null;
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0 : i / (n - 1);
+    const r = radiusFn(t);
+    const s = transformGeom(sphere(r * sx, r * sy, r * sz, lat, lon), M.translate(pts[i][0], pts[i][1], pts[i][2]));
+    g = g ? mergeGeom(g, s) : s;
+  }
+  return g;
+}
+
+// Add the shared cute face (eyes + smile + optional blush) to a parts array.
+function addFace(parts, { x, y = 0, eyeZ, eyeSize, mouthX, mouthY = 0, mouthScale = 1, mouthColor = '#a24a4a', eyeY, blush }) {
+  [+1, -1].forEach((side) => {
+    eyeParts([x, eyeY ?? y, side * eyeZ], eyeSize, side).forEach((p) => parts.push(p));
+  });
+  mouthPart(mouthX ?? x, hex(mouthColor), mouthScale).forEach((p) => {
+    // shift smile to the requested mouth height
+    if (mouthY) p.geom = transformGeom(p.geom, M.translate(0, mouthY, 0));
+    parts.push(p);
+  });
+  if (blush) blushParts(blush.x, blush.y, blush.z, blush.size).forEach((p) => parts.push(p));
+}
+
+// ---------------------------------------------------------------------------
+// Cute-mascot custom builders (10 new species)
+// ---------------------------------------------------------------------------
+
+// 불가사리 — chubby 5-arm star lying in the X-Y plane (broad face toward the
+// viewer), with a cute front face. Thin in Z so the star silhouette reads.
+function buildStarfish() {
+  const BODY = hex('#ff9db0'), LIGHT = hex('#ffc2d0');
+  const parts = [];
+  const arms = 5, armLen = 0.50, thinZ = 0.5;
+  for (let a = 0; a < arms; a++) {
+    const ang = Math.PI / 2 + a * ((2 * Math.PI) / arms); // first arm points up
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const path = [[0, 0, 0], [dx * armLen, dy * armLen, 0]];
+    const g = limbGeom(path, (t) => 0.19 * (1 - t * 0.86) + 0.03, { sz: thinZ, steps: 16, lat: 8, lon: 10 });
+    parts.push({ name: `arm${a}`, color: a % 2 ? LIGHT : BODY, emissive: [0.18, 0.08, 0.10], geom: g });
+  }
+  parts.push({ name: 'center', color: BODY, emissive: [0.18, 0.08, 0.10],
+    geom: transformGeom(sphere(0.23, 0.23, 0.11, 14, 16), M.ident()) });
+  // front face on the broad -Z face (toward the camera): two eyes + smile + blush
+  const fz = -0.12;
+  [-1, +1].forEach((sx) => {
+    eyeParts([sx * 0.085, 0.03, fz], 0.058, -1).forEach((p) => parts.push(p));
+  });
+  [[0, -0.09, 0.024], [-0.06, -0.065, 0.016], [0.06, -0.065, 0.016]].forEach(([mx, my, r], i) =>
+    parts.push({ name: `smile${i}`, color: hex('#c85a6a'), roughness: 0.6,
+      geom: transformGeom(sphere(r, r * 0.8, r, 6, 8), M.translate(mx, my, fz - 0.02)) }));
+  [-1, +1].forEach((sx) => parts.push({ name: `blush${sx}`, color: BLUSH, roughness: 0.72,
+    geom: transformGeom(sphere(0.05, 0.04, 0.02, 6, 8), M.translate(sx * 0.16, -0.02, fz - 0.01)) }));
+  return parts;
+}
+
+// 게 — wide domed carapace, two big claws, stalked eyes, six legs, facing +X.
+function buildCrab() {
+  const BODY = hex('#ff6f61'), CLAW = hex('#ff8566'), BELLY = hex('#ffd0c4');
+  const parts = [];
+  // carapace (wide in Z, shallow in X, domed in Y)
+  parts.push({ name: 'shell', color: BODY, emissive: [0.14, 0.05, 0.04],
+    geom: transformGeom(sphere(0.30, 0.22, 0.42, 14, 18), M.translate(0, 0, 0)) });
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.26, 0.10, 0.36, 10, 14), M.translate(0.02, -0.16, 0)) });
+  // legs — 3 per side, from lower body out & down (jointed: knee then foot)
+  [+1, -1].forEach((side) => {
+    for (let i = 0; i < 3; i++) {
+      const x0 = 0.12 - i * 0.20;
+      const path = [[x0, -0.08, side * 0.30], [x0 - 0.06, -0.14, side * 0.52], [x0 - 0.12, -0.32, side * 0.56]];
+      parts.push({ name: `leg${i}_${side}`, color: CLAW, geom: limbGeom(path, (t) => 0.055 * (1 - 0.55 * t), { steps: 14, lat: 6, lon: 8 }) });
+    }
+  });
+  // claws — big front pincers
+  [+1, -1].forEach((side) => {
+    const armPath = [[0.24, -0.04, side * 0.30], [0.34, -0.02, side * 0.42]];
+    parts.push({ name: `arm_${side}`, color: CLAW, geom: limbGeom(armPath, () => 0.06, { steps: 8 }) });
+    parts.push({ name: `claw_${side}`, color: CLAW, emissive: [0.16, 0.06, 0.05],
+      geom: transformGeom(sphere(0.15, 0.16, 0.12, 12, 14), M.translate(0.40, 0.02, side * 0.46)) });
+    // pincer tip (lighter, small)
+    parts.push({ name: `pincer_${side}`, color: BODY,
+      geom: transformGeom(sphere(0.07, 0.09, 0.06, 8, 10), M.translate(0.50, 0.06, side * 0.46)) });
+  });
+  // eyestalks + eyes on top-front
+  [+1, -1].forEach((side) => {
+    parts.push({ name: `stalk_${side}`, color: BODY,
+      geom: limbGeom([[0.20, 0.16, side * 0.10], [0.22, 0.30, side * 0.12]], () => 0.035) });
+    eyeParts([0.23, 0.34, side * 0.12], 0.06, side).forEach((p) => parts.push(p));
+  });
+  // smile on the front face
+  mouthPart(0.30, hex('#c24a3f'), 1.2).forEach((p) => { p.geom = transformGeom(p.geom, M.translate(0, 0.04, 0)); parts.push(p); });
+  blushParts(0.24, 0.06, 0.24, 0.055).forEach((p) => parts.push(p));
+  return parts;
+}
+
+// 해파리 — glowing dome bell + hanging tentacles, face on the bell front.
+function buildJellyfish() {
+  const BELL = hex('#d7b8ff'), FRILL = hex('#ecdfff');
+  const glow = [0.20, 0.14, 0.30];
+  const parts = [];
+  // bell (rounded dome, wider than tall)
+  parts.push({ name: 'bell', color: BELL, roughness: 0.4, emissive: glow,
+    geom: transformGeom(sphere(0.36, 0.32, 0.36, 16, 20), M.translate(0, 0.10, 0)) });
+  // scalloped rim
+  const rimN = 8;
+  for (let i = 0; i < rimN; i++) {
+    const a = (i / rimN) * Math.PI * 2;
+    parts.push({ name: `rim${i}`, color: FRILL, roughness: 0.4, emissive: glow,
+      geom: transformGeom(sphere(0.08, 0.05, 0.08, 6, 8), M.translate(Math.cos(a) * 0.30, -0.10, Math.sin(a) * 0.30)) });
+  }
+  // long thin tentacles hanging & curling down
+  const tentN = 7;
+  for (let i = 0; i < tentN; i++) {
+    const a = (i / tentN) * Math.PI * 2;
+    const bx = Math.cos(a) * 0.22, bz = Math.sin(a) * 0.22;
+    const path = [];
+    const segs = 8;
+    for (let j = 0; j < segs; j++) {
+      const t = j / (segs - 1);
+      const curl = Math.sin(t * Math.PI * 1.5 + i) * 0.06;
+      path.push([bx + curl, -0.12 - t * 0.55, bz + curl]);
+    }
+    parts.push({ name: `tent${i}`, color: FRILL, roughness: 0.4, emissive: glow,
+      geom: limbGeom(path, (t) => 0.03 * (1 - 0.7 * t), { lat: 5, lon: 6 }) });
+  }
+  // 4 wider frilly oral arms
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    const bx = Math.cos(a) * 0.10, bz = Math.sin(a) * 0.10;
+    const path = [];
+    const segs = 6;
+    for (let j = 0; j < segs; j++) { const t = j / (segs - 1); path.push([bx + Math.sin(t * 4) * 0.04, -0.10 - t * 0.38, bz]); }
+    parts.push({ name: `oral${i}`, color: BELL, roughness: 0.4, emissive: glow,
+      geom: limbGeom(path, (t) => 0.055 * (1 - 0.5 * t), { lat: 5, lon: 6 }) });
+  }
+  // cute face on the bell front (+X)
+  addFace(parts, { x: 0.30, eyeY: 0.12, eyeZ: 0.10, eyeSize: 0.062, mouthX: 0.35, mouthY: 0.02, mouthScale: 0.9, mouthColor: '#a678d8',
+    blush: { x: 0.26, y: 0.02, z: 0.20, size: 0.05 } });
+  return parts;
+}
+
+// 문어 — round mantle, big eyes, and eight curling arms.
+function buildOctopus() {
+  const BODY = hex('#ff9ec4'), ARM = hex('#ffb0d0'), SUCK = hex('#ffe0ec');
+  const parts = [];
+  parts.push({ name: 'mantle', color: BODY, emissive: [0.16, 0.08, 0.12],
+    geom: transformGeom(sphere(0.34, 0.38, 0.34, 16, 20), M.translate(0, 0.08, 0)) });
+  // 8 arms radiating from the base, sweeping out and curling down (smooth tapered tentacles)
+  const armN = 8;
+  for (let i = 0; i < armN; i++) {
+    const a = (i / armN) * Math.PI * 2;
+    const dx = Math.cos(a), dz = Math.sin(a);
+    const path = [];
+    const segs = 6;
+    for (let j = 0; j < segs; j++) {
+      const t = j / (segs - 1);
+      const reach = 0.14 + t * 0.34;
+      const drop = -0.12 - t * 0.34 + Math.sin(t * Math.PI) * 0.12; // dip then curl up a touch
+      path.push([dx * reach, drop, dz * reach]);
+    }
+    parts.push({ name: `arm${i}`, color: ARM, emissive: [0.16, 0.08, 0.11],
+      geom: limbGeom(path, (t) => 0.085 * (1 - 0.78 * t), { lat: 7, lon: 9, steps: 20 }) });
+  }
+  // a couple of sucker dots on the two front arms
+  [+1, -1].forEach((side) => {
+    for (let k = 0; k < 3; k++) {
+      const r = 0.16 + k * 0.10;
+      parts.push({ name: `suck_${side}_${k}`, color: SUCK,
+        geom: transformGeom(sphere(0.028, 0.028, 0.016, 6, 8), M.translate(0.10 + r, -0.16 - k * 0.06, side * 0.06)) });
+    }
+  });
+  addFace(parts, { x: 0.32, eyeY: 0.14, eyeZ: 0.12, eyeSize: 0.085, mouthX: 0.36, mouthY: 0.0, mouthScale: 1.0, mouthColor: '#d16a95',
+    blush: { x: 0.24, y: 0.02, z: 0.24, size: 0.06 } });
+  return parts;
+}
+
+// 바다거북 — domed shell, plastron, head, four flippers, tiny tail.
+function buildSeaTurtle() {
+  const SHELL = hex('#66b06a'), SCUTE = hex('#3f8a52'), SKIN = hex('#a9d9a0'), BELLY = hex('#eef6d8');
+  const parts = [];
+  // carapace dome (wide in X & Z, shallow Y)
+  parts.push({ name: 'shell', color: SHELL, emissive: [0.06, 0.11, 0.05],
+    geom: transformGeom(sphere(0.38, 0.26, 0.40, 16, 20), M.translate(-0.02, 0.06, 0)) });
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.32, 0.10, 0.34, 12, 16), M.translate(-0.02, -0.14, 0)) });
+  // scute pattern — flattened dark hexish spots on top
+  const scutes = [[0, 0.28, 0], [0.16, 0.24, 0.10], [0.16, 0.24, -0.10], [-0.18, 0.24, 0.12], [-0.18, 0.24, -0.12], [-0.02, 0.24, 0.24], [-0.02, 0.24, -0.24]];
+  scutes.forEach(([x, y, z], i) => parts.push({ name: `scute${i}`, color: SCUTE,
+    geom: transformGeom(sphere(0.09, 0.03, 0.09, 6, 6), M.translate(x, y, z)) }));
+  // head poking forward
+  parts.push({ name: 'head', color: SKIN, emissive: [0.05, 0.10, 0.045],
+    geom: transformGeom(sphere(0.17, 0.16, 0.16, 12, 14), M.translate(0.40, -0.02, 0)) });
+  // front flippers (big flattened paddles, swept forward) + rear flippers
+  const flip = (x, y, z, side, len, wid, rot) => {
+    const g = limbGeom([[x, y, side * z], [x - 0.04, y - 0.02, side * (z + len * 0.5)], [x - 0.10, y - 0.03, side * (z + len)]],
+      (t) => wid * (1 - 0.5 * t), { sy: 0.32 });
+    parts.push({ name: `flip_${x}_${side}`, color: SKIN, geom: transformGeom(g, M.chain(M.translate(x, y, side * z), M.rotY(side * rot), M.translate(-x, -y, -side * z))) });
+  };
+  [+1, -1].forEach((side) => {
+    flip(0.20, -0.04, 0.30, side, 0.34, 0.14, 0.5);   // front
+    flip(-0.24, -0.06, 0.26, side, 0.22, 0.10, 0.3);  // rear
+  });
+  // little tail
+  parts.push({ name: 'tail', color: SKIN, geom: limbGeom([[-0.40, -0.02, 0], [-0.48, -0.05, 0]], (t) => 0.05 * (1 - t)) });
+  addFace(parts, { x: 0.54, eyeY: 0.02, eyeZ: 0.10, eyeSize: 0.06, mouthX: 0.55, mouthY: -0.06, mouthScale: 0.85, mouthColor: '#5f8a4f',
+    blush: { x: 0.46, y: -0.05, z: 0.13, size: 0.05 } });
+  return parts;
+}
+
+// 아홀로틀 — chubby pink salamander with feathery external gills, legs, smile.
+function buildAxolotl() {
+  const BODY = hex('#ffbcd4'), GILL = hex('#ff7fa8'), BELLY = hex('#ffe4ee'), FIN = hex('#ffd0e0');
+  const parts = [];
+  // body: rounded head (+X) tapering smoothly to a finned tail (-X)
+  parts.push({ name: 'body', color: BODY, emissive: [0.16, 0.09, 0.12],
+    geom: fishBody({ length: 0.9,
+      sideProfile: cuteBody(0.19, { peak: 0.22, noseR: 0.74, peduncle: 0.12, belly: 0.85, headBoost: 0.0 }),
+      topProfile:  cuteBody(0.17, { peak: 0.22, noseR: 0.74, peduncle: 0.12, belly: 0.85, headBoost: 0.0 }) }) });
+  // belly
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.30, 0.09, 0.14, 10, 14), M.translate(0.08, -0.13, 0)) });
+  // tail fin (vertical, flattened in Z) at the peduncle
+  parts.push({ name: 'tailfin', color: FIN,
+    geom: transformGeom(sailFin({ length: 0.42, height: 0.20 }), M.translate(-0.46, 0.0, 0)) });
+  parts.push({ name: 'tailfin2', color: FIN,
+    geom: transformGeom(sailFin({ length: 0.42, height: 0.16 }), M.chain(M.translate(-0.46, 0.0, 0), M.rotZ(Math.PI))) });
+  // 3 feathery gill stalks per side — the signature frills
+  [+1, -1].forEach((side) => {
+    for (let g = 0; g < 3; g++) {
+      const ang = 0.5 + g * 0.55;          // fan upward/back
+      const bx = 0.22 - g * 0.03, by = 0.05, bz = side * 0.15;
+      const tip = [bx - Math.cos(ang) * 0.12, by + Math.sin(ang) * 0.22, bz + side * 0.16];
+      parts.push({ name: `gill_${side}_${g}`, color: GILL, emissive: [0.20, 0.09, 0.12],
+        geom: limbGeom([[bx, by, bz], tip], (t) => 0.05 * (1 - 0.35 * t), { lat: 6, lon: 8, steps: 8 }) });
+      // fluffy tip
+      parts.push({ name: `gilltip_${side}_${g}`, color: GILL,
+        geom: transformGeom(sphere(0.07, 0.07, 0.07, 7, 9), M.translate(tip[0], tip[1], tip[2])) });
+    }
+  });
+  // 4 stubby legs
+  const leg = (x, side) => parts.push({ name: `leg_${x}_${side}`, color: BODY,
+    geom: limbGeom([[x, -0.11, side * 0.10], [x - 0.01, -0.22, side * 0.16], [x - 0.03, -0.28, side * 0.17]], (t) => 0.052 * (1 - 0.35 * t), { steps: 10, lat: 6, lon: 8 }) });
+  [+1, -1].forEach((side) => { leg(0.20, side); leg(-0.08, side); });
+  addFace(parts, { x: 0.44, eyeY: 0.04, eyeZ: 0.13, eyeSize: 0.058, mouthX: 0.48, mouthY: -0.05, mouthScale: 1.6, mouthColor: '#e07a9a',
+    blush: { x: 0.34, y: -0.03, z: 0.17, size: 0.06 } });
+  return parts;
+}
+
+// 쥐가오리 — flat diamond body with wide wings, cephalic horns, long tail.
+function buildMantaRay() {
+  const TOP = hex('#5f7fc4'), BELLY = hex('#dfe8f7'), SPOT = hex('#e8ecff');
+  const parts = [];
+  // central flattened body (disc)
+  parts.push({ name: 'body', color: TOP, emissive: [0.05, 0.06, 0.11],
+    geom: transformGeom(sphere(0.34, 0.11, 0.22, 16, 18), M.translate(0, 0, 0)) });
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.28, 0.06, 0.18, 12, 14), M.translate(0.02, -0.07, 0)) });
+  // wings — swept lofted surfaces that arc UP toward the tips (dihedral) so the
+  // silhouette reads from a side-on camera instead of vanishing edge-on.
+  [+1, -1].forEach((side) => {
+    const N = 8, pos = [], nrm = [], idx = [];
+    for (let i = 0; i <= N; i++) {
+      const u = i / N;
+      const chord = 0.58 * (1 - u) + 0.05;   // wide at the root, tapers to the tip
+      const lead = 0.22 - u * 0.30;          // leading edge sweeps back
+      const trail = lead - chord;
+      const z = side * (0.10 + u * 0.56);    // span outward
+      const y = u * u * 0.16;                // rise toward the wingtip
+      pos.push(lead, y, z); nrm.push(0, 1, 0.3 * side);
+      pos.push(trail, y - 0.015, z); nrm.push(0, 1, 0.3 * side);
+    }
+    for (let i = 0; i < N; i++) {
+      const a = i * 2;
+      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3, a, a + 1, a + 2, a + 1, a + 3, a + 2); // both windings
+    }
+    parts.push({ name: `wing_${side}`, color: TOP, emissive: [0.05, 0.06, 0.11], geom: { positions: pos, normals: nrm, indices: idx } });
+  });
+  // cephalic horns at the front
+  [+1, -1].forEach((side) => parts.push({ name: `horn_${side}`, color: TOP,
+    geom: limbGeom([[0.32, -0.02, side * 0.06], [0.44, -0.03, side * 0.08]], (t) => 0.04 * (1 - 0.5 * t), { steps: 6 }) }));
+  // long whip tail
+  parts.push({ name: 'tail', color: TOP,
+    geom: limbGeom([[-0.30, 0.03, 0], [-0.55, 0.03, 0], [-0.80, 0.02, 0]], (t) => 0.045 * (1 - 0.85 * t), { steps: 16 }) });
+  // white top spots
+  [[0.02, 0.10], [-0.06, -0.08], [0.10, 0.0]].forEach(([x, z], i) => parts.push({ name: `spot${i}`, color: SPOT,
+    geom: transformGeom(sphere(0.05, 0.02, 0.05, 6, 8), M.translate(x, 0.09, z)) }));
+  addFace(parts, { x: 0.30, eyeY: 0.02, eyeZ: 0.17, eyeSize: 0.05, mouthX: 0.33, mouthY: -0.05, mouthScale: 1.0, mouthColor: '#3f5aa0' });
+  return parts;
+}
+
+// 펭귄 — chubby two-tone body, flipper wings, beak, feet, big eyes.
+function buildPenguin() {
+  const BACK = hex('#3a4a63'), BELLY = hex('#f7f7f2'), BEAK = hex('#ffb347'), FOOT = hex('#ff9a2e');
+  const parts = [];
+  // egg body (tall), facing +X; back darker, belly white on the front
+  parts.push({ name: 'body', color: BACK, emissive: [0.03, 0.04, 0.05],
+    geom: transformGeom(sphere(0.30, 0.42, 0.30, 16, 20), M.translate(0, 0, 0)) });
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.24, 0.36, 0.22, 14, 16), M.translate(0.12, -0.02, 0)) });
+  // face patch (white around eyes) on the upper front
+  parts.push({ name: 'facepatch', color: BELLY,
+    geom: transformGeom(sphere(0.14, 0.16, 0.20, 12, 14), M.translate(0.20, 0.22, 0)) });
+  // beak
+  parts.push({ name: 'beak', color: BEAK, emissive: [0.14, 0.08, 0.02],
+    geom: transformGeom(sphere(0.10, 0.05, 0.06, 8, 10), M.translate(0.34, 0.14, 0)) });
+  // flipper wings
+  [+1, -1].forEach((side) => parts.push({ name: `wing_${side}`, color: BACK,
+    geom: limbGeom([[0.0, 0.10, side * 0.28], [0.02, -0.10, side * 0.32], [0.04, -0.26, side * 0.28]], (t) => 0.09 * (1 - 0.6 * t), { sx: 0.5 }) }));
+  // feet
+  [+1, -1].forEach((side) => parts.push({ name: `foot_${side}`, color: FOOT,
+    geom: transformGeom(sphere(0.10, 0.04, 0.07, 8, 10), M.translate(0.16, -0.42, side * 0.10)) }));
+  addFace(parts, { x: 0.28, eyeY: 0.22, eyeZ: 0.09, eyeSize: 0.072, mouthX: 0.0, mouthScale: 0.0, mouthColor: '#3a4a63',
+    blush: { x: 0.24, y: 0.12, z: 0.16, size: 0.05 } });
+  return parts;
+}
+
+// 일각고래 — chubby blue whale body with a long ivory tusk & horizontal flukes.
+function buildNarwhal() {
+  const BODY = hex('#8fb3d9'), BELLY = hex('#e3eef7'), TUSK = hex('#fff4e0'), SPOT = hex('#b8d0e8');
+  const parts = [];
+  parts.push({ name: 'body', color: BODY, emissive: [0.07, 0.10, 0.14],
+    geom: fishBody({ length: 1.1, sideProfile: cuteBody(0.30, { peak: 0.30, noseR: 0.5, peduncle: 0.28, belly: 0.72, headBoost: 0.06 }),
+      topProfile: cuteBody(0.27, { peak: 0.30, noseR: 0.5, peduncle: 0.28, belly: 0.72, headBoost: 0.06 }) }) });
+  parts.push({ name: 'belly', color: BELLY,
+    geom: transformGeom(sphere(0.44, 0.14, 0.22, 12, 16), M.translate(0.06, -0.20, 0)) });
+  // horizontal tail flukes (fanTail rotated flat into the X-Z plane)
+  [+1, -1].forEach((side) => parts.push({ name: `fluke_${side}`, color: BODY,
+    geom: transformGeom(fanTail({ spread: 0.34, height: 0.26 }), M.chain(M.translate(-0.55, 0.0, 0), M.rotX(-Math.PI / 2), M.rotZ(side > 0 ? 0.2 : -0.2), M.scale(1, 1, side))) }));
+  // spiral-ish ivory tusk from the snout
+  const tuskPath = [];
+  for (let i = 0; i < 8; i++) { const t = i / 7; tuskPath.push([0.55 + t * 0.55, 0.02 + t * 0.04, Math.sin(t * 6) * 0.012]); }
+  parts.push({ name: 'tusk', color: TUSK, emissive: [0.14, 0.13, 0.10],
+    geom: limbGeom(tuskPath, (t) => 0.038 * (1 - 0.8 * t), { lat: 6, lon: 8, steps: 20 }) });
+  // blowhole + light dorsal spots
+  parts.push({ name: 'blowhole', color: hex('#3a4a5a'), geom: transformGeom(sphere(0.03, 0.02, 0.03, 6, 6), M.translate(0.30, 0.28, 0)) });
+  [[0.1, 0.12], [-0.1, 0.05], [-0.25, 0.14]].forEach(([x, y], i) => [+1, -1].forEach((side) => parts.push({ name: `spot${i}_${side}`, color: SPOT,
+    geom: transformGeom(sphere(0.045, 0.04, 0.02, 6, 8), M.translate(x, y, side * 0.26)) })));
+  addFace(parts, { x: 0.48, eyeY: 0.06, eyeZ: 0.20, eyeSize: 0.06, mouthX: 0.52, mouthY: -0.10, mouthScale: 1.1, mouthColor: '#6a8bb0' });
+  return parts;
+}
+
+// ---------------------------------------------------------------------------
 // glTF assembly
 // ---------------------------------------------------------------------------
 async function writeFishGlb(id, parts) {
@@ -858,6 +1254,17 @@ const BUILDERS = [
   ['mandarin',   () => buildGenericFish(PRESETS.mandarin)],
   ['sea_dragon', () => buildSeaDragon()],
   ['coelacanth', () => buildGenericFish(PRESETS.coelacanth)],
+  // --- cute-mascot expansion (10 new species) ---
+  ['pufferfish', () => buildGenericFish(PRESETS.pufferfish)],
+  ['starfish',   () => buildStarfish()],
+  ['crab',       () => buildCrab()],
+  ['jellyfish',  () => buildJellyfish()],
+  ['octopus',    () => buildOctopus()],
+  ['sea_turtle', () => buildSeaTurtle()],
+  ['axolotl',    () => buildAxolotl()],
+  ['manta_ray',  () => buildMantaRay()],
+  ['penguin',    () => buildPenguin()],
+  ['narwhal',    () => buildNarwhal()],
 ];
 
 const written = [];
