@@ -79,6 +79,10 @@ function hex(h) {
 
 const WHITE = hex('#f4f4f4');
 const BLACK = hex('#0a0a0a');
+const EYE_IRIS   = hex('#1c1622'); // warm near-black charcoal (not pure black → friendly, not beady)
+const CATCHLIGHT = hex('#ffffff'); // pure white glossy dot — the #1 kawaii signal
+const MOUTH      = hex('#a24a4a'); // soft warm maroon — reads as lips, never a black void
+const BLUSH      = hex('#ff8a8a'); // rosy cheek accent
 
 // ---------------------------------------------------------------------------
 // fishBody — lathe-like body with non-circular elliptical cross-section.
@@ -112,6 +116,25 @@ function fishBody({ length, sideProfile, topProfile, segments = 36, rings = 20 }
       indices.push(a, a + stride, a + 1, a + 1, a + stride, a + stride + 1);
     }
   }
+  // End caps — close the (possibly blunt/open) nose and tail rings with a fan to a
+  // center point nudged slightly along the axis, so you can't see into the hollow body.
+  // Blunt noses (cuteBody/eelProfile) leave an open ring here; without this it looks pierced.
+  const capEnd = (i, dir) => {
+    const t = i / segments;
+    const x = length * (0.5 - t);
+    const hy = Math.max(sideProfile(t), 0.001);
+    const hz = Math.max(topProfile(t),  0.001);
+    const c = positions.length / 3;
+    positions.push(x + dir * Math.min(hy, hz) * 0.5, 0, 0); // gentle rounded blunt face
+    normals.push(dir, 0, 0);
+    const base = i * stride;
+    for (let j = 0; j < rings; j++) {
+      const p0 = base + j, p1 = base + j + 1;
+      indices.push(c, p0, p1, c, p1, p0); // both windings → always solid from outside
+    }
+  };
+  capEnd(0, +1);        // nose
+  capEnd(segments, -1); // tail
   return { positions, normals, indices };
 }
 
@@ -123,25 +146,54 @@ function torpedoSide(maxR, peak = 0.4, pedunclePct = 0.18) {
   };
 }
 
-// Tall, thin profile for angelfish-style bodies.
-function discProfile(maxR, peak = 0.45) {
+// Cute chibi body: BLUNT rounded nose (never a point), FULL belly, FAT peduncle,
+// optional head-swell in the front third. The de-scary workhorse for "safe" species.
+//   maxR      — max half-extent (height or width)
+//   peak      — t of widest point (push forward → bigger head); 0.30–0.36
+//   noseR     — half-extent AT nose as fraction of maxR (0.40–0.46 = blunt muzzle)
+//   peduncle  — tail-base half-extent as fraction of maxR (fatter = friendlier)
+//   belly     — mid-body fullness exponent (<1 bulges outward)
+//   headBoost — localized front-third girth bump (0.10–0.16 small fish, 0 round fish)
+function cuteBody(maxR, { peak = 0.34, noseR = 0.42, peduncle = 0.34, belly = 0.72, headBoost = 0 } = {}) {
   return (t) => {
-    const s = Math.sin(t * Math.PI);
-    if (t < peak) return Math.pow(s, 0.55) * maxR;
-    return Math.pow(s, 0.85) * maxR * (1 - (t - peak) * 0.3);
+    let r;
+    if (t < peak) {
+      const u = t / peak;
+      const ease = 0.5 - 0.5 * Math.cos(u * Math.PI);            // smooth shoulder, flat at both ends
+      r = maxR * (noseR + (1 - noseR) * Math.pow(ease, belly));  // starts blunt at noseR·maxR
+      if (headBoost) r *= 1 + headBoost * Math.exp(-Math.pow((t - peak * 0.5) / (peak * 0.5), 2) * 2.5);
+    } else {
+      const u = (t - peak) / (1 - peak);
+      r = maxR * (1 - (1 - peduncle) * Math.pow(u, 1.4));        // gentle taper to a fat peduncle
+    }
+    return r;
   };
 }
 
-// Spherical-ish profile for round fish (goldfish).
-function roundProfile(maxR) {
-  return (t) => Math.sin(t * Math.PI) * maxR;
+// Tall, thin profile for angelfish-style bodies. noseR floors the nose/tail so it's not a razor.
+function discProfile(maxR, peak = 0.45, noseR = 0.22) {
+  return (t) => {
+    const s = Math.sin(t * Math.PI);
+    const base = (t < peak) ? Math.pow(s, 0.72) * maxR                    // 0.55→0.72 = rounder front
+                            : Math.pow(s, 0.85) * maxR * (1 - (t - peak) * 0.3);
+    return Math.max(base, maxR * noseR * Math.sin(Math.min(t, 1 - t) * Math.PI)); // blunt nose/tail floor
+  };
 }
 
-// Elongated, eel-like profile.
-function eelProfile(maxR, peak = 0.3) {
+// Spherical-ish profile for round fish (goldfish). floor keeps the tail base from pinching to a point.
+function roundProfile(maxR, floor = 0.16) {
+  return (t) => Math.max(Math.sin(t * Math.PI) * maxR, (t > 0.5 ? maxR * floor : 0));
+}
+
+// Elongated, eel-like profile. De-snaked: blunt nose (noseR) + fat peduncle (tailFrac).
+function eelProfile(maxR, peak = 0.3, tailFrac = 0.30, noseR = 0.38) {
   return (t) => {
-    if (t < peak) return Math.sin((t / peak) * (Math.PI / 2)) * maxR;
-    return maxR * (1 - 0.92 * Math.pow((t - peak) / (1 - peak), 0.9));
+    if (t < peak) {
+      const u = t / peak;
+      return maxR * (noseR + (1 - noseR) * (0.5 - 0.5 * Math.cos(u * Math.PI)));
+    }
+    const u = (t - peak) / (1 - peak);
+    return maxR * (1 - (1 - tailFrac) * u);   // keeps ~tailFrac girth at tail (was ~8%)
   };
 }
 
@@ -149,15 +201,18 @@ function eelProfile(maxR, peak = 0.3) {
 // Caudal (tail) fin — forked shape, lies in the X/Y plane at the peduncle.
 // Base at +X (attaches to body), forks at -X. Double-sided.
 // ---------------------------------------------------------------------------
-function caudalFin({ spread, height, fork = 0.35, baseWidth = 0.12 }) {
+function caudalFin({ spread, height, fork = 0.20, baseWidth = 0.14, round = 0.85 }) {
+  const tip = spread * round;
   const outline = [
-    [0,                       baseWidth],
-    [-spread * 0.35,          height * 0.75],
-    [-spread,                 height],
-    [-spread * (1 - fork),    0],
-    [-spread,                -height],
-    [-spread * 0.35,         -height * 0.75],
-    [0,                      -baseWidth],
+    [0,                      baseWidth],
+    [-spread * 0.30,         height * 0.60],
+    [-tip,                   height * 0.92],   // rounded upper lobe (was sharp [-spread, height])
+    [-spread * 0.92,         height * 0.55],   // extra vertex softens the corner
+    [-spread * (1 - fork),   0],               // shallower notch
+    [-spread * 0.92,        -height * 0.55],
+    [-tip,                  -height * 0.92],
+    [-spread * 0.30,        -height * 0.60],
+    [0,                     -baseWidth],
   ];
   const positions = [];
   const normals = [];
@@ -209,15 +264,9 @@ function sailFin({ length, height, peakPos = 0.55, frontSlope = 0.4 }) {
     const x = length * (t - 0.5);
     positions.push(x, 0, 0);
     normals.push(0, 0, 1);
-    // Top edge: gentle arc with peak at peakPos
-    let y;
-    if (t < peakPos) {
-      const u = t / peakPos;
-      y = height * Math.pow(u, frontSlope);
-    } else {
-      const u = (t - peakPos) / (1 - peakPos);
-      y = height * (1 - Math.pow(u, 1.3));
-    }
+    // Top edge: symmetric rounded dome (zero-slope tips, no sharp trailing point).
+    const u = (t - 0.5) * 2;                                   // -1..1 across the fin
+    const y = height * Math.pow(Math.max(0, 1 - u * u), 0.65); // rounded dome
     positions.push(x, y, 0);
     normals.push(0, 0, 1);
   }
@@ -243,7 +292,7 @@ function pectoralFin({ width, length, droop = 0 }) {
   for (let i = 0; i <= segs; i++) {
     const t = i / segs;
     const angle = (t - 0.5) * Math.PI;
-    const r = Math.cos(angle * 0.85);
+    const r = 0.15 + 0.85 * Math.cos(angle * 0.72); // never reaches 0 → rounded paddle tip
     const x = -length * (1 - r);
     const y = Math.sin(angle) * width - droop * (1 - Math.abs(2 * t - 1));
     positions.push(x, y, 0);
@@ -291,21 +340,49 @@ function sphere(rx, ry, rz, latSeg = 10, lonSeg = 14) {
 // `side` = +1 (right side, +Z) or -1 (left side, -Z); pupil pokes outward.
 function eyeParts(pos, size, side) {
   const [x, y, z] = pos;
+  // Shallow dome (rz 0.50, was 0.85) so the eye sits flush with the head instead of
+  // bulging like a googly ball — but the LARGE dark iris still faces forward and reads
+  // as a big friendly pupil, with a glossy catchlight on top.
   return [
-    { name: 'eyewhite', color: WHITE,
-      geom: transformGeom(sphere(size, size, size * 0.45, 8, 12),
+    // 1) Eyeball white — gentle dome; mostly covered by the iris, shows as a thin rim.
+    { name: 'eyewhite', color: WHITE, roughness: 0.30,
+      geom: transformGeom(sphere(size * 1.00, size * 1.00, size * 0.50, 10, 14),
         M.translate(x, y, z)) },
-    { name: 'pupil', color: BLACK,
-      geom: transformGeom(sphere(size * 0.55, size * 0.55, size * 0.30, 8, 12),
-        M.translate(x, y, z + side * size * 0.25)) },
+    // 2) Iris/pupil — BIG (0.84 wide) and forward so the dark dominates the front face.
+    { name: 'pupil', color: EYE_IRIS, roughness: 0.20,
+      geom: transformGeom(sphere(size * 0.84, size * 0.84, size * 0.40, 10, 14),
+        M.translate(x + size * 0.06, y - size * 0.05, z + side * size * 0.12)) },
+    // 3) Catchlight — small glossy dot on the upper-outer of the iris, toward the key light.
+    { name: 'catchlight', color: CATCHLIGHT, roughness: 0.15, emissive: [0.85, 0.85, 0.85],
+      geom: transformGeom(sphere(size * 0.20, size * 0.20, size * 0.20, 8, 10),
+        M.translate(x + size * 0.26, y + size * 0.24, z + side * size * 0.32)) },
   ];
 }
 
-// Small dark mouth bump at nose.
-function mouthPart(noseX, color = BLACK) {
-  return { name: 'mouth', color,
-    geom: transformGeom(sphere(0.025, 0.012, 0.04, 6, 10),
-      M.translate(noseX - 0.01, -0.02, 0)) };
+// Tiny upturned smile: three small squashed spheres in a shallow upward "u".
+// Corners sit HIGHER than the center = smile. Returns an ARRAY of parts.
+function mouthPart(noseX, color = MOUTH, scale = 1) {
+  const x = noseX - 0.015;
+  const beads = [
+    // [dx,     dy,      dz,     rx,    ry,    rz  ]
+    [ 0.000,  -0.028,   0.000,  0.022, 0.012, 0.026], // center (lowest)
+    [-0.004,  -0.020,   0.030,  0.016, 0.010, 0.016], // right corner (lifted)
+    [-0.004,  -0.020,  -0.030,  0.016, 0.010, 0.016], // left corner (lifted)
+  ];
+  return beads.map(([dx, dy, dz, rx, ry, rz], i) => ({
+    name: `mouth${i}`, color, roughness: 0.6,
+    geom: transformGeom(sphere(rx * scale, ry * scale, rz * scale, 6, 10),
+      M.translate(x + dx * scale, dy * scale, dz * scale)),
+  }));
+}
+
+// Rosy cheek blush — a pair of flattened decal spheres on the cheeks.
+function blushParts(x, y, zSide, size = 0.05) {
+  return [+1, -1].map((side) => ({
+    name: `blush_${side}`, color: BLUSH, roughness: 0.72,
+    geom: transformGeom(sphere(size, size * 0.7, size * 0.18, 6, 10),
+      M.translate(x, y, side * zSide)),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -319,7 +396,7 @@ function buildGenericFish(preset) {
   const bellyColor = preset.bellyColor ? hex(preset.bellyColor) : bodyColor;
 
   // body
-  parts.push({ name: 'body', color: bodyColor,
+  parts.push({ name: 'body', color: bodyColor, emissive: preset.emissive,
     geom: fishBody({
       length: len,
       sideProfile: preset.sideProfile,
@@ -428,9 +505,17 @@ function buildGenericFish(preset) {
     });
   }
 
-  // mouth
+  // cheek blush (opt-in per species)
+  if (preset.blush) {
+    const bl = preset.blush;
+    blushParts(bl.x, bl.y, bl.z ?? (preset.eye?.z ?? preset.maxWidth * 0.9), bl.size)
+      .forEach(p => parts.push(p));
+  }
+
+  // mouth — friendly smile (array of beads)
   if (preset.mouth !== false) {
-    parts.push(mouthPart(len * 0.5, BLACK));
+    mouthPart(len * 0.5, hex(preset.mouthColor ?? '#a24a4a'), preset.mouthScale ?? 1)
+      .forEach(p => parts.push(p));
   }
 
   return parts;
@@ -442,50 +527,63 @@ function buildGenericFish(preset) {
 
 const PRESETS = {
   clownfish: {
-    length: 1.2, maxHeight: 0.36, maxWidth: 0.24,
-    bodyColor: '#ff7733', finColor: '#1a1a1a',
-    sideProfile: torpedoSide(0.36, 0.35),
-    topProfile:  torpedoSide(0.24, 0.40),
+    length: 1.05, maxHeight: 0.40, maxWidth: 0.27,
+    bodyColor: '#ff9a52', finColor: '#3a2a24',
+    emissive: [0.10, 0.055, 0.028],
+    sideProfile: cuteBody(0.40, { peak: 0.34, noseR: 0.45, peduncle: 0.36, belly: 0.70, headBoost: 0.12 }),
+    topProfile:  cuteBody(0.27, { peak: 0.34, noseR: 0.45, peduncle: 0.36, belly: 0.70, headBoost: 0.12 }),
+    bellyColor: '#ffd9b0',
+    belly: { length: 0.42, height: 0.12, width: 0.22, x: 0.02, y: -0.20 },
     stripes: [
-      { x: 0.34,  thickness: 0.06, color: '#f5f5f5' },
-      { x: 0.05,  thickness: 0.08, color: '#f5f5f5' },
-      { x: -0.30, thickness: 0.06, color: '#f5f5f5' },
+      { x: 0.34,  thickness: 0.06, color: '#fff6ec' },
+      { x: 0.05,  thickness: 0.08, color: '#fff6ec' },
+      { x: -0.30, thickness: 0.06, color: '#fff6ec' },
     ],
     dorsal:   { length: 0.7, height: 0.20, peakPos: 0.45, x: -0.05, attach: 0.30 },
     anal:     { length: 0.30, height: 0.12, x: -0.15, attach: -0.28 },
-    tail:     { spread: 0.30, height: 0.32, fork: 0.20, baseWidth: 0.08 },
+    tail:     { spread: 0.30, height: 0.32, fork: 0.15, baseWidth: 0.10 },
     pectoral: { x: 0.18, y: -0.05, width: 0.14, length: 0.22 },
-    eye:      { x: 0.42, y: 0.08, size: 0.06 },
+    mouthColor: '#c85a44', mouthScale: 1.15,
+    eye:      { x: 0.44, y: 0.02, size: 0.085, z: 0.20 },
+    blush:    { x: 0.30, y: -0.06, z: 0.21, size: 0.055 },
   },
 
   guppy: {
-    length: 0.95, maxHeight: 0.18, maxWidth: 0.13,
-    bodyColor: '#7ec8e3', finColor: '#c25aff',
-    sideProfile: torpedoSide(0.18, 0.30, 0.10),
-    topProfile:  torpedoSide(0.13, 0.30, 0.10),
+    length: 0.80, maxHeight: 0.22, maxWidth: 0.16,
+    bodyColor: '#a6ddef', finColor: '#c98cf0',
+    emissive: [0.055, 0.086, 0.098],
+    sideProfile: cuteBody(0.22, { peak: 0.30, noseR: 0.40, peduncle: 0.30, belly: 0.72, headBoost: 0.15 }),
+    topProfile:  cuteBody(0.16, { peak: 0.32, noseR: 0.40, peduncle: 0.30, belly: 0.72, headBoost: 0.15 }),
+    bellyColor: '#eaf7fd',
+    belly: { length: 0.34, height: 0.07, width: 0.12, x: 0.0, y: -0.10 },
     spots: [
-      { x: -0.10, y: 0.02, size: 0.06, color: '#ffd166' },
-      { x: -0.22, y: -0.02, size: 0.05, color: '#ff6b9d' },
+      { x: -0.10, y: 0.02, size: 0.06, color: '#ffdf8f' },
+      { x: -0.22, y: -0.02, size: 0.05, color: '#ff9dbd' },
     ],
     dorsal:   { length: 0.30, height: 0.15, x: -0.10, attach: 0.17 },
     anal:     { length: 0.20, height: 0.10, x: -0.15, attach: -0.15 },
     tail:     { spread: 0.55, height: 0.45, fork: 0.05, baseWidth: 0.05 }, // big veil
     pectoral: { x: 0.15, y: -0.02, width: 0.09, length: 0.16 },
-    eye:      { x: 0.36, y: 0.04, size: 0.045 },
+    mouthColor: '#8f7ec0', mouthScale: 0.75,
+    eye:      { x: 0.38, y: 0.00, size: 0.065 },
+    blush:    { x: 0.28, y: -0.05, z: 0.115, size: 0.040 },
   },
 
   goldfish: {
-    length: 1.0, maxHeight: 0.46, maxWidth: 0.36,
-    bodyColor: '#ffb300', finColor: '#ff8a00',
-    sideProfile: roundProfile(0.46),
-    topProfile:  roundProfile(0.36),
-    bellyColor: '#fff0a8',
-    belly: { length: 0.30, height: 0.10, width: 0.30, x: 0.0, y: -0.32 },
+    length: 1.0, maxHeight: 0.48, maxWidth: 0.36,
+    bodyColor: '#ffc64d', finColor: '#ffab47',
+    emissive: [0.11, 0.078, 0.03],
+    sideProfile: roundProfile(0.48, 0.16),
+    topProfile:  roundProfile(0.36, 0.16),
+    bellyColor: '#fffbe6',
+    belly: { length: 0.34, height: 0.12, width: 0.32, x: 0.0, y: -0.28 },
     dorsal:   { length: 0.42, height: 0.28, peakPos: 0.50, x: 0.0, attach: 0.42 },
     anal:     { length: 0.22, height: 0.16, x: -0.20, attach: -0.40 },
     tailDouble: { spread: 0.40, height: 0.32 },
     pectoral: { x: 0.20, y: -0.05, width: 0.18, length: 0.22 },
-    eye:      { x: 0.34, y: 0.10, size: 0.07, z: 0.35 },
+    mouthColor: '#e07a3a', mouthScale: 1.15,
+    eye:      { x: 0.36, y: 0.04, size: 0.10, z: 0.34 },
+    blush:    { x: 0.26, y: -0.05, z: 0.34, size: 0.065 },
   },
 
   seahorse: {
@@ -494,99 +592,119 @@ const PRESETS = {
   },
 
   zebrafish: {
-    length: 0.95, maxHeight: 0.14, maxWidth: 0.11,
-    bodyColor: '#f0e9c8', finColor: '#a5a5a5',
-    sideProfile: torpedoSide(0.14, 0.35),
-    topProfile:  torpedoSide(0.11, 0.35),
+    length: 0.78, maxHeight: 0.18, maxWidth: 0.14,
+    bodyColor: '#f7f1d8', finColor: '#c9c2d6',
+    emissive: [0.09, 0.086, 0.07],
+    sideProfile: cuteBody(0.18, { peak: 0.32, noseR: 0.42, peduncle: 0.32, belly: 0.72, headBoost: 0.12 }),
+    topProfile:  cuteBody(0.14, { peak: 0.34, noseR: 0.42, peduncle: 0.32, belly: 0.72, headBoost: 0.12 }),
     stripes: [
-      { x: 0.35,  thickness: 0.04, color: '#2a5fa8', heightR: 0.15, widthR: 0.12 },
-      { x: 0.20,  thickness: 0.04, color: '#2a5fa8', heightR: 0.15, widthR: 0.12 },
-      { x: 0.05,  thickness: 0.04, color: '#2a5fa8', heightR: 0.15, widthR: 0.12 },
-      { x: -0.10, thickness: 0.04, color: '#2a5fa8', heightR: 0.15, widthR: 0.12 },
-      { x: -0.25, thickness: 0.04, color: '#2a5fa8', heightR: 0.12, widthR: 0.10 },
+      { x: 0.35,  thickness: 0.04, color: '#5a86c9', heightR: 0.19, widthR: 0.15 },
+      { x: 0.20,  thickness: 0.04, color: '#5a86c9', heightR: 0.19, widthR: 0.15 },
+      { x: 0.05,  thickness: 0.04, color: '#5a86c9', heightR: 0.19, widthR: 0.15 },
+      { x: -0.10, thickness: 0.04, color: '#5a86c9', heightR: 0.19, widthR: 0.15 },
+      { x: -0.25, thickness: 0.04, color: '#5a86c9', heightR: 0.15, widthR: 0.12 },
     ],
     dorsal:   { length: 0.25, height: 0.10, x: -0.15, attach: 0.13 },
     anal:     { length: 0.18, height: 0.07, x: -0.18, attach: -0.12 },
     tail:     { spread: 0.28, height: 0.18, fork: 0.30, baseWidth: 0.04 },
     pectoral: { x: 0.20, y: -0.04, width: 0.08, length: 0.14 },
-    eye:      { x: 0.36, y: 0.04, size: 0.04 },
+    mouthColor: '#8a7fb0', mouthScale: 0.75,
+    eye:      { x: 0.38, y: 0.00, size: 0.060 },
   },
 
   betta: {
-    length: 0.95, maxHeight: 0.22, maxWidth: 0.18,
-    bodyColor: '#c92a2a', finColor: '#7a0d3a',
-    sideProfile: torpedoSide(0.22, 0.30),
-    topProfile:  torpedoSide(0.18, 0.30),
-    dorsal:   { length: 0.60, height: 0.32, peakPos: 0.70, x: -0.10, attach: 0.20 },
-    anal:     { length: 0.55, height: 0.30, peakPos: 0.50, x: -0.10, attach: -0.20 },
-    tail:     { spread: 0.65, height: 0.55, fork: 0.05, baseWidth: 0.06 },
+    length: 0.80, maxHeight: 0.27, maxWidth: 0.21,
+    bodyColor: '#e2564f', finColor: '#b23a63',
+    emissive: [0.13, 0.048, 0.043],
+    sideProfile: cuteBody(0.27, { peak: 0.30, noseR: 0.44, peduncle: 0.34, belly: 0.70, headBoost: 0.12 }),
+    topProfile:  cuteBody(0.21, { peak: 0.32, noseR: 0.44, peduncle: 0.34, belly: 0.70, headBoost: 0.12 }),
+    bellyColor: '#ffb3a8',
+    belly: { length: 0.34, height: 0.09, width: 0.16, x: 0.02, y: -0.11 },
+    dorsal:   { length: 0.60, height: 0.24, peakPos: 0.70, x: -0.10, attach: 0.20 },
+    anal:     { length: 0.55, height: 0.22, peakPos: 0.50, x: -0.10, attach: -0.20 },
+    tail:     { spread: 0.65, height: 0.42, fork: 0.10, baseWidth: 0.08 },
     pectoral: { x: 0.18, y: -0.03, width: 0.18, length: 0.32, droop: 0.10, flare: Math.PI / 2.5 },
-    eye:      { x: 0.36, y: 0.07, size: 0.05 },
+    mouthColor: '#c4485a',
+    eye:      { x: 0.38, y: 0.02, size: 0.072 },
+    blush:    { x: 0.28, y: -0.05, z: 0.17, size: 0.045 },
   },
 
   angelfish: {
-    length: 0.85, maxHeight: 0.58, maxWidth: 0.10,
-    bodyColor: '#d8d8e0', finColor: '#1a1a1a',
-    sideProfile: discProfile(0.58, 0.45),
-    topProfile:  discProfile(0.10, 0.45),
+    length: 0.85, maxHeight: 0.58, maxWidth: 0.13,
+    bodyColor: '#eef0f7', finColor: '#4a4a5a',
+    emissive: [0.10, 0.10, 0.11],
+    sideProfile: discProfile(0.58, 0.45, 0.22),
+    topProfile:  discProfile(0.13, 0.45, 0.22),
     stripes: [
-      { x: 0.22,  thickness: 0.025, color: '#1a1a1a', heightR: 0.58, widthR: 0.105 },
-      { x: 0.02,  thickness: 0.030, color: '#1a1a1a', heightR: 0.58, widthR: 0.105 },
-      { x: -0.20, thickness: 0.025, color: '#1a1a1a', heightR: 0.50, widthR: 0.10 },
+      { x: 0.22,  thickness: 0.025, color: '#5a5a6e', heightR: 0.58, widthR: 0.135 },
+      { x: 0.02,  thickness: 0.030, color: '#5a5a6e', heightR: 0.58, widthR: 0.135 },
+      { x: -0.20, thickness: 0.025, color: '#5a5a6e', heightR: 0.50, widthR: 0.13 },
     ],
-    dorsal:   { length: 0.55, height: 0.65, peakPos: 0.55, x: -0.05, attach: 0.55 },
-    anal:     { length: 0.55, height: 0.55, peakPos: 0.55, x: -0.10, attach: -0.55 },
+    dorsal:   { length: 0.55, height: 0.52, peakPos: 0.55, x: -0.05, attach: 0.55 },
+    anal:     { length: 0.55, height: 0.44, peakPos: 0.55, x: -0.10, attach: -0.55 },
     tail:     { spread: 0.55, height: 0.50, fork: 0.10, baseWidth: 0.10 },
-    pectoral: { x: 0.10, y: -0.10, width: 0.08, length: 0.40, droop: 0.30 },
-    eye:      { x: 0.30, y: 0.18, size: 0.05, z: 0.10 },
+    pectoral: { x: 0.10, y: -0.10, width: 0.08, length: 0.28, droop: 0.18 },
+    mouthColor: '#9a8fb0',
+    eye:      { x: 0.33, y: 0.13, size: 0.105, z: 0.12 },
+    blush:    { x: 0.24, y: 0.02, z: 0.115, size: 0.05 },
   },
 
   mandarin: {
-    length: 0.90, maxHeight: 0.22, maxWidth: 0.16,
-    bodyColor: '#1670c4', finColor: '#ff7a1a',
-    sideProfile: torpedoSide(0.22, 0.40),
-    topProfile:  torpedoSide(0.16, 0.40),
+    length: 0.78, maxHeight: 0.25, maxWidth: 0.19,
+    bodyColor: '#3f8fd6', finColor: '#ff9a47',
+    emissive: [0.03, 0.10, 0.15],
+    sideProfile: cuteBody(0.25, { peak: 0.32, noseR: 0.44, peduncle: 0.34, belly: 0.70, headBoost: 0.10 }),
+    topProfile:  cuteBody(0.19, { peak: 0.34, noseR: 0.44, peduncle: 0.34, belly: 0.70, headBoost: 0.10 }),
+    bellyColor: '#bfe0f5',
+    belly: { length: 0.36, height: 0.09, width: 0.15, x: 0.0, y: -0.11 },
     spots: [
-      { x: 0.20, y: 0.08, size: 0.07, color: '#ff7a1a' },
-      { x: 0.05, y: -0.04, size: 0.06, color: '#27c46b' },
-      { x: -0.10, y: 0.06, size: 0.07, color: '#ffd166' },
-      { x: -0.22, y: -0.03, size: 0.05, color: '#ff7a1a' },
+      { x: 0.20, y: 0.08, size: 0.07, color: '#ff9a47' },
+      { x: 0.05, y: -0.04, size: 0.06, color: '#5cd493' },
+      { x: -0.10, y: 0.06, size: 0.07, color: '#ffdf8f' },
+      { x: -0.22, y: -0.03, size: 0.05, color: '#ff9a47' },
     ],
     dorsal:   { length: 0.55, height: 0.20, peakPos: 0.55, x: -0.05, attach: 0.22 },
     anal:     { length: 0.30, height: 0.13, x: -0.18, attach: -0.20 },
     tail:     { spread: 0.32, height: 0.25, fork: 0.05, baseWidth: 0.07 },
     pectoral: { x: 0.18, y: -0.04, width: 0.13, length: 0.20 },
-    eye:      { x: 0.34, y: 0.08, size: 0.05 },
+    mouthColor: '#e07a3a',
+    eye:      { x: 0.36, y: 0.02, size: 0.072 },
+    blush:    { x: 0.26, y: -0.05, z: 0.15, size: 0.045 },
   },
 
   sea_dragon: {
-    length: 1.4, maxHeight: 0.16, maxWidth: 0.13,
-    bodyColor: '#7fb069', finColor: '#4f7a45',
-    sideProfile: eelProfile(0.16, 0.25),
-    topProfile:  eelProfile(0.13, 0.25),
+    length: 1.05, maxHeight: 0.20, maxWidth: 0.16,
+    bodyColor: '#a7d98a', finColor: '#79b06a',
+    emissive: [0.078, 0.11, 0.062],
+    sideProfile: eelProfile(0.20, 0.28, 0.32, 0.38),
+    topProfile:  eelProfile(0.16, 0.28, 0.32, 0.38),
     // leafy appendages added below via custom branch
-    eye:      { x: 0.55, y: 0.05, size: 0.04, z: 0.10 },
+    eye:      { x: 0.55, y: 0.02, size: 0.055, z: 0.11 },
     mouth:    false,
   },
 
   coelacanth: {
-    length: 1.5, maxHeight: 0.38, maxWidth: 0.33,
-    bodyColor: '#3d4a78', finColor: '#2a3358',
-    sideProfile: torpedoSide(0.38, 0.42, 0.30),
-    topProfile:  torpedoSide(0.33, 0.42, 0.30),
+    length: 1.15, maxHeight: 0.44, maxWidth: 0.37,
+    bodyColor: '#7b86bf', finColor: '#5a659e',
+    emissive: [0.055, 0.062, 0.11],
+    sideProfile: cuteBody(0.44, { peak: 0.36, noseR: 0.42, peduncle: 0.40, belly: 0.68, headBoost: 0.10 }),
+    topProfile:  cuteBody(0.37, { peak: 0.36, noseR: 0.42, peduncle: 0.40, belly: 0.68, headBoost: 0.10 }),
+    bellyColor: '#cfd6f2',
+    belly: { length: 0.55, height: 0.16, width: 0.30, x: 0.05, y: -0.24 },
     spots: [
-      { x: 0.25, y: 0.05, size: 0.08, color: '#a8b8e0' },
-      { x: 0.05, y: -0.10, size: 0.07, color: '#a8b8e0' },
-      { x: -0.20, y: 0.08, size: 0.07, color: '#a8b8e0' },
-      { x: -0.40, y: -0.05, size: 0.06, color: '#a8b8e0' },
+      { x: 0.25, y: 0.05, size: 0.08, color: '#e8ecff' },
+      { x: 0.05, y: -0.10, size: 0.07, color: '#e8ecff' },
+      { x: -0.20, y: 0.08, size: 0.07, color: '#e8ecff' },
+      { x: -0.40, y: -0.05, size: 0.06, color: '#e8ecff' },
     ],
     dorsal:   { length: 0.30, height: 0.20, peakPos: 0.40, x: 0.10, attach: 0.36 },
     dorsal2:  { length: 0.22, height: 0.18, peakPos: 0.50, x: -0.30, attach: 0.32 },
     anal:     { length: 0.25, height: 0.16, x: -0.30, attach: -0.32 },
-    tail:     { spread: 0.45, height: 0.40, fork: 0.45, baseWidth: 0.10 },
+    tail:     { spread: 0.45, height: 0.40, fork: 0.25, baseWidth: 0.12 },
     pectoral: { x: 0.25, y: -0.12, width: 0.18, length: 0.30, flare: Math.PI / 2.2 },
     pelvic:   { x: -0.05, y: -0.30, width: 0.12, length: 0.22 },
-    eye:      { x: 0.50, y: 0.10, size: 0.07, z: 0.28 },
+    mouthColor: '#8f7ec0',
+    eye:      { x: 0.52, y: 0.04, size: 0.095, z: 0.27 },
   },
 };
 
@@ -595,8 +713,8 @@ const PRESETS = {
 // ---------------------------------------------------------------------------
 
 function buildSeahorse() {
-  const BODY = hex('#f5b042');
-  const ACCENT = hex('#d4831a');
+  const BODY = hex('#ffc159');
+  const ACCENT = hex('#f0a63f');
   const parts = [];
   // Vertical S-curve body — 9 stacked spheres tapering down. Head at +Y, tail at -Y curled forward (+X then -X).
   const segs = 9;
@@ -621,11 +739,11 @@ function buildSeahorse() {
   // Head — slightly bigger sphere at top with snout
   const head = pts[0];
   parts.push({ name: 'head', color: BODY,
-    geom: transformGeom(sphere(0.20, 0.18, 0.16, 12, 16),
+    geom: transformGeom(sphere(0.24, 0.23, 0.20, 12, 16),
       M.translate(head.x + 0.05, head.y + 0.05, 0)) });
-  // Snout — pointed forward
+  // Snout — stubby muzzle (was a long spear)
   parts.push({ name: 'snout', color: BODY,
-    geom: transformGeom(sphere(0.16, 0.05, 0.05, 8, 12),
+    geom: transformGeom(sphere(0.11, 0.06, 0.06, 8, 12),
       M.translate(head.x + 0.22, head.y - 0.03, 0)) });
   // Crown ridge on top of head
   parts.push({ name: 'crown', color: ACCENT,
@@ -638,7 +756,7 @@ function buildSeahorse() {
       M.chain(M.translate(mid.x - 0.18, mid.y, 0), M.rotZ(Math.PI / 2))) });
   // Eyes
   [+1, -1].forEach((side) => {
-    eyeParts([head.x + 0.14, head.y + 0.05, side * 0.12], 0.035, side)
+    eyeParts([head.x + 0.14, head.y + 0.02, side * 0.12], 0.06, side)
       .forEach(p => parts.push(p));
   });
   return parts;
@@ -648,8 +766,8 @@ function buildSeaDragon() {
   const preset = PRESETS.sea_dragon;
   const parts = buildGenericFish(preset);
   // Add leafy appendages — flat triangular fronds sticking out
-  const LEAF = hex('#4f7a45');
-  const LEAF_LIGHT = hex('#7fb069');
+  const LEAF = hex('#7fbf7a');
+  const LEAF_LIGHT = hex('#c3e6a6');
   const leafSpecs = [
     // [x, y, rotZ, scale, side]
     [0.55, 0.16, 0.4, 1.0, 0],
@@ -680,10 +798,10 @@ function buildSeaDragon() {
           M.chain(M.translate(x, y, side * 0.12), M.rotY(side * Math.PI / 2), M.rotZ(0.5))) });
     });
   });
-  // Long thin snout
+  // Short stubby snout (was a long spear)
   parts.push({ name: 'snout', color: hex(preset.bodyColor),
-    geom: transformGeom(sphere(0.12, 0.04, 0.04, 8, 12),
-      M.translate(preset.length * 0.5 + 0.08, 0, 0)) });
+    geom: transformGeom(sphere(0.07, 0.05, 0.05, 8, 12),
+      M.translate(preset.length * 0.5 + 0.05, 0, 0)) });
   return parts;
 }
 
@@ -705,8 +823,13 @@ async function writeFishGlb(id, parts) {
       doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(part.geom.indices)));
     const mat = doc.createMaterial(`${id}_${part.name}`)
       .setBaseColorFactor([...part.color, 1])
-      .setRoughnessFactor(0.55)
-      .setMetallicFactor(0.0);
+      .setRoughnessFactor(part.roughness ?? 0.72)   // was 0.55 → softer plush/vinyl finish
+      .setMetallicFactor(part.metallic ?? 0.0);
+    if (part.emissive) {
+      mat.setEmissiveFactor(part.emissive);          // explicit glow (catchlight, deep-sea lift)
+    } else {
+      mat.setEmissiveFactor(part.color.map((c) => c * 0.06)); // 6% self-fill vs. dark ambient/fog
+    }
     prim.setMaterial(mat);
     mesh.addPrimitive(prim);
   }
