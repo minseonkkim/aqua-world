@@ -1393,7 +1393,7 @@ exports.notifyDormantUsers = onSchedule(
 //   - 일일 한도 (HATCH_BOOST 10회 / DAILY_DOUBLE 1회) — 어뷰징 차단
 //   - SSV 와 Callable 양쪽 모두 같은 applyAdRewardTx 로 수렴
 
-const AD_REWARD_LIMITS = { hatch_boost: 10, daily_double: 1, ad_star_coral: 5 };
+const AD_REWARD_LIMITS = { hatch_boost: 10, daily_double: 1, ad_star_coral: 10 };
 const HATCH_BOOST_SECONDS = 300;
 // 광고 1회 시청당 지급하는 Star Coral 수량. 클라 payload 를 믿지 않고 서버 상수로 고정해야
 // 임의 수량 요청 위변조를 막을 수 있다(반복 보상이므로 daily_double 과 달리 서버 권위 필수).

@@ -91,7 +91,7 @@ export const CURRENCY = {
 
   // 광고 보고 Star Coral 받기 — 서버 AD_REWARD_LIMITS.ad_star_coral / AD_STAR_CORAL_AMOUNT 와 일치시킬 것.
   AD_STAR_CORAL_AMOUNT: 10, // 광고 1회당 지급
-  AD_STAR_CORAL_MAX_PER_DAY: 5, // 하루 최대 시청 횟수 (10 × 5 = 하루 50)
+  AD_STAR_CORAL_MAX_PER_DAY: 10, // 하루 최대 시청 횟수 (10 × 10 = 하루 100)
 
   // playProductId 는 Google Play Console 의 인앱 상품 ID 와 정확히 일치해야 한다(가이드 참조).
   // 현재는 패키지 id 와 동일하게 둔다.
