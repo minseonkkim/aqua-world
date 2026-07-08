@@ -12,6 +12,10 @@ import {
   RARITY_BY_EGG,
   SPECIES_BY_RARITY,
   computeFeedMaxPerDay,
+  BREED_EGG_TIER_BY_RARITY,
+  EGG_HATCH_TIME,
+  getSpeciesRarity,
+  rollBreedingSpecies,
 } from '../constants';
 
 export interface DailyRewardResult {
@@ -47,6 +51,8 @@ interface UserState {
   recordAdStarCoral: () => void;
 
   addEggToInventory: (tier: EggTier, overrideHatchSeconds?: number) => void;
+  /** 번식(짝짓기)으로 얻은 알을 인벤토리에 추가. 부모 종을 기억해 부화 시 같은 종으로 추첨. */
+  addBreedingEgg: (parentSpeciesId: string) => void;
   removeEggFromInventory: (eggId: string) => void;
   startHatching: (eggId: string) => void;
   // returns speciesId on success, null if not ready
@@ -171,6 +177,21 @@ export const useUserStore = create<UserState>()(
         set({ user: { ...user, inventory: [...user.inventory, newEgg] } });
       },
 
+      addBreedingEgg: parentSpeciesId => {
+        const { user } = get();
+        if (!user) return;
+        const tier = BREED_EGG_TIER_BY_RARITY[getSpeciesRarity(parentSpeciesId)];
+        const newEgg: Egg = {
+          id: `egg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          tier,
+          hatchDuration: EGG_HATCH_TIME[tier],
+          startedAt: 0,
+          isHatching: false,
+          breedSpeciesId: parentSpeciesId,
+        };
+        set({ user: { ...user, inventory: [...user.inventory, newEgg] } });
+      },
+
       removeEggFromInventory: eggId => {
         const { user } = get();
         if (!user) return;
@@ -199,7 +220,10 @@ export const useUserStore = create<UserState>()(
         const elapsed = (serverNow() - egg.startedAt) / 1000;
         if (elapsed < egg.hatchDuration) return null;
 
-        const speciesId = rollSpecies(egg.tier);
+        // 번식 알은 부모 종(낮은 확률로 상위 등급)으로, 일반 알은 tier 풀에서 추첨
+        const speciesId = egg.breedSpeciesId
+          ? rollBreedingSpecies(egg.breedSpeciesId)
+          : rollSpecies(egg.tier);
         set({ user: { ...user, inventory: user.inventory.filter(e => e.id !== eggId) } });
         return speciesId;
       },

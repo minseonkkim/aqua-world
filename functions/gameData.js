@@ -50,6 +50,16 @@ const SPECIES_BY_RARITY = {
   legendary: ["coelacanth"],
 };
 
+// ─── 번식(짝짓기) ───
+// 같은 종 성어 2마리로 번식 알을 얻는다. 부모는 사라지지 않고 각자 쿨다운에 들어간다.
+// 클라 src/constants (BREED_*) 와 값이 일치해야 한다.
+const BREEDABLE_STAGES = ["adult", "large"];
+const BREED_COST_PEARL = 200;
+const BREED_COOLDOWN_SECONDS = 12 * 3600; // 12시간
+const BREED_UPGRADE_RATE = 0.08; // 한 단계 상위 등급으로 부화할 확률
+const NEXT_RARITY = { common: "rare", rare: "epic", epic: "legendary", legendary: null };
+const BREED_EGG_TIER_BY_RARITY = { common: "basic", rare: "rare", epic: "legendary", legendary: "legendary" };
+
 // ─── 알 ───
 const EGG_HATCH_TIME = { basic: 300, rare: 1800, legendary: 7200 };
 const EGG_PRICES = {
@@ -173,6 +183,12 @@ module.exports = {
   SPECIES_COUNT,
   RARITY_BY_EGG,
   SPECIES_BY_RARITY,
+  BREEDABLE_STAGES,
+  BREED_COST_PEARL,
+  BREED_COOLDOWN_SECONDS,
+  BREED_UPGRADE_RATE,
+  NEXT_RARITY,
+  BREED_EGG_TIER_BY_RARITY,
   EGG_HATCH_TIME,
   EGG_PRICES,
   STAGE_DURATION_SECONDS,

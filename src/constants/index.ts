@@ -243,6 +243,58 @@ export const SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
   legendary: ['coelacanth'],
 };
 
+// ==================== 번식(짝짓기) ====================
+// 같은 종 성어 2마리를 짝지어 알을 얻는다. 부모는 사라지지 않고 각자 쿨다운에 들어가며,
+// 알은 인큐베이터에서 부화한다(같은 종, 낮은 확률로 상위 등급 종). 서버 gameData.js 와 일치시킬 것.
+
+/** 짝짓기 가능한 최소 성장 단계 (성어 이상) */
+export const BREEDABLE_STAGES: FishGrowthStage[] = ['adult', 'large'];
+/** 짝짓기 1회 비용 (Pearl) */
+export const BREED_COST_PEARL = 200;
+/** 짝짓기 후 각 부모의 재짝짓기 쿨다운 (초) — 12시간 */
+export const BREED_COOLDOWN_SECONDS = 12 * 3600;
+/** 번식 알이 한 단계 상위 등급 종으로 부화할 확률 (낮은 확률의 "대박") */
+export const BREED_UPGRADE_RATE = 0.08;
+
+/** rarity 한 단계 상위 (최상위면 null) */
+export const NEXT_RARITY: Record<FishRarity, FishRarity | null> = {
+  common: 'rare',
+  rare: 'epic',
+  epic: 'legendary',
+  legendary: null,
+};
+
+/** 부모 종 rarity → 번식 알 tier (부화 시간·외형을 결정) */
+export const BREED_EGG_TIER_BY_RARITY: Record<FishRarity, EggTier> = {
+  common: 'basic',
+  rare: 'rare',
+  epic: 'legendary',
+  legendary: 'legendary',
+};
+
+/** speciesId 로 rarity 를 역추적 (SPECIES_BY_RARITY 기준). 미상이면 'common'. */
+export function getSpeciesRarity(speciesId: string): FishRarity {
+  const rarities: FishRarity[] = ['common', 'rare', 'epic', 'legendary'];
+  for (const r of rarities) {
+    if (SPECIES_BY_RARITY[r].includes(speciesId)) return r;
+  }
+  return 'common';
+}
+
+/**
+ * 번식 알의 부화 종을 추첨한다. 기본은 부모와 같은 종이고,
+ * BREED_UPGRADE_RATE 확률로 한 단계 상위 등급 풀에서 뽑는다(상위 등급이 있을 때만).
+ * 클라(게스트)·서버 모두 동일 규칙을 사용한다.
+ */
+export function rollBreedingSpecies(parentSpeciesId: string): string {
+  const upgraded = NEXT_RARITY[getSpeciesRarity(parentSpeciesId)];
+  if (upgraded && Math.random() < BREED_UPGRADE_RATE) {
+    const pool = SPECIES_BY_RARITY[upgraded];
+    if (pool && pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return parentSpeciesId;
+}
+
 // ==================== 플레이어 레벨 ====================
 
 export const LEVEL_EXP_TABLE = Array.from({ length: 100 }, (_, i) => ({

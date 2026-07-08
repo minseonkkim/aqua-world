@@ -120,6 +120,13 @@ export const feedFish = call<
   { user: User; tank: Tank; newStage: FishGrowthStage | null }
 >('feedFish');
 
+// ─── 번식(짝짓기) ────────────────────────────────────────────────────────────
+// 같은 종 성어 2마리로 번식 알을 만든다. 서버가 Pearl 차감·부모 쿨다운·알 지급을 권위로 처리.
+export const breedFish = call<
+  { tankId: string; parentAId: string; parentBId: string },
+  { user: User; tank: Tank }
+>('breedFish');
+
 // ─── 물고기 보관함 ↔ 수조 / 수조 확장 ───────────────────────────────────────
 
 export const storeFish = call<{ tankId: string; fishId: string }, { user: User; tank: Tank }>(

@@ -12,6 +12,7 @@ import DecorationModePanel from '@/components/DecorationModePanel';
 import PhotoModeOverlay from '@/components/PhotoModeOverlay';
 import NotificationPanel from '@/components/NotificationPanel';
 import FishInventoryPanel from '@/components/FishInventoryPanel';
+import BreedingPanel from '@/components/BreedingPanel';
 import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
@@ -19,7 +20,8 @@ import { useNotificationStore } from '@/store/useNotificationStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier, User, Tank } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
-import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL } from '@/constants';
+import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL, BREED_COST_PEARL } from '@/constants';
+import { isBreedable } from '@/utils/breeding';
 import {
   isCloudUser,
   optimistic,
@@ -31,6 +33,7 @@ import {
   placeFish as placeFishServer,
   expandTankCapacity as expandTankCapacityServer,
   cleanTank as cleanTankServer,
+  breedFish as breedFishServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
 import { serverNow } from '@/services/clock';
@@ -59,12 +62,13 @@ export default function TankPage() {
     addDecorationInventory,
     addFishToInventory,
     removeFishFromInventory,
+    addBreedingEgg,
   } = useUserStore();
   const {
     tanks, activeTankId, addFishToTank, removeFish, feedFish, feedAllFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
     savePreset, loadPreset, deletePreset, setLightMode,
-    tickMoodAndCleanliness, cleanTank, contaminate, expandTankCapacity,
+    tickMoodAndCleanliness, cleanTank, contaminate, expandTankCapacity, markFishBred,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
   const pushNotification = useNotificationStore(s => s.push);
@@ -78,7 +82,7 @@ export default function TankPage() {
   const [photoMode, setPhotoMode] = useState(false);
   const [lightPopupOpen, setLightPopupOpen] = useState(false);
   // 좌측 하단 패널 상호 배타 — 한 번에 하나만 열림
-  const [leftPanel, setLeftPanel] = useState<'incubator' | 'fishbox' | null>(null);
+  const [leftPanel, setLeftPanel] = useState<'incubator' | 'fishbox' | 'breeding' | null>(null);
   const tankSceneRef = useRef<TankSceneHandle>(null);
 
   const activeTank = tanks.find(t => t.id === activeTankId);
@@ -475,6 +479,40 @@ export default function TankPage() {
     showToast(`📦 ${fish.name} 보관함에 보관`);
   }, [activeTankId, removeFish, addFishToInventory]);
 
+  // ===== 짝짓기(번식) 핸들러 =====
+  // 같은 종 성어 2마리 → Pearl 차감 + 부모 쿨다운 + 번식 알 지급.
+  // 클라우드는 서버 breedFish 가 권위(낙관적 UI + 실패 시 롤백), 게스트는 로컬 처리.
+  const handleBreed = useCallback((a: Fish, b: Fish) => {
+    if (!activeTankId) return;
+    const now = serverNow();
+    if (a.speciesId !== b.speciesId) { showToast('같은 종끼리만 짝지을 수 있어요'); return; }
+    if (!isBreedable(a, now) || !isBreedable(b, now)) {
+      showToast('성어 이상 · 쿨다운이 끝난 물고기만 짝지을 수 있어요');
+      return;
+    }
+    if ((user?.pearl ?? 0) < BREED_COST_PEARL) {
+      showToast(`Pearl이 부족합니다 (${BREED_COST_PEARL} 🪙 필요)`);
+      return;
+    }
+    const apply = () => {
+      spendPearl(BREED_COST_PEARL);
+      markFishBred(activeTankId, [a.id, b.id], Date.now());
+      addBreedingEgg(a.speciesId);
+    };
+    if (isCloudUser()) {
+      optimistic(
+        apply,
+        () => breedFishServer({ tankId: activeTankId, parentAId: a.id, parentBId: b.id }),
+        () => showToast('짝짓기에 실패했어요 — 다시 시도해주세요'),
+      );
+    } else {
+      apply();
+    }
+    analytics.breedFish(a.speciesId);
+    showToast('💞 짝짓기 성공! 알이 인큐베이터에 담겼어요');
+    setLeftPanel('incubator');
+  }, [activeTankId, user?.pearl, spendPearl, markFishBred, addBreedingEgg]);
+
   const handleExpandCapacity = useCallback(() => {
     if (!activeTankId) return;
     const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
@@ -761,6 +799,18 @@ export default function TankPage() {
             onOpenChange={o => setLeftPanel(o ? 'fishbox' : null)}
           />
         )}
+
+      {/* 짝짓기 패널 (왼쪽, 보관함 위) — 성어 이상 후보가 2마리 이상일 때만 노출 */}
+      {!decorationMode && !photoMode && (
+        <BreedingPanel
+          fish={fishInTank}
+          costPearl={BREED_COST_PEARL}
+          pearl={user?.pearl ?? 0}
+          onBreed={handleBreed}
+          open={leftPanel === 'breeding'}
+          onOpenChange={o => setLeftPanel(o ? 'breeding' : null)}
+        />
+      )}
 
       {/* 우측 액션 버튼 — 꾸미기/포토 모드 중에는 숨김 */}
       {!decorationMode && !photoMode && (

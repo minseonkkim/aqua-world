@@ -64,11 +64,13 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
       alignItems: 'center',
       gap: 12,
     }}>
-      <div style={{ fontSize: 32 }}>{TIER_EMOJI[egg.tier]}</div>
+      <div style={{ fontSize: 32 }}>{egg.breedSpeciesId ? '💞' : TIER_EMOJI[egg.tier]}</div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>{TIER_LABEL[egg.tier]}</span>
+          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>
+            {egg.breedSpeciesId ? '번식 알' : TIER_LABEL[egg.tier]}
+          </span>
           <span style={{
             fontSize: 10, padding: '2px 6px', borderRadius: 4,
             background: TIER_COLOR[egg.tier], color: '#fff',

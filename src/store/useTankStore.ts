@@ -35,6 +35,8 @@ interface TankState {
   addFishToTank: (tankId: string, fish: Fish) => void;
   updateFish: (tankId: string, fishId: string, updates: Partial<Fish>) => void;
   removeFish: (tankId: string, fishId: string) => void;
+  /** 짝짓기에 참여한 부모 물고기들의 lastBredAt 를 갱신(재짝짓기 쿨다운 시작) */
+  markFishBred: (tankId: string, fishIds: string[], ts: number) => void;
   /** 수조 수용량 레벨 +1 (상한 검증·비용 차감은 호출자 책임) */
   expandTankCapacity: (tankId: string) => void;
 
@@ -162,6 +164,19 @@ export const useTankStore = create<TankState>()(
           tanks: state.tanks.map(t =>
             t.id === tankId
               ? { ...t, fish: t.fish.filter(f => f.id !== fishId), updatedAt: Date.now() }
+              : t,
+          ),
+        })),
+
+      markFishBred: (tankId, fishIds, ts) =>
+        set(state => ({
+          tanks: state.tanks.map(t =>
+            t.id === tankId
+              ? {
+                  ...t,
+                  fish: t.fish.map(f => (fishIds.includes(f.id) ? { ...f, lastBredAt: ts } : f)),
+                  updatedAt: ts,
+                }
               : t,
           ),
         })),
