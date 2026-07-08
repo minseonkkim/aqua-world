@@ -91,7 +91,7 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
       <button
         onClick={() => onOpenChange(!open)}
         style={{
-          position: 'absolute', left: 12, bottom: 36,
+          position: 'absolute', left: 12, bottom: 30,
           background: 'rgba(0,0,0,0.7)',
           border: '1px solid rgba(255,107,157,0.5)',
           borderRadius: 12, padding: '8px 14px',
@@ -105,7 +105,7 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
 
       {open && (
         <div style={{
-          position: 'absolute', left: 12, bottom: 86,
+          position: 'absolute', left: 12, bottom: 80,
           width: 288,
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',

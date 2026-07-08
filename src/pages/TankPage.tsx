@@ -17,6 +17,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { useUiStore } from '@/store/useUiStore';
 import { Fish, TankDecoration, TankEnvironment, EggTier, User, Tank } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
@@ -80,6 +81,10 @@ export default function TankPage() {
   const [decorationMode, setDecorationMode] = useState(false);
   const [selectedDecoId, setSelectedDecoId] = useState<string | null>(null);
   const [photoMode, setPhotoMode] = useState(false);
+  // 전체화면 감상 모드 — 모든 UI(하단 탭바 포함)를 숨기고 수조 3D만 몰입해서 본다. 카메라 회전은 유지.
+  // 탭바는 MainLayout이 렌더하므로 전역 UI 스토어로 상태를 공유한다.
+  const immersiveMode = useUiStore(s => s.immersive);
+  const setImmersiveMode = useUiStore(s => s.setImmersive);
   const [lightPopupOpen, setLightPopupOpen] = useState(false);
   // 좌측 하단 패널 상호 배타 — 한 번에 하나만 열림
   const [leftPanel, setLeftPanel] = useState<'incubator' | 'fishbox' | 'breeding' | null>(null);
@@ -141,6 +146,9 @@ export default function TankPage() {
   );
 
   const handleFishClick = useCallback((f: Fish) => setSelectedFishId(f.id), []);
+
+  // 전체화면 모드는 탭바를 숨기므로, TankPage를 벗어날 때 반드시 해제해 다른 화면에서 갇히지 않게 한다.
+  useEffect(() => () => setImmersiveMode(false), [setImmersiveMode]);
 
   // 주기적 성장 틱 (30초마다) — 성장/부화 완료 시 토스트 + 알림 생성, mood/청결도 갱신
   useEffect(() => {
@@ -702,13 +710,13 @@ export default function TankPage() {
           environment={environment}
           fish={fishInTank}
           decorations={decorationsInTank}
-          onFishClick={photoMode ? undefined : handleFishClick}
+          onFishClick={(photoMode || immersiveMode) ? undefined : handleFishClick}
           decorationMode={decorationMode}
           selectedDecorationId={selectedDecoId}
           onDecorationSelect={setSelectedDecoId}
           onDecorationMove={handleMoveDecoration}
           lightMode={activeTank?.lightMode ?? 'auto'}
-          onSurfaceFeed={photoMode ? undefined : handleSurfaceFeed}
+          onSurfaceFeed={(photoMode || immersiveMode) ? undefined : handleSurfaceFeed}
           tankScale={getTankScale(capacityLevel)}
           // 모달/패널로 수조가 가려질 때 30fps로 낮춰 배터리 절약 (포토 모드는 수조가 주인공이라 제외)
           lowPower={!photoMode && (notifOpen || !!selectedFish || !!pendingDailyReward || !!pendingHatch)}
@@ -716,8 +724,8 @@ export default function TankPage() {
         />
       </Suspense>
 
-      {/* 상단 HUD — 포토 모드 중에는 숨김 */}
-      {!photoMode && (
+      {/* 상단 HUD — 포토/전체화면 모드 중에는 숨김 */}
+      {!photoMode && !immersiveMode && (
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0,
         padding: 'calc(var(--safe-top) + 12px) 12px 8px',
@@ -776,8 +784,8 @@ export default function TankPage() {
       </div>
       )}
 
-      {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기/포토 모드 중에는 숨김 */}
-      {!decorationMode && !photoMode && (
+      {/* 인큐베이터 패널 (왼쪽 하단) — 꾸미기/포토/전체화면 모드 중에는 숨김 */}
+      {!decorationMode && !photoMode && !immersiveMode && (
         <IncubatorPanel
           onCollect={handleHatchCollect}
           open={leftPanel === 'incubator'}
@@ -786,7 +794,7 @@ export default function TankPage() {
       )}
 
       {/* 물고기 보관함 패널 (왼쪽, 인큐베이터 위) — 보유 물고기가 있을 때만 */}
-      {!decorationMode && !photoMode &&
+      {!decorationMode && !photoMode && !immersiveMode &&
         (fishInTank.length > 0 || (user?.fishInventory?.length ?? 0) > 0) && (
           <FishInventoryPanel
             onPlace={handlePlaceFish}
@@ -801,7 +809,7 @@ export default function TankPage() {
         )}
 
       {/* 짝짓기 패널 (왼쪽, 보관함 위) — 성어 이상 후보가 2마리 이상일 때만 노출 */}
-      {!decorationMode && !photoMode && (
+      {!decorationMode && !photoMode && !immersiveMode && (
         <BreedingPanel
           fish={fishInTank}
           costPearl={BREED_COST_PEARL}
@@ -812,8 +820,8 @@ export default function TankPage() {
         />
       )}
 
-      {/* 우측 액션 버튼 — 꾸미기/포토 모드 중에는 숨김 */}
-      {!decorationMode && !photoMode && (
+      {/* 우측 액션 버튼 — 꾸미기/포토/전체화면 모드 중에는 숨김 */}
+      {!decorationMode && !photoMode && !immersiveMode && (
         <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             {
@@ -856,8 +864,26 @@ export default function TankPage() {
         </div>
       )}
 
+      {/* 전체화면 감상 — 우측 액션 스택(조명) 아래, 라벨 없이 작은 원형 아이콘만 */}
+      {!decorationMode && !photoMode && !immersiveMode && (
+        <button
+          onClick={() => { setLightPopupOpen(false); setImmersiveMode(true); }}
+          title="전체화면 감상"
+          style={{
+            position: 'absolute', right: 19, bottom: 24,
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'rgba(0,0,0,0.6)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: 20, lineHeight: 1, cursor: 'pointer',
+          }}
+        >
+          ⛶
+        </button>
+      )}
+
       {/* 조명 모드 팝업 — ☀️ 버튼 좌측에 배치 */}
-      {lightPopupOpen && !decorationMode && !photoMode && activeTankId && (
+      {lightPopupOpen && !decorationMode && !photoMode && !immersiveMode && activeTankId && (
         <div style={{
           position: 'absolute', right: 84, bottom: 80,
           display: 'flex', flexDirection: 'column', gap: 4,
@@ -919,8 +945,27 @@ export default function TankPage() {
         />
       )}
 
+      {/* 전체화면 감상 모드 — 우측 상단 나가기 버튼만 남김. 카메라 회전은 유지된다. */}
+      {immersiveMode && (
+        <button
+          onClick={() => setImmersiveMode(false)}
+          style={{
+            position: 'absolute',
+            top: 'calc(var(--safe-top) + 12px)', right: 12,
+            background: 'rgba(0,0,0,0.55)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            borderRadius: 20, padding: '7px 14px',
+            color: '#fff', fontSize: 13, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 6,
+            cursor: 'pointer', zIndex: 80,
+          }}
+        >
+          ✕ 나가기
+        </button>
+      )}
+
       {/* 빈 수조 안내 — 알도 없고 튜토리얼도 끝났을 때만 */}
-      {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && !photoMode && (
+      {fishInTank.length === 0 && (user?.inventory.length ?? 0) === 0 && !tutorialActive && !photoMode && !immersiveMode && (
         <div style={{
           position: 'absolute', bottom: 140, left: '50%', transform: 'translateX(-50%)',
           background: 'rgba(0,0,0,0.65)', borderRadius: 16, padding: '12px 20px',
@@ -947,7 +992,7 @@ export default function TankPage() {
       )}
 
       {/* 알림 패널 */}
-      {notifOpen && !photoMode && <NotificationPanel onClose={() => setNotifOpen(false)} />}
+      {notifOpen && !photoMode && !immersiveMode && <NotificationPanel onClose={() => setNotifOpen(false)} />}
 
       {/* 일일 보상 팝업 */}
       {pendingDailyReward && <DailyRewardModal reward={pendingDailyReward} />}

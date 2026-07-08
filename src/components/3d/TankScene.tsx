@@ -369,7 +369,9 @@ function TankSceneImpl({
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w, h);
+    // 3번째 인자 false: canvas 인라인 px 스타일을 건드리지 않아 width/height:100% 반응형을 유지.
+    // (true면 px가 고정돼 컨테이너가 커질 때 canvas가 안 따라와 검은 여백이 생김)
+    renderer.setSize(w, h, false);
     renderer.setClearColor(new THREE.Color(env.bg), 1);
     rendererRef.current = renderer;
 
@@ -464,7 +466,8 @@ function TankSceneImpl({
 
     const ro = new ResizeObserver(() => {
       const cw = canvas.clientWidth, ch = canvas.clientHeight;
-      renderer.setSize(cw, ch);
+      if (cw === 0 || ch === 0) return;
+      renderer.setSize(cw, ch, false); // 인라인 스타일 유지(위 init 주석 참고) — 드로잉 버퍼만 갱신
       camera.aspect = cw / ch;
       camera.updateProjectionMatrix();
     });
