@@ -755,9 +755,11 @@ export default function TankPage() {
               </div>
             </>
           )}
+          {/* 레벨 시스템 미완성(경험치 미지급)으로 표시 비활성화
           <div className="currency-pill" style={{ color: 'var(--color-accent)' }}>
             Lv.{user?.level ?? 1}
           </div>
+          */}
           <button
             onClick={() => setNotifOpen(o => !o)}
             style={{
