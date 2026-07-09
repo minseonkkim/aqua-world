@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   PhotoFilter, PhotoFrame, FILTER_LABELS, FRAME_LABELS,
-  composePhoto, sharePhoto, downloadPhoto,
+  composePhoto, sharePhoto, savePhoto,
 } from '@/utils/photoCompose';
 import { playSFX } from '@/services/audio';
 import { analytics } from '@/services/analytics';
@@ -80,9 +80,9 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
     else onToast('공유 실패');
   }, [resultBlob, onToast, filter, frame]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!resultBlob) return;
-    if (downloadPhoto(resultBlob)) {
+    if (await savePhoto(resultBlob)) {
       analytics.photoCapture(filter, frame, 'downloaded');
       onToast('💾 저장 완료!');
     } else onToast('저장 실패');

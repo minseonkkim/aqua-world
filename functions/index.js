@@ -101,6 +101,42 @@ function rollSpecies(tier) {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// ─── 번식(짝짓기) 헬퍼 ───
+function speciesRarity(speciesId) {
+  return (G.SPECIES[speciesId] && G.SPECIES[speciesId].rarity) || "common";
+}
+
+/** 번식 알 부화 종 추첨: 기본은 부모와 같은 종, 낮은 확률로 한 단계 상위 등급 풀에서. */
+function rollBreedingSpecies(parentSpeciesId) {
+  const upgraded = G.NEXT_RARITY[speciesRarity(parentSpeciesId)];
+  if (upgraded && Math.random() < G.BREED_UPGRADE_RATE) {
+    const pool = G.SPECIES_BY_RARITY[upgraded];
+    if (pool && pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  return parentSpeciesId;
+}
+
+/** 번식 알 생성(부모 종 기억). tier 는 부모 등급으로 결정 → 부화 시간·외형. */
+function makeBreedingEgg(parentSpeciesId) {
+  const tier = G.BREED_EGG_TIER_BY_RARITY[speciesRarity(parentSpeciesId)];
+  return {
+    id: genId("egg"),
+    tier,
+    hatchDuration: G.EGG_HATCH_TIME[tier],
+    startedAt: 0,
+    isHatching: false,
+    breedSpeciesId: parentSpeciesId,
+  };
+}
+
+/** 성어 이상 + 쿨다운 종료 → 짝짓기 가능 */
+function isBreedable(fish, now) {
+  if (!G.BREEDABLE_STAGES.includes(fish.growthStage)) return false;
+  const last = fish.lastBredAt || 0;
+  if (!last) return true;
+  return (now - last) / 1000 >= G.BREED_COOLDOWN_SECONDS;
+}
+
 /** 보상 1건을 user 객체(가변 복사본)에 적용 */
 function applyReward(user, reward) {
   if (reward.type === "pearl") user.pearl += reward.amount;
@@ -370,7 +406,10 @@ exports.hatchEgg = onCall(async (request) => {
     }
 
     // ★ 종 추첨은 반드시 서버에서
-    const speciesId = rollSpecies(egg.tier);
+    // 번식 알은 부모 종(낮은 확률로 상위 등급), 일반 알은 tier 풀에서 추첨
+    const speciesId = egg.breedSpeciesId
+      ? rollBreedingSpecies(egg.breedSpeciesId)
+      : rollSpecies(egg.tier);
     const species = G.SPECIES[speciesId];
     const now = Date.now();
     const fish = {
@@ -480,6 +519,55 @@ exports.feedFish = onCall(async (request) => {
       tank: stripTank(newTank),
       newStage: advanced ? advanced.growthStage : null,
     };
+  });
+});
+
+// ─── 번식(짝짓기) ────────────────────────────────────────────────────────────
+// 같은 종 성어 2마리 → Pearl 차감 + 부모 쿨다운 + 번식 알 지급. 부모는 사라지지 않는다.
+exports.breedFish = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const tankId = request.data && request.data.tankId;
+  const parentAId = request.data && request.data.parentAId;
+  const parentBId = request.data && request.data.parentBId;
+  if (!tankId || !parentAId || !parentBId) {
+    throw new HttpsError("invalid-argument", "tankId/parentAId/parentBId 필요");
+  }
+  if (parentAId === parentBId) {
+    throw new HttpsError("invalid-argument", "서로 다른 물고기를 골라야 합니다.");
+  }
+
+  return db.runTransaction(async (tx) => {
+    const uSnap = await tx.get(userRef(uid));
+    if (!uSnap.exists) throw new HttpsError("not-found", "유저 없음");
+    const user = uSnap.data();
+    const tankData = await readOwnedTank(tx, uid, tankId);
+
+    const fishList = tankData.fish || [];
+    const a = fishList.find((f) => f.id === parentAId);
+    const b = fishList.find((f) => f.id === parentBId);
+    if (!a || !b) throw new HttpsError("not-found", "물고기를 찾을 수 없습니다.");
+    if (a.speciesId !== b.speciesId) {
+      throw new HttpsError("failed-precondition", "같은 종끼리만 짝지을 수 있습니다.");
+    }
+    const now = Date.now();
+    if (!isBreedable(a, now) || !isBreedable(b, now)) {
+      throw new HttpsError("failed-precondition", "성어 이상·쿨다운이 끝난 물고기만 가능합니다.");
+    }
+    if ((user.pearl || 0) < G.BREED_COST_PEARL) {
+      throw new HttpsError("failed-precondition", "재화가 부족합니다.");
+    }
+
+    user.pearl -= G.BREED_COST_PEARL;
+    user.inventory = [...user.inventory, makeBreedingEgg(a.speciesId)];
+
+    const newFishList = fishList.map((f) =>
+      f.id === parentAId || f.id === parentBId ? { ...f, lastBredAt: now } : f
+    );
+    const newTank = { ...tankData, fish: newFishList, updatedAt: now };
+
+    tx.set(userRef(uid), user);
+    tx.set(tankRef(tankId), newTank);
+    return { user, tank: stripTank(newTank) };
   });
 });
 

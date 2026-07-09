@@ -109,6 +109,7 @@ export const analytics = {
   startHatching: (tier: string) => track('start_hatching', { tier }),
   hatchEgg: (tier: string, speciesId: string) =>
     track('hatch_egg', { tier, species_id: speciesId }),
+  breedFish: (speciesId: string) => track('breed_fish', { species_id: speciesId }),
 
   // 경제/상점
   purchaseDecoration: (modelId: string, price: number) =>

@@ -30,6 +30,8 @@ export interface Fish {
   growthBoostSeconds: number; // 먹이로 누적된 성장 가속 (초). 단계 승급 시 0으로 초기화
   position: { x: number; y: number; z: number };
   color?: string; // optional color override
+  /** 마지막으로 짝짓기에 참여한 시각(unix ms). 없거나 0이면 쿨다운 없음(짝짓기 가능) */
+  lastBredAt?: number;
 }
 
 // ==================== Egg ====================
@@ -42,6 +44,11 @@ export interface Egg {
   hatchDuration: number; // seconds
   startedAt: number; // unix timestamp, 0 if not started
   isHatching: boolean;
+  /**
+   * 번식(짝짓기)으로 생성된 알이면 부모 종 id. 부화 시 tier 풀 대신
+   * 이 종(낮은 확률로 상위 등급) 을 추첨한다. 일반 알(상점/보상)은 undefined.
+   */
+  breedSpeciesId?: string;
 }
 
 // ==================== Tank ====================

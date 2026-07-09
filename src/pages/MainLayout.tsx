@@ -7,6 +7,7 @@ import FriendsPage from './FriendsPage';
 import SettingsPage from './SettingsPage';
 import PrivacyPage from './PrivacyPage';
 import TermsPage from './TermsPage';
+import { useUiStore } from '@/store/useUiStore';
 // LicensesPage는 130KB 라이선스 JSON을 import하므로 lazy load
 const LicensesPage = lazy(() => import('./LicensesPage'));
 
@@ -21,6 +22,8 @@ const TABS = [
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  // 전체화면 감상 모드에서는 하단 탭바까지 숨긴다.
+  const immersive = useUiStore(s => s.immersive);
 
   return (
     <>
@@ -42,6 +45,7 @@ export default function MainLayout() {
         </Routes>
       </div>
 
+      {!immersive && (
       <nav className="tab-bar">
         {TABS.map(tab => (
           <button
@@ -54,6 +58,7 @@ export default function MainLayout() {
           </button>
         ))}
       </nav>
+      )}
     </>
   );
 }

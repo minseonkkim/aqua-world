@@ -1,6 +1,7 @@
 // 포토 모드 — 필터/프레임/워터마크 합성
 // 입력: TankScene 캔버스에서 캡처한 PNG dataURL
 // 출력: 합성된 Blob (공유/저장용)
+import { isNative } from '@/services/platform';
 
 export type PhotoFilter = 'none' | 'warm' | 'cool' | 'vintage' | 'mono';
 export type PhotoFrame = 'none' | 'polaroid' | 'gradient';
@@ -153,8 +154,18 @@ function drawWatermark(ctx: CanvasRenderingContext2D, ox: number, oy: number, im
 }
 
 // 공유/저장 헬퍼
+//
+// 네이티브(Capacitor)와 웹은 저장/공유 방식이 완전히 다르다.
+//  - 웹: navigator.share({files}) / <a download> — 브라우저에서만 동작
+//  - 네이티브: WebView 에선 위 API 가 무반응이라 Capacitor 플러그인 사용
+//    (photoNative 모듈은 native 일 때만 동적 import — 웹 번들에 포함되지 않음)
 
 export async function sharePhoto(blob: Blob): Promise<'shared' | 'downloaded' | 'cancelled' | 'error'> {
+  if (isNative()) {
+    const { sharePhotoNative } = await import('./photoNative');
+    return sharePhotoNative(blob);
+  }
+
   const fileName = `aquaworld_${Date.now()}.png`;
   const file = new File([blob], fileName, { type: 'image/png' });
 
@@ -175,6 +186,15 @@ export async function sharePhoto(blob: Blob): Promise<'shared' | 'downloaded' | 
   }
   // 폴백: 다운로드
   return downloadPhoto(blob, fileName) ? 'downloaded' : 'error';
+}
+
+/** 저장: 네이티브는 갤러리, 웹은 파일 다운로드. 성공 시 true. */
+export async function savePhoto(blob: Blob, fileName?: string): Promise<boolean> {
+  if (isNative()) {
+    const { saveToGalleryNative } = await import('./photoNative');
+    return saveToGalleryNative(blob);
+  }
+  return downloadPhoto(blob, fileName);
 }
 
 export function downloadPhoto(blob: Blob, fileName?: string): boolean {
