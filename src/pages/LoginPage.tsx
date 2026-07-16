@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { useModalStore } from '@/store/useModalStore';
 import { signInWithGoogle, startKakaoLogin } from '@/services/firebase/auth';
+import { describeAuthError } from '@/services/firebase/authErrors';
 import { loadUserTanks } from '@/services/firebase/firestore';
 import { bootstrapUser, claimDailyReward, reconcileFish } from '@/services/firebase/functions';
 import { analytics, identifyUser, setUserProps } from '@/services/analytics';
@@ -119,12 +120,13 @@ export default function LoginPage() {
         return;
       }
       console.error(`[${providerLabel} Login]`, err);
-      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      // 원인을 특정할 수 있으면(특히 네트워크) 그 이유를 보여준다. 원문은 위 console.error 로 남는다.
+      const info = describeAuthError(err, providerLabel);
       await useModalStore.getState().alert({
-        emoji: '⚠️',
-        title: `${providerLabel} 로그인 실패`,
-        message: `${msg}\n\n(DevTools 콘솔에서 자세한 스택을 확인하세요)`,
-        tone: 'danger',
+        emoji: info.emoji,
+        title: info.title,
+        message: info.message,
+        tone: info.isNetwork ? 'info' : 'danger',
       });
     } finally {
       bootstrappingRef.current = false;
@@ -158,12 +160,13 @@ export default function LoginPage() {
       sessionStorage.removeItem('aw:auth_action');
       loginInFlightRef.current = false;
       setLoading(false);
-      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[카카오 Login]', err);
+      const info = describeAuthError(err, '카카오');
       void useModalStore.getState().alert({
-        emoji: '⚠️',
-        title: '카카오 로그인 실패',
-        message: msg,
-        tone: 'danger',
+        emoji: info.emoji,
+        title: info.title,
+        message: info.message,
+        tone: info.isNetwork ? 'info' : 'danger',
       });
     }
   };
