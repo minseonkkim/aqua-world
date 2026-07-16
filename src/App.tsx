@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUserStore, DailyRewardResult } from '@/store/useUserStore';
 import { useTankStore } from '@/store/useTankStore';
 import { onAuthChanged, completeKakaoLogin } from '@/services/firebase/auth';
+import { describeAuthError } from '@/services/firebase/authErrors';
 import { App as CapApp } from '@capacitor/app';
 import { Browser } from '@capacitor/browser';
 import { isNative } from '@/services/platform';
@@ -13,6 +14,7 @@ import { loadUserTanks } from '@/services/firebase/firestore';
 import { isConfigured } from '@/services/firebase/config';
 import { isPushSupported, listenForeground, getPushPermission, enablePush } from '@/services/firebase/messaging';
 import { initAds, preloadRewardedAd } from '@/services/ads';
+import { initNetworkStatus } from '@/services/network';
 import MainLayout from '@/pages/MainLayout';
 import OnboardingPage from '@/pages/OnboardingPage';
 import LoginPage from '@/pages/LoginPage';
@@ -73,12 +75,12 @@ export default function App() {
     setLoading(true);
     completeKakaoLogin(code!).catch(err => {
       console.error('[Kakao callback]', err);
-      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      const info = describeAuthError(err, '카카오');
       void useModalStore.getState().alert({
-        emoji: '⚠️',
-        title: '카카오 로그인 실패',
-        message: msg,
-        tone: 'danger',
+        emoji: info.emoji,
+        title: info.title,
+        message: info.message,
+        tone: info.isNetwork ? 'info' : 'danger',
       });
       setLoading(false);
       setKakaoInFlight(false);
@@ -121,6 +123,11 @@ export default function App() {
       void sub.then(s => s.remove());
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 네트워크 연결 상태 추적 시작 — 로그인 실패 시 오프라인 여부를 동기로 판별하는 데 쓴다.
+  useEffect(() => {
+    initNetworkStatus();
+  }, []);
 
   // 이미 푸시를 허용한 유저는 앱 진입 시 포그라운드 수신 리스너 재연결.
   // 네이티브에서는 토큰이 회전될 수 있으므로 enablePush() 로 재등록까지 수행.
