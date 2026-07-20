@@ -171,7 +171,36 @@ const DECORATION_PRICES = {
   pearl_shell: 130, roman_pillar: 160, arch_ring: 140, bubble_chimney: 100,
 };
 
+// ─── 친구 시스템 (V1.1) ───
+// 친구 코드: 사람이 눈으로 읽고 입으로 불러줄 수 있어야 하므로 혼동 문자(0/O/1/I)를 뺀다.
+const FRIEND_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const FRIEND_CODE_LENGTH = 6;
+// 친구 수 상한 — 친구 목록은 매 조회마다 유저 문서를 N번 읽으므로 비용 상한이기도 하다.
+const FRIEND_MAX = 50;
+// 하루 방문 가능 인원 (어뷰징 방지, 로드맵 5-1 🟡)
+const FRIEND_VISIT_LIMIT_PER_DAY = 10;
+// 방문 흔적으로 남기는 먹이의 성장 가속(초). 본인 먹이(FEED_GROWTH_BOOST_SECONDS=300)보다
+// 약하게 잡아 "친구 먹이로 대리 육성" 이 본인 플레이를 대체하지 못하게 한다.
+const FRIEND_FEED_GROWTH_BOOST_SECONDS = 60;
+// 한 수조가 하루에 받을 수 있는 친구 먹이 수 — 친구 수에 비례해 성장이 폭주하지 않게 한다.
+const FRIEND_FEED_RECEIVE_LIMIT_PER_DAY = 10;
+// 친구 수조 방문 보상(방문자) — 하루 FRIEND_VISIT_LIMIT_PER_DAY 명까지만 지급된다.
+const FRIEND_VISIT_PEARL_REWARD = 20;
+// 초대 보상: 초대한 쪽/받은 쪽 모두 희귀 알 1개 (로드맵 5-1)
+const INVITE_REWARD = { type: "egg", tier: "rare" };
+// 초대 코드 입력 유효 기간(가입 후 N일) — 오래된 계정이 코드를 사후 입력해 보상만 챙기는 것 방지
+const INVITE_REDEEM_WINDOW_DAYS = 7;
+
 module.exports = {
+  FRIEND_CODE_ALPHABET,
+  FRIEND_CODE_LENGTH,
+  FRIEND_MAX,
+  FRIEND_VISIT_LIMIT_PER_DAY,
+  FRIEND_FEED_GROWTH_BOOST_SECONDS,
+  FRIEND_FEED_RECEIVE_LIMIT_PER_DAY,
+  FRIEND_VISIT_PEARL_REWARD,
+  INVITE_REWARD,
+  INVITE_REDEEM_WINDOW_DAYS,
   START_PEARL,
   START_STAR_CORAL,
   TANK_CAPACITY_BY_LEVEL,

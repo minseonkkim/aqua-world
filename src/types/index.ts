@@ -118,6 +118,44 @@ export interface User {
   claimedCompendiumMilestones?: number[];
   /** 광고 보상 일일 카운터: type → { YYYYMMDD: 사용횟수 }. 남은 횟수 표시에 사용. */
   adWatchCounters?: Record<string, Record<string, number>>;
+  /** 내 친구 코드(6자리). 서버가 첫 친구 탭 진입 시 발급한다. */
+  friendCode?: string;
+  /** 나를 초대한 유저의 uid. 서버가 한 번만 설정 — 초대 보상 중복 방지의 기준값. */
+  invitedBy?: string;
+  /** 내 초대로 가입한 친구 수 */
+  inviteCount?: number;
+}
+
+// ==================== Friends (V1.1) ====================
+
+/** 서버가 정제해 내려주는 공개 프로필. 남의 users 문서는 직접 읽을 수 없다. */
+export interface FriendProfile {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
+  level: number;
+  /** 마지막 앱 실행 시각(unix ms). 친구 목록의 "N분 전 접속" 표시에 쓴다. */
+  lastActiveAt: number;
+  collectedCount: number;
+  friendCode: string | null;
+}
+
+export interface Friend extends FriendProfile {
+  /** 친구가 된 시각(unix ms) */
+  since: number;
+}
+
+/** 친구 코드 검색 결과의 관계 상태 — UI 버튼 라벨을 결정한다. */
+export type FriendRelation = 'none' | 'requested' | 'incoming' | 'friend';
+
+export type FriendTraceType = 'heart' | 'feed';
+
+/** 내 수조에 남겨진 방문 흔적 */
+export interface FriendVisit {
+  uid: string;
+  type: FriendTraceType;
+  at: number;
+  displayName: string;
 }
 
 // ==================== Shop ====================

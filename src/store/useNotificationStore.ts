@@ -3,7 +3,8 @@ import { persist } from 'zustand/middleware';
 import { playSFX } from '@/services/audio';
 import { useUserStore } from './useUserStore';
 
-export type NotificationType = 'growth' | 'hatch' | 'daily' | 'reengage';
+// 'visit' — 친구가 내 수조에 흔적(하트/먹이)을 남긴 알림 (V1.1)
+export type NotificationType = 'growth' | 'hatch' | 'daily' | 'reengage' | 'visit';
 
 export interface AppNotification {
   id: string; // 고유 + 중복 방지 키

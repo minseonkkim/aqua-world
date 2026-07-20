@@ -4,6 +4,8 @@ import TankPage from './TankPage';
 import CompendiumPage from './CompendiumPage';
 import ShopPage from './ShopPage';
 import FriendsPage from './FriendsPage';
+import FriendTankPage from './FriendTankPage';
+import InvitePage from './InvitePage';
 import SettingsPage from './SettingsPage';
 import PrivacyPage from './PrivacyPage';
 import TermsPage from './TermsPage';
@@ -33,6 +35,8 @@ export default function MainLayout() {
           <Route path="/compendium" element={<CompendiumPage />} />
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/friends/:uid" element={<FriendTankPage />} />
+          <Route path="/invite/:code" element={<InvitePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
@@ -50,7 +54,12 @@ export default function MainLayout() {
         {TABS.map(tab => (
           <button
             key={tab.path}
-            className={`tab-item ${location.pathname === tab.path ? 'active' : ''}`}
+            // 하위 경로(/friends/:uid 친구 수조 방문)에서도 상위 탭을 활성으로 유지한다.
+            className={`tab-item ${
+              location.pathname === tab.path || location.pathname.startsWith(`${tab.path}/`)
+                ? 'active'
+                : ''
+            }`}
             onClick={() => navigate(tab.path)}
           >
             <span>{tab.icon}</span>

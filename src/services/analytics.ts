@@ -125,4 +125,15 @@ export const analytics = {
     track('photo_capture', { filter, frame, action }),
   compendiumMilestoneClaim: (pct: number) =>
     track('compendium_milestone_claim', { pct }),
+
+  // 친구 (V1.1)
+  friendRequestSend: () => track('friend_request_send'),
+  friendRequestRespond: (accepted: boolean) =>
+    track('friend_request_respond', { accepted }),
+  friendRemove: () => track('friend_remove'),
+  friendInviteShare: (outcome: 'shared' | 'copied' | 'failed') =>
+    track('friend_invite_share', { outcome }),
+  friendInviteRedeem: () => track('friend_invite_redeem'),
+  friendTankVisit: () => track('friend_tank_visit'),
+  friendTrace: (type: 'heart' | 'feed') => track('friend_trace', { type }),
 };

@@ -25,9 +25,19 @@ const { FieldValue } = require("firebase-admin/firestore");
 
 const G = require("./gameData");
 const { applyGrowthAdvance } = require("./growth");
-
-admin.initializeApp();
-const db = admin.firestore();
+// admin.initializeApp() 과 공용 헬퍼는 shared.js 가 단독으로 소유한다 —
+// index.js / friends.js 가 같은 인스턴스와 같은 규칙을 쓰도록.
+const {
+  db,
+  requireAuth,
+  genId,
+  isNewDay,
+  makeEgg,
+  userRef,
+  tankRef,
+  readOwnedTank,
+  stripTank,
+} = require("./shared");
 
 setGlobalOptions({ region: "asia-northeast3", maxInstances: 10 });
 
@@ -35,40 +45,6 @@ setGlobalOptions({ region: "asia-northeast3", maxInstances: 10 });
 const HATCH_READY_GRACE_SECONDS = 2;
 
 // ─── 헬퍼 ──────────────────────────────────────────────────────────────────
-
-function requireAuth(request) {
-  const uid = request.auth && request.auth.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "로그인이 필요합니다.");
-  return uid;
-}
-
-function genId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-// 일일 리셋(먹이/로그인 보상)은 KST(Asia/Seoul) 자정 기준. Cloud Functions 런타임은 UTC라
-// 그냥 getDate() 를 쓰면 클라(브라우저 로컬 TZ)와 '날짜'가 어긋나 일일 카운터가 desync 된다.
-// 한국은 DST 가 없어 고정 +9h 오프셋이 안전. 클라 src/utils/day.ts isNewDayKst 와 동일 규칙.
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-function isNewDay(lastMs, nowMs) {
-  const a = new Date(lastMs + KST_OFFSET_MS);
-  const b = new Date(nowMs + KST_OFFSET_MS);
-  return (
-    a.getUTCDate() !== b.getUTCDate() ||
-    a.getUTCMonth() !== b.getUTCMonth() ||
-    a.getUTCFullYear() !== b.getUTCFullYear()
-  );
-}
-
-function makeEgg(tier) {
-  return {
-    id: genId("egg"),
-    tier,
-    hatchDuration: G.EGG_HATCH_TIME[tier],
-    startedAt: 0,
-    isHatching: false,
-  };
-}
 
 function makeTutorialEgg() {
   return {
@@ -142,31 +118,6 @@ function applyReward(user, reward) {
   if (reward.type === "pearl") user.pearl += reward.amount;
   else if (reward.type === "star_coral") user.starCoral += reward.amount;
   else if (reward.type === "egg") user.inventory = [...user.inventory, makeEgg(reward.tier)];
-}
-
-const userRef = (uid) => db.doc(`users/${uid}`);
-const tankRef = (tankId) => db.doc(`tanks/${tankId}`);
-
-/** tank 문서를 읽고 소유권을 검증. ownerId 는 Tank 타입에 없는 Firestore 전용 필드. */
-async function readOwnedTank(tx, uid, tankId) {
-  const snap = await tx.get(tankRef(tankId));
-  if (!snap.exists) {
-    logger.warn("readOwnedTank rejected: tank not found", { uid, tankId });
-    throw new HttpsError("not-found", "수조를 찾을 수 없습니다.");
-  }
-  const data = snap.data();
-  if (data.ownerId !== uid) {
-    logger.warn("readOwnedTank rejected: owner mismatch", { uid, tankId, ownerId: data.ownerId });
-    throw new HttpsError("permission-denied", "본인 수조가 아닙니다.");
-  }
-  return data;
-}
-
-/** tank 에서 ownerId 제거(클라 Tank 타입과 일치) */
-function stripTank(tankWithOwner) {
-  const { ownerId, ...tank } = tankWithOwner;
-  void ownerId;
-  return tank;
 }
 
 /**
@@ -1692,3 +1643,17 @@ exports.admobSSV = onRequest({ region: "asia-northeast3" }, async (req, res) => 
     res.status(500).send("error");
   }
 });
+
+// ─── 친구 시스템 (V1.1) ──────────────────────────────────────────────────────
+// 구현은 friends.js. Firebase 는 index.js 의 export 만 배포 대상으로 훑으므로
+// 여기서 다시 내보낸다.
+const friends = require("./friends");
+exports.getMyFriendCode = friends.getMyFriendCode;
+exports.findUserByFriendCode = friends.findUserByFriendCode;
+exports.sendFriendRequest = friends.sendFriendRequest;
+exports.respondFriendRequest = friends.respondFriendRequest;
+exports.removeFriend = friends.removeFriend;
+exports.listFriends = friends.listFriends;
+exports.getFriendTank = friends.getFriendTank;
+exports.sendFriendTrace = friends.sendFriendTrace;
+exports.redeemInvite = friends.redeemInvite;

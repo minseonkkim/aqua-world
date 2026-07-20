@@ -12,6 +12,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // 친구 데이터(friends / requestsIn / requestsOut / visits)와 친구 코드 인덱스는
+    // 서버 전용이다. 규칙은 상위 문서에서 하위 컬렉션으로 상속되지 않고, 어떤 match 도
+    // 이들에 allow 를 주지 않으므로 기본 거부(default deny)로 이미 막혀 있다.
+    // 아래 블록은 그 사실을 코드로 남겨두기 위한 문서용이다 — allow 는 OR 로 합쳐지므로
+    // `if false` 자체에는 차단 효력이 없다(위 users/{uid} 본인 읽기를 무효화하지도 않는다).
+    // 클라는 친구 목록을 listFriends 로만 받는다. 친구 프로필은 남의 users 문서라
+    // 직접 읽을 수 없고, 서버가 공개 필드만 정제해 돌려준다.
+    // friendCodes 는 코드 → uid 역추적을 막기 위해 조회도 함수(findUserByFriendCode) 경유.
+    match /users/{uid}/{sub=**} {
+      allow read, write: if false;
+    }
+    match /friendCodes/{code} {
+      allow read, write: if false;
+    }
+
     // 인앱결제 멱등 기록 — 서버(Admin)만 읽고 쓴다. 클라이언트 접근 전면 차단.
     match /purchases/{purchaseToken} {
       allow read, write: if false;
