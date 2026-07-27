@@ -27,7 +27,7 @@
     (function () {
       // Kakao 가 ?code=... 또는 ?error=... 로 돌려보낸 쿼리스트링을 그대로 앱 커스텀 스킴으로 전달.
       var qs = location.search || '';
-      var target = 'app.aquaworld://oauth/kakao' + qs;
+      var target = 'aquaworld.app://oauth/kakao' + qs;
       // 수동 폴백 링크에도 같은 URL 세팅 (일부 in-app 브라우저에서 자동 이동이 막힐 때 대비)
       var a = document.getElementById('manual');
       if (a) a.setAttribute('href', target);
