@@ -217,7 +217,7 @@ exports.bootstrapUser = onCall(async (request) => {
       const tankId = `tank_${uid}`;
       const recovered = {
         id: tankId, name: "나의 수조", environment: "coral_reef",
-        fish: [], decorations: [], cleanliness: 100, lightMode: "auto",
+        fish: [], decorations: [], cleanliness: 100, lightOn: false,
         createdAt: Date.now(), updatedAt: Date.now(), ownerId: uid,
       };
       await tankRef(tankId).set(recovered, { merge: true });
@@ -262,7 +262,7 @@ exports.bootstrapUser = onCall(async (request) => {
     fish: [],
     decorations: [],
     cleanliness: 100,
-    lightMode: "auto",
+    lightOn: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -979,7 +979,6 @@ exports.purchaseDecoration = onCall(async (request) => {
 // 합쳐지거나 순서가 바뀌어도 항상 같은 상태로 수렴한다.
 
 const VALID_ENVIRONMENTS = new Set(["coral_reef", "deep_sea", "korean_river", "amazon", "space"]);
-const VALID_LIGHT_MODES = new Set(["auto", "day", "night", "sunset"]);
 const VALID_DECO_TYPES = new Set(["plant", "rock", "driftwood", "ornament"]);
 const MAX_DECORATIONS_PER_TANK = 60;
 const MAX_PRESET_SLOTS = 3;
@@ -1033,7 +1032,8 @@ exports.saveTankCosmetics = onCall(async (request) => {
     savedAt: finiteNum(p && p.savedAt) || Date.now(),
   }));
 
-  const lightMode = VALID_LIGHT_MODES.has(data.lightMode) ? data.lightMode : undefined;
+  // 조명 ON/OFF. 구버전 클라의 lightMode('auto'|'day'|...)는 더 이상 받지 않는다(무시).
+  const lightOn = typeof data.lightOn === "boolean" ? data.lightOn : undefined;
   const environment = VALID_ENVIRONMENTS.has(data.environment) ? data.environment : undefined;
   // 청결도는 클라가 감쇠/오염을 계산하는 클라 권위 필드(서버는 감쇠 모델이 없음).
   // 그대로 저장한다(기존 클라 직접쓰기와 동일 신뢰 수준). 청소(100 복구)는 cleanTank 가
@@ -1079,7 +1079,7 @@ exports.saveTankCosmetics = onCall(async (request) => {
       decorationPresets: presets,
       updatedAt: now,
     };
-    if (lightMode) newTank.lightMode = lightMode;
+    if (lightOn !== undefined) newTank.lightOn = lightOn;
     if (environment) newTank.environment = environment;
     if (cleanliness !== undefined) newTank.cleanliness = cleanliness;
     if (lastCleanlinessTickAt !== undefined) newTank.lastCleanlinessTickAt = lastCleanlinessTickAt;

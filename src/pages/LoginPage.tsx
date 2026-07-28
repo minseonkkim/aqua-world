@@ -41,7 +41,7 @@ function createDefaultTank(): Tank {
     fish: [],
     decorations: [],
     cleanliness: 100,
-    lightMode: 'auto',
+    lightOn: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
