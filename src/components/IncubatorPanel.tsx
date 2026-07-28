@@ -177,9 +177,11 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     const egg = user?.inventory.find(e => e.id === eggId);
     if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
+      // onError 없이 두면 서버 거절 시 조용히 롤백돼 "눌러도 아무 반응 없음"으로 보인다.
       optimistic(
         () => startHatching(eggId),
         () => startHatchingServer({ eggId }),
+        () => showToast('부화를 시작하지 못했어요. 잠시 후 다시 시도해주세요'),
       );
       return;
     }

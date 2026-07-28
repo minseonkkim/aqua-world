@@ -502,19 +502,23 @@ export default function TankPage() {
       showToast(`Pearl이 부족합니다 (${BREED_COST_PEARL} 🪙 필요)`);
       return;
     }
-    const apply = () => {
-      spendPearl(BREED_COST_PEARL);
-      markFishBred(activeTankId, [a.id, b.id], Date.now());
-      addBreedingEgg(a.speciesId);
-    };
     if (isCloudUser()) {
+      // 알 id 는 서버가 발급한다. 낙관적으로 로컬 id 알을 만들면 인큐베이터가 곧바로 열리는
+      // 이 동선에서 유저가 왕복 이전에 "부화 시작"을 눌러버려, 서버가 모르는 id 로 요청이
+      // 나가 404 → 무음 롤백으로 유령 알이 고정된다. 재화·쿨다운만 낙관적으로 반영하고
+      // 알은 서버 응답(setUser)으로 받는다 — 체감 지연은 수백 ms.
       optimistic(
-        apply,
+        () => {
+          spendPearl(BREED_COST_PEARL);
+          markFishBred(activeTankId, [a.id, b.id], Date.now());
+        },
         () => breedFishServer({ tankId: activeTankId, parentAId: a.id, parentBId: b.id }),
         () => showToast('짝짓기에 실패했어요 — 다시 시도해주세요'),
       );
     } else {
-      apply();
+      spendPearl(BREED_COST_PEARL);
+      markFishBred(activeTankId, [a.id, b.id], Date.now());
+      addBreedingEgg(a.speciesId);
     }
     analytics.breedFish(a.speciesId);
     showToast('💞 짝짓기 성공! 알이 인큐베이터에 담겼어요');
