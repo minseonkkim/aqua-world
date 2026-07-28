@@ -9,8 +9,6 @@ import { buildDecorationMesh, getDecorationMeta } from '@/utils/decorationModels
 import { preloadDecorationModels } from '@/utils/decorationModelLoader';
 import { moodSpeedFactor, moodSinkBias } from '@/utils/mood';
 
-export type LightMode = 'auto' | 'day' | 'night' | 'sunset';
-
 export interface TankSceneHandle {
   /** 현재 프레임을 강제 렌더 후 PNG dataURL로 반환. 실패 시 null. */
   captureFrame: () => string | null;
@@ -27,8 +25,8 @@ interface Props {
   onDecorationSelect?: (id: string | null) => void;
   /** 드래그 종료 시 최종 위치 커밋 */
   onDecorationMove?: (id: string, position: { x: number; y: number; z: number }) => void;
-  /** 조명 모드 — auto: 기기 시간 기반 낮/밤 자동 전환 */
-  lightMode?: LightMode;
+  /** 어항 조명(LED) ON 여부 — 켜면 위에서 따뜻한 빛이 내려오는 연출. 배경 밝기는 항상 낮 고정 */
+  lightOn?: boolean;
   /** 수면 클릭 시 호출 — 일일 먹이 카운트 등 게임 로직에서 처리 */
   onSurfaceFeed?: (x: number, z: number) => boolean | void;
   /** 수조 확장 시각 배율 — 가로·세로(바닥 면적)를 확대. 기본 1 */
@@ -48,6 +46,14 @@ const ENV: Record<TankEnvironment, { water: number; ambient: number; bg: string 
 
 const FLOOR_Y = -3;
 const WATER_Y = 2.9;
+// 기본 밝기 — 항상 낮 고정 (구 day 모드와 동일 값)
+const AMBIENT_DAY = 0.63;
+const SUN_DAY = 1.3;
+// 어항 조명 — ON 시 수조 전체가 균일하게 환해진다 (따뜻한 ambient 글로우 + 기본 조명 부스트)
+const LAMP_COLOR = 0xffe6b3;
+const LAMP_GLOW_INTENSITY = 0.9;
+const AMBIENT_LAMP_BOOST = 0.65;
+const SUN_LAMP_BOOST = 1.0;
 // 확장 레벨 1.0 기준(base) 수조 반경. 가로(X)·세로(Z)는 tankScale로 확대, 높이(Y)는 고정.
 const BASE_HALF_X = 4.5;
 const TANK_HALF_Y = 2.5;
@@ -80,6 +86,17 @@ function limitVec(v: THREE.Vector3, max: number): THREE.Vector3 {
   return v;
 }
 
+// 조명 밝기 엔벨로프(0~1) — 켤 때는 형광등처럼 두 번 튀고 점등, 끌 때는 짧은 페이드아웃.
+// elapsedMs=Infinity(초기 상태)면 목표값을 그대로 반환하므로 마운트 시 연출이 재생되지 않는다.
+function lampEnvelope(on: boolean, elapsedMs: number): number {
+  if (!on) return Math.max(0, 1 - elapsedMs / 150);
+  if (elapsedMs < 70) return 0.4;
+  if (elapsedMs < 130) return 0.05;
+  if (elapsedMs < 220) return 0.75;
+  if (elapsedMs < 290) return 0.15;
+  return Math.min(1, 0.15 + ((elapsedMs - 290) / 160) * 0.85);
+}
+
 const LOADING_MESSAGES = [
   '🐠 물고기들 수조로 입장 중...',
   '🪸 산호 위치 잡는 중...',
@@ -110,7 +127,7 @@ function TankSceneImpl({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
   onDecorationSelect, onDecorationMove,
-  lightMode = 'auto', onSurfaceFeed, tankScale = 1, lowPower = false, style,
+  lightOn = false, onSurfaceFeed, tankScale = 1, lowPower = false, style,
 }: Props, ref: React.Ref<TankSceneHandle>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -125,9 +142,9 @@ function TankSceneImpl({
   const decoHighlightRef = useRef<THREE.Mesh | null>(null);
   const ambientRef = useRef<THREE.AmbientLight | null>(null);
   const sunRef = useRef<THREE.DirectionalLight | null>(null);
+  const lampRef = useRef<THREE.AmbientLight | null>(null);
   const bubblesRef = useRef<THREE.Mesh[]>([]);
   const foodsRef = useRef<FoodParticle[]>([]);
-  const lastLightTickRef = useRef(0);
   const rafRef = useRef(0);
   // 저전력 throttle — 최신 lowPower 값과 마지막 렌더 시각을 animate에서 참조
   const lowPowerRef = useRef(lowPower);
@@ -140,15 +157,16 @@ function TankSceneImpl({
   // 현재 tankScale 반영된 수영 경계 — animate/핸들러에서 항상 최신값 참조
   const boundsRef = useRef({ halfX: BASE_HALF_X * tankScale, halfZ: BASE_HALF_Z * tankScale });
 
-  // 최신 lightMode/onSurfaceFeed를 ref로 보관 (animate/handler 안에서 최신 값 참조)
-  // lightMode는 ref 갱신 후 즉시 applyDayNight 호출 — 5초 throttle 우회
-  const lightModeRef = useRef<LightMode>(lightMode);
-  const applyDayNightRef = useRef<(() => void) | null>(null);
+  // 최신 lightOn/onSurfaceFeed를 ref로 보관 (animate/handler 안에서 최신 값 참조)
+  // 토글 시각을 기록해 animate가 lampEnvelope로 점등/소등 연출을 재생한다.
+  // 초기값 -Infinity → 마운트 시에는 연출 없이 현재 상태로 즉시 정착.
+  const lampOnRef = useRef(lightOn);
+  const lampChangedAtRef = useRef(-Infinity);
   useEffect(() => {
-    lightModeRef.current = lightMode;
-    applyDayNightRef.current?.();
-    lastLightTickRef.current = performance.now(); // 다음 throttled tick 리셋
-  }, [lightMode]);
+    if (lampOnRef.current === lightOn) return;
+    lampOnRef.current = lightOn;
+    lampChangedAtRef.current = performance.now();
+  }, [lightOn]);
   const onSurfaceFeedRef = useRef(onSurfaceFeed);
   useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
   useEffect(() => { lowPowerRef.current = lowPower; }, [lowPower]);
@@ -386,16 +404,22 @@ function TankSceneImpl({
     cameraRef.current = camera;
     apply();
 
-    const ambient = new THREE.AmbientLight(env.ambient, 0.6);
+    const ambient = new THREE.AmbientLight(env.ambient, AMBIENT_DAY);
     scene.add(ambient);
     ambientRef.current = ambient;
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    const sun = new THREE.DirectionalLight(0xffffff, SUN_DAY);
     sun.position.set(5, 10, 5);
     scene.add(sun);
     sunRef.current = sun;
     const under = new THREE.PointLight(0x4488ff, 0.8, 15);
     under.position.set(0, -2, 0);
     scene.add(under);
+
+    // 어항 조명 — 따뜻한 ambient 글로우. 강도는 animate가 lampEnvelope로 매 프레임 갱신
+    // (점등 깜빡임 연출 포함). ambient라 수조 전체가 균일하게 밝아진다
+    const lamp = new THREE.AmbientLight(LAMP_COLOR, 0);
+    scene.add(lamp);
+    lampRef.current = lamp;
 
     // 수조 유리
     scene.add(new THREE.Mesh(
@@ -689,42 +713,6 @@ function TankSceneImpl({
     }
   }, [onFishClick, onDecorationSelect, onDecorationMove, setEnabled, updatePointer, spawnFoodParticles]);
 
-  // 시간 기반 조명 계수 (0 = 자정, 1 = 정오)
-  const computeDayFactor = useCallback((): number => {
-    const mode = lightModeRef.current;
-    if (mode === 'day') return 1;
-    if (mode === 'night') return 0;
-    if (mode === 'sunset') return 0.4;
-    // auto — 기기 시간 기반 코사인 보간
-    const now = new Date();
-    const h = now.getHours() + now.getMinutes() / 60;
-    return 0.5 - 0.5 * Math.cos((h / 24) * Math.PI * 2);
-  }, []);
-
-  const applyDayNight = useCallback(() => {
-    const ambient = ambientRef.current;
-    const sun = sunRef.current;
-    const renderer = rendererRef.current;
-    const scene = sceneRef.current;
-    if (!ambient || !sun || !renderer || !scene) return;
-    const f = computeDayFactor();
-    ambient.intensity = 0.18 + f * 0.45;
-    sun.intensity = 0.35 + f * 0.95;
-    // 햇빛 색: 밤은 푸르스름, 낮은 백색
-    const nightSun = new THREE.Color(0x4466aa);
-    const daySun = new THREE.Color(0xffffff);
-    sun.color.copy(nightSun).lerp(daySun, f);
-    // 배경: 밤은 환경 bg의 70% 어둡게, 낮은 환경 bg 그대로
-    const dayBg = new THREE.Color(env.bg);
-    const nightBg = dayBg.clone().multiplyScalar(0.3);
-    const currentBg = nightBg.clone().lerp(dayBg, f);
-    renderer.setClearColor(currentBg, 1);
-    if (scene.fog instanceof THREE.FogExp2) scene.fog.color.copy(currentBg);
-  }, [computeDayFactor, env.bg]);
-
-  // applyDayNight ref 동기화 — lightMode 변경 시 즉시 호출 가능하도록
-  useEffect(() => { applyDayNightRef.current = applyDayNight; }, [applyDayNight]);
-
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
     // 저전력 모드: 30fps로 throttle. getDelta 호출 전에 건너뛰어야 dt가 누적되고,
@@ -908,10 +896,13 @@ function TankSceneImpl({
       mesh.rotation.z = base.z + sway;
     });
 
-    // 낮/밤 — 5초마다 갱신 (per-frame 불필요)
-    if (now - lastLightTickRef.current > 5000) {
-      lastLightTickRef.current = now;
-      applyDayNight();
+    // 어항 조명 — 점등/소등 연출. 정착 후에도 상수 대입뿐이라 per-frame 비용은 무시 가능
+    const lamp = lampRef.current;
+    if (lamp) {
+      const f = lampEnvelope(lampOnRef.current, now - lampChangedAtRef.current);
+      lamp.intensity = LAMP_GLOW_INTENSITY * f;
+      if (ambientRef.current) ambientRef.current.intensity = AMBIENT_DAY + AMBIENT_LAMP_BOOST * f;
+      if (sunRef.current) sunRef.current.intensity = SUN_DAY + SUN_LAMP_BOOST * f;
     }
 
     // 선택 하이라이트 펄스
@@ -924,7 +915,7 @@ function TankSceneImpl({
     if (rendererRef.current && sceneRef.current && cameraRef.current) {
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
-  }, [applyDayNight, tickCamera]);
+  }, [tickCamera]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

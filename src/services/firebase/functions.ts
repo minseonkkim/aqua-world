@@ -37,7 +37,16 @@ interface ServerResult {
  * 낙관적 UI 헬퍼.
  * 1) apply(): 로컬 상태를 즉시 변경해 화면이 바로 반응한다.
  * 2) server(): 백그라운드로 서버 호출 — 성공 시 권위 상태로 자동 재조정(setUser/applyServerTank).
- * 3) 실패 시 호출 직전 user/tank 스냅샷으로 롤백 + onError.
+ * 3) 실패 시 롤백 + onError.
+ *
+ * 롤백은 "호출 직전 스냅샷 복원"이라 그 사이 스토어가 다른 경로로 바뀌었으면(다른 서버 응답,
+ * 30초 성장 틱, 동시에 진행 중인 다른 낙관적 연산) 그 변경까지 되돌려 버린다. 실제로 짝짓기
+ * 직후 부화 시작을 누르면, 늦게 도착한 startHatching 실패가 먼저 반영된 breedFish 의 권위
+ * 상태를 덮어써 서버가 모르는 유령 알이 고정됐다.
+ *
+ * 그래서 apply() 직후의 참조를 남겨 두고, 실패 시점에 참조가 그대로일 때만 복원한다. 스토어는
+ * 전부 불변 갱신이라 참조가 달라졌다는 건 누군가 이미 덮어썼다는 뜻 — 그 경우 손대지 않고
+ * 서버에서 권위 상태를 다시 받아 수렴시킨다.
  */
 export function optimistic(
   apply: () => void,
@@ -47,11 +56,36 @@ export function optimistic(
   const prevUser = useUserStore.getState().user;
   const prevTanks = useTankStore.getState().tanks;
   apply();
+  const appliedUser = useUserStore.getState().user;
+  const appliedTanks = useTankStore.getState().tanks;
+
   server().catch((err) => {
-    useUserStore.getState().setUser(prevUser);
-    useTankStore.getState().setTanks(prevTanks);
+    const userUntouched = useUserStore.getState().user === appliedUser;
+    const tanksUntouched = useTankStore.getState().tanks === appliedTanks;
+    if (userUntouched) useUserStore.getState().setUser(prevUser);
+    if (tanksUntouched) useTankStore.getState().setTanks(prevTanks);
+    // 되돌리지 못한 쪽엔 실패한 낙관적 변경이 남아 서버와 어긋난다 — 권위 상태로 수렴시킨다.
+    if (!userUntouched || !tanksUntouched) void resyncFromServer();
     onError?.(err);
   });
+}
+
+/**
+ * 서버 권위 user/tank 를 다시 받아 로컬을 수렴시킨다 — 롤백이 안전하지 않았을 때의 회복 경로.
+ * bootstrapUser 는 idempotent 하고 call() 이 응답을 스토어에 반영하므로 그대로 재사용한다.
+ * 실패(오프라인 등)해도 무시 — 다음 서버 왕복이나 앱 재시작에서 어차피 수렴한다.
+ */
+let resyncInFlight = false;
+async function resyncFromServer(): Promise<void> {
+  if (resyncInFlight || !functions) return;
+  resyncInFlight = true;
+  try {
+    await bootstrapUser();
+  } catch {
+    /* 비치명적 */
+  } finally {
+    resyncInFlight = false;
+  }
 }
 
 function call<TData, TResult extends ServerResult>(name: string) {
@@ -174,7 +208,7 @@ export interface TankCosmeticsPayload {
   tankId: string;
   decorations: TankDecoration[];
   decorationPresets: DecorationPreset[];
-  lightMode: Tank['lightMode'];
+  lightOn: boolean;
   environment: TankEnvironment;
   cleanliness: number;
   lastCleanlinessTickAt?: number;

@@ -68,7 +68,7 @@ export default function TankPage() {
   const {
     tanks, activeTankId, addFishToTank, removeFish, feedFish, feedAllFish, tickFishGrowth,
     addDecoration, removeDecoration, updateDecoration,
-    savePreset, loadPreset, deletePreset, setLightMode,
+    savePreset, loadPreset, deletePreset, setLightOn,
     tickMoodAndCleanliness, cleanTank, contaminate, expandTankCapacity, markFishBred,
   } = useTankStore();
   const { getSpeciesById } = useFishStore();
@@ -85,7 +85,6 @@ export default function TankPage() {
   // 탭바는 MainLayout이 렌더하므로 전역 UI 스토어로 상태를 공유한다.
   const immersiveMode = useUiStore(s => s.immersive);
   const setImmersiveMode = useUiStore(s => s.setImmersive);
-  const [lightPopupOpen, setLightPopupOpen] = useState(false);
   // 좌측 하단 패널 상호 배타 — 한 번에 하나만 열림
   const [leftPanel, setLeftPanel] = useState<'incubator' | 'fishbox' | 'breeding' | null>(null);
   const tankSceneRef = useRef<TankSceneHandle>(null);
@@ -502,19 +501,23 @@ export default function TankPage() {
       showToast(`Pearl이 부족합니다 (${BREED_COST_PEARL} 🪙 필요)`);
       return;
     }
-    const apply = () => {
-      spendPearl(BREED_COST_PEARL);
-      markFishBred(activeTankId, [a.id, b.id], Date.now());
-      addBreedingEgg(a.speciesId);
-    };
     if (isCloudUser()) {
+      // 알 id 는 서버가 발급한다. 낙관적으로 로컬 id 알을 만들면 인큐베이터가 곧바로 열리는
+      // 이 동선에서 유저가 왕복 이전에 "부화 시작"을 눌러버려, 서버가 모르는 id 로 요청이
+      // 나가 404 → 무음 롤백으로 유령 알이 고정된다. 재화·쿨다운만 낙관적으로 반영하고
+      // 알은 서버 응답(setUser)으로 받는다 — 체감 지연은 수백 ms.
       optimistic(
-        apply,
+        () => {
+          spendPearl(BREED_COST_PEARL);
+          markFishBred(activeTankId, [a.id, b.id], Date.now());
+        },
         () => breedFishServer({ tankId: activeTankId, parentAId: a.id, parentBId: b.id }),
         () => showToast('짝짓기에 실패했어요 — 다시 시도해주세요'),
       );
     } else {
-      apply();
+      spendPearl(BREED_COST_PEARL);
+      markFishBred(activeTankId, [a.id, b.id], Date.now());
+      addBreedingEgg(a.speciesId);
     }
     analytics.breedFish(a.speciesId);
     showToast('💞 짝짓기 성공! 알이 인큐베이터에 담겼어요');
@@ -715,7 +718,7 @@ export default function TankPage() {
           selectedDecorationId={selectedDecoId}
           onDecorationSelect={setSelectedDecoId}
           onDecorationMove={handleMoveDecoration}
-          lightMode={activeTank?.lightMode ?? 'auto'}
+          lightOn={activeTank?.lightOn ?? false}
           onSurfaceFeed={(photoMode || immersiveMode) ? undefined : handleSurfaceFeed}
           tankScale={getTankScale(capacityLevel)}
           // 모달/패널로 수조가 가려질 때 30fps로 낮춰 배터리 절약 (포토 모드는 수조가 주인공이라 제외)
@@ -845,10 +848,15 @@ export default function TankPage() {
             { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
             { icon: '📷', label: '포토', action: () => setPhotoMode(true) },
             {
-              icon: LIGHT_MODE_ICON[activeTank?.lightMode ?? 'auto'],
+              icon: '💡',
               label: '조명',
-              action: () => setLightPopupOpen(v => !v),
-              active: lightPopupOpen,
+              action: () => {
+                if (!activeTankId) return;
+                const next = !(activeTank?.lightOn ?? false);
+                setLightOn(activeTankId, next);
+                showToast(next ? '💡 조명 켜짐' : '💡 조명 꺼짐');
+              },
+              active: activeTank?.lightOn ?? false,
             },
           ].map(btn => (
             <button key={btn.icon} onClick={btn.action} style={{
@@ -869,7 +877,7 @@ export default function TankPage() {
       {/* 전체화면 감상 — 우측 액션 스택(조명) 아래, 라벨 없이 작은 원형 아이콘만 */}
       {!decorationMode && !photoMode && !immersiveMode && (
         <button
-          onClick={() => { setLightPopupOpen(false); setImmersiveMode(true); }}
+          onClick={() => setImmersiveMode(true)}
           title="전체화면 감상"
           style={{
             position: 'absolute', right: 19, bottom: 24,
@@ -882,43 +890,6 @@ export default function TankPage() {
         >
           ⛶
         </button>
-      )}
-
-      {/* 조명 모드 팝업 — ☀️ 버튼 좌측에 배치 */}
-      {lightPopupOpen && !decorationMode && !photoMode && !immersiveMode && activeTankId && (
-        <div style={{
-          position: 'absolute', right: 84, bottom: 80,
-          display: 'flex', flexDirection: 'column', gap: 4,
-          background: 'rgba(10, 22, 40, 0.95)', borderRadius: 12, padding: 6,
-          border: '1px solid rgba(77, 208, 225, 0.4)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-          zIndex: 60,
-        }}>
-          {(['auto', 'day', 'sunset', 'night'] as const).map(mode => {
-            const isActive = (activeTank?.lightMode ?? 'auto') === mode;
-            return (
-              <button
-                key={mode}
-                onClick={() => {
-                  setLightMode(activeTankId, mode);
-                  setLightPopupOpen(false);
-                  showToast(`${LIGHT_MODE_ICON[mode]} ${LIGHT_MODE_LABEL[mode]} 모드`);
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  background: isActive ? 'rgba(77, 208, 225, 0.25)' : 'transparent',
-                  border: `1px solid ${isActive ? 'rgba(77, 208, 225, 0.6)' : 'transparent'}`,
-                  borderRadius: 8, padding: '5px 10px',
-                  color: '#fff', fontSize: 11, fontWeight: isActive ? 700 : 500,
-                  cursor: 'pointer', whiteSpace: 'nowrap', minWidth: 90,
-                }}
-              >
-                <span style={{ fontSize: 16 }}>{LIGHT_MODE_ICON[mode]}</span>
-                <span>{LIGHT_MODE_LABEL[mode]}</span>
-              </button>
-            );
-          })}
-        </div>
       )}
 
       {/* 꾸미기 모드 패널 */}
@@ -1043,10 +1014,3 @@ const TIER_LABELS: Record<string, string> = {
   basic: '기본 알', rare: '희귀 알', legendary: '전설 알',
 };
 
-const LIGHT_MODE_ICON: Record<'auto' | 'day' | 'sunset' | 'night', string> = {
-  auto: '🌗', day: '☀️', sunset: '🌅', night: '🌙',
-};
-
-const LIGHT_MODE_LABEL: Record<'auto' | 'day' | 'sunset' | 'night', string> = {
-  auto: '자동 (시간)', day: '낮', sunset: '노을', night: '밤',
-};

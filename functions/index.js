@@ -147,6 +147,29 @@ function applyReward(user, reward) {
 const userRef = (uid) => db.doc(`users/${uid}`);
 const tankRef = (tankId) => db.doc(`tanks/${tankId}`);
 
+/**
+ * 저장된 fish 들에 경과시간 성장을 반영한 목록. 승급이 없으면 원본 배열을 그대로 돌려준다.
+ *
+ * 성장은 stageStartedAt 기준 순수 함수(클라 src/utils/growth.ts 와 동일 구현)라, 읽는 시점에
+ * 계산만 하면 클라의 30초 로컬 틱과 항상 같은 값이 나온다. 이걸 안 하면 저장된 stale 단계가
+ * 응답에 실려 나가 applyServerTank 가 클라의 로컬 성장을 되돌리고, 30초 뒤 다시 올라가
+ * 짝짓기 후보 목록(성어 이상 필터)이 깜빡인다. breedFish 의 성어 판정도 같은 이유로 stale 해진다.
+ *
+ * 여기서 쓰기는 하지 않는다(트랜잭션 read-before-write 유지). 순수 함수라 저장 여부와 무관하게
+ * 같은 결과가 나오고, tank 를 쓰는 호출들이 자연히 영속화한다.
+ */
+function withGrownFish(fishList, now) {
+  const list = fishList || [];
+  let changed = false;
+  const next = list.map((f) => {
+    const advanced = applyGrowthAdvance(f, now);
+    if (!advanced) return f;
+    changed = true;
+    return advanced;
+  });
+  return changed ? next : list;
+}
+
 /** tank 문서를 읽고 소유권을 검증. ownerId 는 Tank 타입에 없는 Firestore 전용 필드. */
 async function readOwnedTank(tx, uid, tankId) {
   const snap = await tx.get(tankRef(tankId));
@@ -159,7 +182,7 @@ async function readOwnedTank(tx, uid, tankId) {
     logger.warn("readOwnedTank rejected: owner mismatch", { uid, tankId, ownerId: data.ownerId });
     throw new HttpsError("permission-denied", "본인 수조가 아닙니다.");
   }
-  return data;
+  return { ...data, fish: withGrownFish(data.fish, Date.now()) };
 }
 
 /** tank 에서 ownerId 제거(클라 Tank 타입과 일치) */
@@ -211,13 +234,18 @@ exports.bootstrapUser = onCall(async (request) => {
     const firstTankId = (data.tanks || [])[0];
     if (firstTankId) {
       const tSnap = await tankRef(firstTankId).get();
-      if (tSnap.exists && tSnap.data().ownerId === uid) tank = stripTank(tSnap.data());
+      if (tSnap.exists && tSnap.data().ownerId === uid) {
+        // readOwnedTank 와 동일하게 경과시간 성장을 반영해서 돌려준다 — 콜드스타트 직후
+        // 클라가 stale 단계를 받아 성장이 되돌아 보이지 않도록.
+        const tData = tSnap.data();
+        tank = stripTank({ ...tData, fish: withGrownFish(tData.fish, Date.now()) });
+      }
     }
     if (!tank) {
       const tankId = `tank_${uid}`;
       const recovered = {
         id: tankId, name: "나의 수조", environment: "coral_reef",
-        fish: [], decorations: [], cleanliness: 100, lightMode: "auto",
+        fish: [], decorations: [], cleanliness: 100, lightOn: false,
         createdAt: Date.now(), updatedAt: Date.now(), ownerId: uid,
       };
       await tankRef(tankId).set(recovered, { merge: true });
@@ -262,7 +290,7 @@ exports.bootstrapUser = onCall(async (request) => {
     fish: [],
     decorations: [],
     cleanliness: 100,
-    lightMode: "auto",
+    lightOn: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -979,7 +1007,6 @@ exports.purchaseDecoration = onCall(async (request) => {
 // 합쳐지거나 순서가 바뀌어도 항상 같은 상태로 수렴한다.
 
 const VALID_ENVIRONMENTS = new Set(["coral_reef", "deep_sea", "korean_river", "amazon", "space"]);
-const VALID_LIGHT_MODES = new Set(["auto", "day", "night", "sunset"]);
 const VALID_DECO_TYPES = new Set(["plant", "rock", "driftwood", "ornament"]);
 const MAX_DECORATIONS_PER_TANK = 60;
 const MAX_PRESET_SLOTS = 3;
@@ -1033,7 +1060,8 @@ exports.saveTankCosmetics = onCall(async (request) => {
     savedAt: finiteNum(p && p.savedAt) || Date.now(),
   }));
 
-  const lightMode = VALID_LIGHT_MODES.has(data.lightMode) ? data.lightMode : undefined;
+  // 조명 ON/OFF. 구버전 클라의 lightMode('auto'|'day'|...)는 더 이상 받지 않는다(무시).
+  const lightOn = typeof data.lightOn === "boolean" ? data.lightOn : undefined;
   const environment = VALID_ENVIRONMENTS.has(data.environment) ? data.environment : undefined;
   // 청결도는 클라가 감쇠/오염을 계산하는 클라 권위 필드(서버는 감쇠 모델이 없음).
   // 그대로 저장한다(기존 클라 직접쓰기와 동일 신뢰 수준). 청소(100 복구)는 cleanTank 가
@@ -1079,7 +1107,7 @@ exports.saveTankCosmetics = onCall(async (request) => {
       decorationPresets: presets,
       updatedAt: now,
     };
-    if (lightMode) newTank.lightMode = lightMode;
+    if (lightOn !== undefined) newTank.lightOn = lightOn;
     if (environment) newTank.environment = environment;
     if (cleanliness !== undefined) newTank.cleanliness = cleanliness;
     if (lastCleanlinessTickAt !== undefined) newTank.lastCleanlinessTickAt = lastCleanlinessTickAt;

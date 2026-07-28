@@ -26,7 +26,7 @@ interface TankState {
   updateTank: (tankId: string, updates: Partial<Tank>) => void;
 
   setEnvironment: (tankId: string, env: TankEnvironment) => void;
-  setLightMode: (tankId: string, mode: Tank['lightMode']) => void;
+  setLightOn: (tankId: string, on: boolean) => void;
 
   addDecoration: (tankId: string, decoration: TankDecoration) => void;
   removeDecoration: (tankId: string, decorationId: string) => void;
@@ -77,13 +77,20 @@ export const useTankStore = create<TankState>()(
         return tanks.find(t => t.id === activeTankId) ?? null;
       },
 
-      applyServerTank: tank =>
+      applyServerTank: tank => {
+        // 서버 응답에도 경과시간 성장을 반영해서 넣는다. 성장은 stageStartedAt 기준 순수
+        // 함수(서버 functions/growth.js 와 동일 구현)라 결과가 어긋나지 않고, 서버가 아직
+        // 승급을 반영하지 않은 응답을 보내도 30초 틱으로 올려둔 로컬 단계가 되돌아가지 않는다.
+        // (되돌아가면 성장 단계로 게이팅되는 짝짓기 후보 목록이 깜빡였다.)
+        const now = Date.now();
+        const grown = { ...tank, fish: tank.fish.map(f => applyGrowthAdvance(f, now) ?? f) };
         set(state => ({
-          tanks: state.tanks.some(t => t.id === tank.id)
-            ? state.tanks.map(t => (t.id === tank.id ? tank : t))
-            : [...state.tanks, tank],
-          activeTankId: state.activeTankId ?? tank.id,
-        })),
+          tanks: state.tanks.some(t => t.id === grown.id)
+            ? state.tanks.map(t => (t.id === grown.id ? grown : t))
+            : [...state.tanks, grown],
+          activeTankId: state.activeTankId ?? grown.id,
+        }));
+      },
 
       addTank: tank =>
         set(state => ({
@@ -103,10 +110,10 @@ export const useTankStore = create<TankState>()(
           ),
         })),
 
-      setLightMode: (tankId, mode) =>
+      setLightOn: (tankId, on) =>
         set(state => ({
           tanks: state.tanks.map(t =>
-            t.id === tankId ? { ...t, lightMode: mode, updatedAt: Date.now() } : t,
+            t.id === tankId ? { ...t, lightOn: on, updatedAt: Date.now() } : t,
           ),
         })),
 
