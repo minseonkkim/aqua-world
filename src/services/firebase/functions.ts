@@ -131,12 +131,8 @@ export const exchangePearl = call<{ pkgId: string }, { user: User }>('exchangePe
 export const purchaseDecoration = call<{ modelId: string }, { user: User }>('purchaseDecoration');
 export const purchaseFeedTicket = call<{ pkgId: string }, { user: User }>('purchaseFeedTicket');
 
-// Star Coral 구매: Google Play Billing 영수증(purchaseToken)을 서버가 Play Developer API 로
-// 검증한 뒤에만 지급한다. 무검증 지급(구 purchaseStarCoral)은 서버에서 폐기됨.
-export const verifyStarCoralPurchase = call<
-  { pkgId: string; productId: string; purchaseToken: string },
-  { user: User }
->('verifyStarCoralPurchase');
+// Star Coral 은 보상형 광고로만 지급된다(prepareAdReward/claimAdReward).
+// 인앱결제와 영수증 검증(verifyStarCoralPurchase)은 서버에서 제거됨.
 
 // ─── 부화 / 먹이 ────────────────────────────────────────────────────────────
 
