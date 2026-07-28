@@ -29,7 +29,7 @@ export function useFirestoreSync() {
           tankId: tank.id,
           decorations: tank.decorations,
           decorationPresets: tank.decorationPresets ?? [],
-          lightMode: tank.lightMode,
+          lightOn: tank.lightOn ?? false,
           environment: tank.environment,
           cleanliness: tank.cleanliness,
           lastCleanlinessTickAt: tank.lastCleanlinessTickAt,

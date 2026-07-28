@@ -77,7 +77,8 @@ export interface Tank {
   fish: Fish[];
   decorations: TankDecoration[];
   cleanliness: number; // 0-100
-  lightMode: 'auto' | 'day' | 'night' | 'sunset';
+  /** 어항 조명(LED) ON 여부. 과거 lightMode('auto'|'day'|...) 문서에는 없음 → false 취급 */
+  lightOn?: boolean;
   createdAt: number;
   updatedAt: number;
   decorationPresets?: DecorationPreset[];

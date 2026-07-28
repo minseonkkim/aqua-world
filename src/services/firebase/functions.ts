@@ -174,7 +174,7 @@ export interface TankCosmeticsPayload {
   tankId: string;
   decorations: TankDecoration[];
   decorationPresets: DecorationPreset[];
-  lightMode: Tank['lightMode'];
+  lightOn: boolean;
   environment: TankEnvironment;
   cleanliness: number;
   lastCleanlinessTickAt?: number;

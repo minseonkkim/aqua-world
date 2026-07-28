@@ -26,7 +26,7 @@ interface TankState {
   updateTank: (tankId: string, updates: Partial<Tank>) => void;
 
   setEnvironment: (tankId: string, env: TankEnvironment) => void;
-  setLightMode: (tankId: string, mode: Tank['lightMode']) => void;
+  setLightOn: (tankId: string, on: boolean) => void;
 
   addDecoration: (tankId: string, decoration: TankDecoration) => void;
   removeDecoration: (tankId: string, decorationId: string) => void;
@@ -103,10 +103,10 @@ export const useTankStore = create<TankState>()(
           ),
         })),
 
-      setLightMode: (tankId, mode) =>
+      setLightOn: (tankId, on) =>
         set(state => ({
           tanks: state.tanks.map(t =>
-            t.id === tankId ? { ...t, lightMode: mode, updatedAt: Date.now() } : t,
+            t.id === tankId ? { ...t, lightOn: on, updatedAt: Date.now() } : t,
           ),
         })),
 
