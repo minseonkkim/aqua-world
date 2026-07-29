@@ -93,7 +93,7 @@ function FishRow({ fish, full, onPlace }: { fish: Fish; full: boolean; onPlace: 
           background: full ? 'rgba(255,255,255,0.08)' : 'var(--color-primary)',
           color: full ? 'var(--color-text-disabled)' : '#fff',
           border: 'none', borderRadius: 8, padding: '6px 10px',
-          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
           cursor: full ? 'not-allowed' : 'pointer',
         }}
       >
@@ -128,7 +128,7 @@ export default function FishInventoryPanel({ onPlace, onExpand, tankFishCount, c
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 180,
-          width: 280,
+          width: 'min(280px, calc(100vw - 24px))',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,

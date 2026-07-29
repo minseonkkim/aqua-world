@@ -50,7 +50,10 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/aquaworld_notification" />
 
-        <!-- AdMob APPLICATION_ID. 현재는 Google 공식 테스트 ID. 실서비스 빌드 전에 AdMob 콘솔에서 발급한 실제 값으로 교체 필수. -->
+        <!-- AdMob APPLICATION_ID (실 계정). 광고 단위 ID(.env VITE_ADMOB_REWARDED_ANDROID)와
+             퍼블리셔 ID 가 같아야 한다. 개발 중에는 실 광고를 요청하지 않도록
+             .env 의 VITE_ADMOB_TEST_DEVICES 에 기기 해시를 등록하거나
+             VITE_ADMOB_USE_TEST_ADS=true 로 테스트 단위를 강제할 것. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-2189275813205372~8805884871" />

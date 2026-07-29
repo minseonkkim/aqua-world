@@ -18,6 +18,7 @@ import {
 import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 import { playSFX } from '@/services/audio';
 import { analytics } from '@/services/analytics';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 type ShopTab = 'egg' | 'decoration' | 'pearl' | 'star_coral';
 
@@ -140,8 +141,10 @@ export default function ShopPage() {
   //   클라우드 → prepareAdReward(nonce) → 광고 시청 → claimAdReward(서버 권위 지급)
   //   게스트   → 광고 시청 → 로컬 지급 + 로컬 일일 카운터 증가
   const AD_AMOUNT = CURRENCY.AD_STAR_CORAL_AMOUNT;
-  const watchAdForStarCoral = async () => {
-    if (!user || watchingAd) return;
+  // watchingAd 는 버튼 문구용. 실제 중복 진입 차단은 useAsyncAction 의 ref 가드가 한다
+  // (state 는 리렌더 후에야 반영돼 첫 탭 직후의 두 번째 탭을 못 막는다).
+  const [watchAdForStarCoral] = useAsyncAction(async () => {
+    if (!user) return;
     if (!isAdsAvailable()) {
       playSFX('error');
       showToast('광고는 앱에서만 볼 수 있어요');
@@ -196,9 +199,11 @@ export default function ShopPage() {
     } finally {
       setWatchingAd(false);
     }
-  };
+  });
 
-  const buyPearl = async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {
+  // 구매 계열은 확인 모달 → 서버 왕복이 끝날 때까지 잠근다.
+  // 안 잠그면 연타로 모달이 두 번 뜨거나, 두 번째 요청이 서버에서 거절돼 롤백 + 실패 토스트가 뜬다.
+  const [buyPearl, buyingPearl] = useAsyncAction(async (pkg: (typeof CURRENCY.PEARL_PACKAGES)[number]) => {
     const total = pkg.pearl + pkg.bonus;
     if ((user?.starCoral ?? 0) < pkg.starCoral) {
       playSFX('error');
@@ -214,7 +219,7 @@ export default function ShopPage() {
     if (!ok) return;
     analytics.exchangePearl(pkg.id);
     if (isCloudUser()) {
-      optimistic(
+      return optimistic(
         () => {
           spendStarCoral(pkg.starCoral);
           addPearl(total);
@@ -224,15 +229,14 @@ export default function ShopPage() {
         () => exchangePearl({ pkgId: pkg.id }),
         () => { playSFX('error'); showToast('교환에 실패했습니다'); },
       );
-      return;
     }
     if (!spendStarCoral(pkg.starCoral)) return;
     addPearl(total);
     playSFX('coin');
     showToast(`🪙 코인 ${total.toLocaleString()}개 획득!`);
-  };
+  });
 
-  const buyEgg = async (item: (typeof EGG_ITEMS)[number]) => {
+  const [buyEgg, buyingEgg] = useAsyncAction(async (item: (typeof EGG_ITEMS)[number]) => {
     const balance = item.currency === 'pearl' ? (user?.pearl ?? 0) : (user?.starCoral ?? 0);
     if (balance < item.price) {
       playSFX('error');
@@ -248,7 +252,7 @@ export default function ShopPage() {
     if (!confirmed) return;
     analytics.purchaseEgg(item.tier, item.currency, item.price);
     if (isCloudUser()) {
-      optimistic(
+      return optimistic(
         () => {
           if (item.currency === 'pearl') spendPearl(item.price);
           else spendStarCoral(item.price);
@@ -259,16 +263,15 @@ export default function ShopPage() {
         () => purchaseEgg({ tier: item.tier }),
         () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
-      return;
     }
     const ok = item.currency === 'pearl' ? spendPearl(item.price) : spendStarCoral(item.price);
     if (!ok) return;
     addEggToInventory(item.tier);
     playSFX('coin');
     showToast(`${item.emoji} ${item.name} 획득! 수조 화면에서 부화시키세요`);
-  };
+  });
 
-  const buyFeedTicket = async (pkg: (typeof FEED_TICKET_PACKAGES)[number]) => {
+  const [buyFeedTicket, buyingFeedTicket] = useAsyncAction(async (pkg: (typeof FEED_TICKET_PACKAGES)[number]) => {
     if ((user?.pearl ?? 0) < pkg.price) {
       playSFX('error');
       showToast(`🪙 코인 ${pkg.price - (user?.pearl ?? 0)} 부족`);
@@ -283,7 +286,7 @@ export default function ShopPage() {
     if (!confirmed) return;
     analytics.purchaseFeedTicket(pkg.id, pkg.amount, pkg.price);
     if (isCloudUser()) {
-      optimistic(
+      return optimistic(
         () => {
           spendPearl(pkg.price);
           addFeedTickets(pkg.amount);
@@ -293,15 +296,14 @@ export default function ShopPage() {
         () => purchaseFeedTicket({ pkgId: pkg.id }),
         () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
-      return;
     }
     if (!spendPearl(pkg.price)) return;
     addFeedTickets(pkg.amount);
     playSFX('coin');
     showToast(`🍖 먹이 티켓 ${pkg.amount}장 획득!`);
-  };
+  });
 
-  const buyDecoration = async (modelId: string, name: string, price: number, emoji: string) => {
+  const [buyDecoration, buyingDecoration] = useAsyncAction(async (modelId: string, name: string, price: number, emoji: string) => {
     if ((user?.pearl ?? 0) < price) {
       playSFX('error');
       showToast(`🪙 Pearl ${price - (user?.pearl ?? 0)} 부족`);
@@ -316,7 +318,7 @@ export default function ShopPage() {
     if (!confirmed) return;
     analytics.purchaseDecoration(modelId, price);
     if (isCloudUser()) {
-      optimistic(
+      return optimistic(
         () => {
           spendPearl(price);
           addDecorationInventory(modelId, 1);
@@ -326,13 +328,12 @@ export default function ShopPage() {
         () => purchaseDecoration({ modelId }),
         () => { playSFX('error'); showToast('구매에 실패했습니다'); },
       );
-      return;
     }
     if (!spendPearl(price)) return;
     addDecorationInventory(modelId, 1);
     playSFX('coin');
     showToast(`${emoji} ${name} 인벤토리 +1 · 수조에서 배치하세요`);
-  };
+  });
 
   const decoItems = useMemo(
     () =>
@@ -417,6 +418,7 @@ export default function ShopPage() {
               </div>
               <button
                 onClick={() => buyEgg(item)}
+                disabled={buyingEgg}
                 style={{
                   background: RARITY_BG[item.tier],
                   color: '#fff',
@@ -429,7 +431,8 @@ export default function ShopPage() {
                   gap: 4,
                   whiteSpace: 'nowrap',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: buyingEgg ? 'wait' : 'pointer',
+                  opacity: buyingEgg ? 0.5 : 1,
                 }}
               >
                 {CURRENCY_ICON[item.currency]} {item.price}
@@ -482,6 +485,7 @@ export default function ShopPage() {
                 </div>
                 <button
                   onClick={() => buyFeedTicket(pkg)}
+                  disabled={buyingFeedTicket}
                   style={{
                     background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
                     color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
@@ -494,7 +498,8 @@ export default function ShopPage() {
                     gap: 4,
                     whiteSpace: 'nowrap',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: buyingFeedTicket ? 'wait' : 'pointer',
+                    opacity: buyingFeedTicket ? 0.5 : 1,
                   }}
                 >
                   🪙 {pkg.price}
@@ -581,6 +586,7 @@ export default function ShopPage() {
                   </div>
                   <button
                     onClick={() => buyDecoration(item.modelId, item.name, item.price, item.emoji)}
+                    disabled={buyingDecoration}
                     style={{
                       alignSelf: 'flex-end',
                       background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
@@ -590,7 +596,8 @@ export default function ShopPage() {
                       fontSize: 12,
                       fontWeight: 700,
                       border: 'none',
-                      cursor: 'pointer',
+                      cursor: buyingDecoration ? 'wait' : 'pointer',
+                      opacity: buyingDecoration ? 0.5 : 1,
                     }}
                   >
                     🪙 {item.price}
@@ -640,6 +647,7 @@ export default function ShopPage() {
                 </div>
                 <button
                   onClick={() => buyPearl(pkg)}
+                  disabled={buyingPearl}
                   style={{
                     background: canAfford ? 'var(--color-accent)' : 'rgba(255,255,255,0.1)',
                     color: canAfford ? '#0a1628' : 'var(--color-text-disabled)',
@@ -652,7 +660,8 @@ export default function ShopPage() {
                     gap: 4,
                     whiteSpace: 'nowrap',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: buyingPearl ? 'wait' : 'pointer',
+                    opacity: buyingPearl ? 0.5 : 1,
                   }}
                 >
                   🌸 {pkg.starCoral}

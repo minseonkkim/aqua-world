@@ -47,27 +47,33 @@ interface ServerResult {
  * 그래서 apply() 직후의 참조를 남겨 두고, 실패 시점에 참조가 그대로일 때만 복원한다. 스토어는
  * 전부 불변 갱신이라 참조가 달라졌다는 건 누군가 이미 덮어썼다는 뜻 — 그 경우 손대지 않고
  * 서버에서 권위 상태를 다시 받아 수렴시킨다.
+ *
+ * 반환값은 서버 왕복이 끝나면(성공·실패 모두) resolve 되는 Promise 다 — 절대 reject 하지 않는다.
+ * 버튼 핸들러가 이걸 return 하면 useAsyncAction 이 응답이 올 때까지 재탭을 잠근다.
  */
 export function optimistic(
   apply: () => void,
   server: () => Promise<unknown>,
   onError?: (err: unknown) => void,
-): void {
+): Promise<void> {
   const prevUser = useUserStore.getState().user;
   const prevTanks = useTankStore.getState().tanks;
   apply();
   const appliedUser = useUserStore.getState().user;
   const appliedTanks = useTankStore.getState().tanks;
 
-  server().catch((err) => {
-    const userUntouched = useUserStore.getState().user === appliedUser;
-    const tanksUntouched = useTankStore.getState().tanks === appliedTanks;
-    if (userUntouched) useUserStore.getState().setUser(prevUser);
-    if (tanksUntouched) useTankStore.getState().setTanks(prevTanks);
-    // 되돌리지 못한 쪽엔 실패한 낙관적 변경이 남아 서버와 어긋난다 — 권위 상태로 수렴시킨다.
-    if (!userUntouched || !tanksUntouched) void resyncFromServer();
-    onError?.(err);
-  });
+  return server().then(
+    () => undefined,
+    (err) => {
+      const userUntouched = useUserStore.getState().user === appliedUser;
+      const tanksUntouched = useTankStore.getState().tanks === appliedTanks;
+      if (userUntouched) useUserStore.getState().setUser(prevUser);
+      if (tanksUntouched) useTankStore.getState().setTanks(prevTanks);
+      // 되돌리지 못한 쪽엔 실패한 낙관적 변경이 남아 서버와 어긋난다 — 권위 상태로 수렴시킨다.
+      if (!userUntouched || !tanksUntouched) void resyncFromServer();
+      onError?.(err);
+    },
+  );
 }
 
 /**
@@ -131,12 +137,8 @@ export const exchangePearl = call<{ pkgId: string }, { user: User }>('exchangePe
 export const purchaseDecoration = call<{ modelId: string }, { user: User }>('purchaseDecoration');
 export const purchaseFeedTicket = call<{ pkgId: string }, { user: User }>('purchaseFeedTicket');
 
-// Star Coral 구매: Google Play Billing 영수증(purchaseToken)을 서버가 Play Developer API 로
-// 검증한 뒤에만 지급한다. 무검증 지급(구 purchaseStarCoral)은 서버에서 폐기됨.
-export const verifyStarCoralPurchase = call<
-  { pkgId: string; productId: string; purchaseToken: string },
-  { user: User }
->('verifyStarCoralPurchase');
+// Star Coral 은 보상형 광고로만 지급된다(prepareAdReward/claimAdReward).
+// 인앱결제와 영수증 검증(verifyStarCoralPurchase)은 서버에서 제거됨.
 
 // ─── 부화 / 먹이 ────────────────────────────────────────────────────────────
 

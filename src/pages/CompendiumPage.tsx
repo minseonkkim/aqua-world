@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/useUserStore';
 import { COMPENDIUM_MILESTONES, COMPENDIUM_REWARDS, CompendiumReward } from '@/constants';
 import { isCloudUser, claimMilestone } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 const RARITY_COLOR: Record<string, string> = {
   common: 'var(--color-rarity-common)', rare: 'var(--color-rarity-rare)',
@@ -30,7 +31,8 @@ export default function CompendiumPage() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const handleClaim = async (milestone: number) => {
+  // 연타하면 두 번째 청구가 "이미 수령" 으로 거절돼 '아직 청구할 수 없습니다' 가 뜬다 — 응답까지 잠근다.
+  const [handleClaim, claiming] = useAsyncAction(async (milestone: number) => {
     if (isCloudUser()) {
       try {
         const res = await claimMilestone({ pct: milestone });
@@ -48,7 +50,7 @@ export default function CompendiumPage() {
     }
     analytics.compendiumMilestoneClaim(milestone);
     showToast(`🎉 ${milestone}% 보상 획득 · ${rewardLabel(reward)}`);
-  };
+  });
 
   return (
     <div className="page">
@@ -76,7 +78,7 @@ export default function CompendiumPage() {
               <button
                 key={m}
                 onClick={canClaim ? () => handleClaim(m) : undefined}
-                disabled={!canClaim}
+                disabled={!canClaim || claiming}
                 style={{
                   flex: '0 0 auto', minWidth: 72, padding: '8px 6px',
                   background: isClaimed

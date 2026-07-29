@@ -11,6 +11,7 @@ import {
 import { analytics } from '@/services/analytics';
 import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 import { serverNow } from '@/services/clock';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -34,9 +35,11 @@ interface EggCardProps {
   onCollect: () => void;
   onBoostAd: () => void;
   boostInFlight: boolean;
+  /** 부화 시작/수확 요청이 서버 응답을 기다리는 중 — 버튼을 잠근다 */
+  busy: boolean;
 }
 
-function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardProps) {
+function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -59,21 +62,35 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
     <div style={{
       background: 'rgba(255,255,255,0.06)',
       borderRadius: 12,
-      padding: 12,
+      // 왼쪽 아이콘 주변 여백을 좁혀 가운데 텍스트 열에 폭을 넘긴다
+      padding: '12px 12px 12px 4px',
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
+      gap: 6,
     }}>
-      <div style={{ fontSize: 32 }}>{egg.breedSpeciesId ? '💞' : TIER_EMOJI[egg.tier]}</div>
+      <div style={{ fontSize: 30, flexShrink: 0, lineHeight: 1 }}>
+        {egg.breedSpeciesId ? '💞' : TIER_EMOJI[egg.tier]}
+      </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>
+        {/* minWidth:0 이 없으면 이 행이 내용 너비 아래로 못 줄어 배지가 카드 밖으로
+            넘치고, 뒤에 그려지는 수확/부화 버튼 밑에 깔린다.
+            280px 패널에서 이름+배지+버튼을 한 줄에 다 넣을 폭이 안 나오므로(LEGENDARY 기준)
+            wrap 으로 배지를 아랫줄에 흘린다 — 이름을 말줄임하는 것보다 낫다. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, rowGap: 2,
+          flexWrap: 'wrap', marginBottom: 4, minWidth: 0,
+        }}>
+          <span style={{
+            fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap',
+            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
             {egg.breedSpeciesId ? '번식 알' : TIER_LABEL[egg.tier]}
           </span>
           <span style={{
             fontSize: 10, padding: '2px 6px', borderRadius: 4,
             background: TIER_COLOR[egg.tier], color: '#fff',
+            flexShrink: 0, whiteSpace: 'nowrap',
           }}>
             {egg.tier.toUpperCase()}
           </span>
@@ -96,8 +113,12 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+              minWidth: 0,
             }}>
-              <div style={{ fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+              <div style={{
+                fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
                 {isReady ? '🎉 부화 완료!' : `⏳ ${formatTime(remaining)}`}
               </div>
               {!isReady && isAdsAvailable() && (
@@ -114,6 +135,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
                     cursor: boostInFlight ? 'wait' : 'pointer',
                     opacity: boostInFlight ? 0.5 : 1,
                     whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                   title="광고를 보고 부화 시간을 5분 단축합니다"
                 >
@@ -126,22 +148,24 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
       </div>
 
       {!egg.isHatching && (
-        <button onClick={onStart} style={{
+        <button onClick={onStart} disabled={busy} style={{
           background: 'var(--color-primary)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+          fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+          cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
         }}>
-          부화 시작
+          {busy ? '시작 중…' : '부화 시작'}
         </button>
       )}
       {isReady && (
-        <button onClick={onCollect} style={{
+        <button onClick={onCollect} disabled={busy} style={{
           background: 'var(--color-success)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-          animation: 'pulse 1s infinite',
+          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+          cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
+          animation: busy ? 'none' : 'pulse 1s infinite',
         }}>
-          수확! 🐟
+          {busy ? '수확 중…' : '수확! 🐟'}
         </button>
       )}
     </div>
@@ -149,8 +173,11 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
 }
 
 interface Props {
-  /** 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리. */
-  onCollect: (eggId: string, eggTier: EggTier) => void;
+  /**
+   * 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리.
+   * Promise 를 돌려주면 서버 응답이 올 때까지 수확 버튼이 잠긴다.
+   */
+  onCollect: (eggId: string, eggTier: EggTier) => void | Promise<void>;
   /** 패널 열림 상태 (부모가 제어 — 좌측 패널 상호 배타) */
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -173,23 +200,32 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     void preloadRewardedAd();
   }, [open, hasHatchingEgg]);
 
-  const handleStart = (eggId: string) => {
+  // optimistic() 을 return 해야 서버 왕복이 끝날 때까지 잠긴다. 안 그러면 연타로 두 번째
+  // startHatching 이 나가 서버가 "이미 부화 중"으로 거절 → 롤백 + 실패 토스트가 뜬다.
+  const [handleStart, starting] = useAsyncAction((eggId: string) => {
     const egg = user?.inventory.find(e => e.id === eggId);
     if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
       // onError 없이 두면 서버 거절 시 조용히 롤백돼 "눌러도 아무 반응 없음"으로 보인다.
-      optimistic(
+      return optimistic(
         () => startHatching(eggId),
         () => startHatchingServer({ eggId }),
         () => showToast('부화를 시작하지 못했어요. 잠시 후 다시 시도해주세요'),
       );
-      return;
     }
     startHatching(eggId);
-  };
+  });
 
-  const handleBoostAd = async (eggId: string) => {
-    if (!user || boostingEggId) return;
+  // 수확도 서버 왕복(hatchEgg)이라 같은 이유로 잠근다.
+  const [handleCollect, collecting] = useAsyncAction(async (eggId: string, eggTier: EggTier) => {
+    const wasLast = (user?.inventory.length ?? 0) <= 1;
+    await onCollect(eggId, eggTier);
+    if (wasLast) onOpenChange(false);
+  });
+
+  // boostingEggId 는 해당 알의 버튼 표시용. 중복 진입 차단은 useAsyncAction 의 ref 가드.
+  const [handleBoostAd] = useAsyncAction(async (eggId: string) => {
+    if (!user) return;
     // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
@@ -240,7 +276,7 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     } finally {
       setBoostingEggId(null);
     }
-  };
+  });
 
   const inventory = user?.inventory ?? [];
 
@@ -266,7 +302,8 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 130,
-          width: 280,
+          // 좁은 화면에서 패널이 오른쪽으로 삐져나가지 않게 (left 12 + right 12 여백 확보)
+          width: 'min(280px, calc(100vw - 24px))',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
@@ -285,12 +322,10 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
                 key={egg.id}
                 egg={egg}
                 onStart={() => handleStart(egg.id)}
-                onCollect={() => {
-                  onCollect(egg.id, egg.tier);
-                  if (inventory.length <= 1) onOpenChange(false);
-                }}
+                onCollect={() => handleCollect(egg.id, egg.tier)}
                 onBoostAd={() => handleBoostAd(egg.id)}
                 boostInFlight={boostingEggId === egg.id}
+                busy={starting || collecting}
               />
             ))}
           </div>
