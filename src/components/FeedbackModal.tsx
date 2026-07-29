@@ -3,6 +3,7 @@ import { submitFeedback, FeedbackType } from '@/services/feedback';
 import { useUserStore } from '@/store/useUserStore';
 import { useModalStore } from '@/store/useModalStore';
 import { playSFX } from '@/services/audio';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 const TYPES: { key: FeedbackType; label: string; emoji: string }[] = [
   { key: 'bug', label: '버그 신고', emoji: '🐞' },
@@ -25,17 +26,11 @@ export default function FeedbackModal({ open, onClose }: { open: boolean; onClos
   const [contact, setContact] = useState(user?.email ?? '');
   const [busy, setBusy] = useState(false);
 
-  if (!open) return null;
-
-  const close = () => {
-    if (busy) return;
-    playSFX('modal_close');
-    onClose();
-  };
-
-  const handleSubmit = async () => {
+  // 훅이라 조기 return(!open) 위에 둬야 한다. busy 는 버튼 문구용이고,
+  // 중복 전송(연타) 차단은 useAsyncAction 의 ref 가드가 맡는다.
+  const [handleSubmit] = useAsyncAction(async () => {
     const text = message.trim();
-    if (!text || busy) return;
+    if (!text) return;
     setBusy(true);
     try {
       await submitFeedback({ type, message: text, contact: contact.trim() || undefined });
@@ -58,6 +53,14 @@ export default function FeedbackModal({ open, onClose }: { open: boolean; onClos
     } finally {
       setBusy(false);
     }
+  });
+
+  if (!open) return null;
+
+  const close = () => {
+    if (busy) return;
+    playSFX('modal_close');
+    onClose();
   };
 
   return (

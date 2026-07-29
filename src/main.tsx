@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/global.css';
+import { installTapGuard } from './utils/tapGuard';
+
+// 모든 버튼의 연타(중복 탭)를 전역에서 삼킨다. 서버 왕복까지 잠그는 건 useAsyncAction 담당.
+installTapGuard();
 
 // Sentry는 lazy load — replayIntegration 제거(~100KB+ 절감), 첫 페인트 차단하지 않음.
 // 초기화 전 발생한 에러는 native window.onerror 가 받아두므로 손실은 거의 없다.

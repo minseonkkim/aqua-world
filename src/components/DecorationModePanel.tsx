@@ -124,7 +124,8 @@ export default function DecorationModePanel({
             { icon: '－', label: '작게', action: () => onScale(selectedDecoration.id, -0.1) },
             { icon: '🗑', label: '삭제', action: () => onDelete(selectedDecoration.id) },
           ].map(btn => (
-            <button key={btn.icon} onClick={btn.action} style={{
+            // 회전/확대·축소는 조금씩 여러 번 누르는 게 정상 사용이라 연타 가드에서 제외한다.
+            <button key={btn.icon} onClick={btn.action} data-tap-repeat style={{
               background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)',
               borderRadius: 10, padding: '8px 10px', color: '#fff', fontSize: 11,
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,

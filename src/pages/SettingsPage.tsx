@@ -12,6 +12,7 @@ import { analytics, identifyUser } from '@/services/analytics';
 import { isNative } from '@/services/platform';
 import { APP_VERSION } from '@/services/feedback';
 import FeedbackModal from '@/components/FeedbackModal';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -55,7 +56,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogout = async () => {
+  // 확인 모달이 뜨는 동안 다시 눌리면 모달이 겹쳐 쌓인다 — 흐름이 끝날 때까지 잠근다.
+  const [handleLogout, loggingOut] = useAsyncAction(async () => {
     const ok = await useModalStore.getState().confirm({
       emoji: '👋',
       title: '로그아웃',
@@ -69,12 +71,12 @@ export default function SettingsPage() {
     await signOut();
     setUser(null);
     setTanks([]);
-  };
+  });
 
   // 게스트 계정(`guest_` prefix)은 서버에 데이터가 없어 탈퇴 대상이 아님
   const isCloudUser = !!user && !user.id.startsWith('guest_');
 
-  const handleDeleteAccount = async () => {
+  const [handleDeleteAccount, deletingAccount] = useAsyncAction(async () => {
     const first = await useModalStore.getState().confirm({
       emoji: '⚠️',
       title: '회원 탈퇴',
@@ -107,10 +109,11 @@ export default function SettingsPage() {
         tone: 'danger',
       });
     }
-  };
+  });
 
   const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
     <div
+      role="button"
       onClick={() => { onChange(!value); playSFX('click'); }}
       style={{
         width: 44, height: 24, borderRadius: 12,
@@ -170,6 +173,7 @@ export default function SettingsPage() {
           <Section title="앱" />
           <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
             <div
+              role="button"
               onClick={() => window.dispatchEvent(new Event('aquaworld:show-install'))}
               style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
             >
@@ -183,6 +187,7 @@ export default function SettingsPage() {
       <Section title="피드백" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
         <div
+          role="button"
           onClick={() => { playSFX('click'); setFeedbackOpen(true); }}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
         >
@@ -195,6 +200,7 @@ export default function SettingsPage() {
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
         <Row label="버전"><span style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>{APP_VERSION}</span></Row>
         <div
+          role="button"
           onClick={() => navigate('/privacy')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
@@ -202,6 +208,7 @@ export default function SettingsPage() {
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
         <div
+          role="button"
           onClick={() => navigate('/terms')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
         >
@@ -209,6 +216,7 @@ export default function SettingsPage() {
           <span style={{ color: 'var(--color-text-secondary)', fontSize: 24, lineHeight: 1, fontWeight: 300 }}>›</span>
         </div>
         <div
+          role="button"
           onClick={() => navigate('/licenses')}
           style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', cursor: 'pointer' }}
         >
@@ -220,18 +228,26 @@ export default function SettingsPage() {
       <Section title="계정" />
       <div style={{ background: 'var(--color-surface)', margin: '0 16px', borderRadius: 12, overflow: 'hidden' }}>
         <div
+          role="button"
           onClick={handleLogout}
           style={{
-            padding: '14px 16px', color: '#ff6b6b', cursor: 'pointer', fontSize: 15,
+            padding: '14px 16px', color: '#ff6b6b', fontSize: 15,
             borderBottom: isCloudUser ? '1px solid rgba(255,255,255,0.05)' : 'none',
+            cursor: loggingOut ? 'wait' : 'pointer',
+            opacity: loggingOut ? 0.5 : 1,
           }}
         >
           로그아웃
         </div>
         {isCloudUser && (
           <div
+            role="button"
             onClick={handleDeleteAccount}
-            style={{ padding: '14px 16px', color: '#ff6b6b', cursor: 'pointer', fontSize: 15 }}
+            style={{
+              padding: '14px 16px', color: '#ff6b6b', fontSize: 15,
+              cursor: deletingAccount ? 'wait' : 'pointer',
+              opacity: deletingAccount ? 0.5 : 1,
+            }}
           >
             회원 탈퇴
             <div style={{ fontSize: 11, color: 'var(--color-text-disabled)', marginTop: 2 }}>
