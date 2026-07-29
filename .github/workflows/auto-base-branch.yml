@@ -20,6 +20,9 @@ jobs:
             const pr = context.payload.pull_request;
             const MARKER = '<!-- auto-base-branch -->';
 
+            // 닫힌 PR은 base를 바꿀 수 없다(422). 닫힌 뒤 본문을 고치면 edited 가 그대로 날아온다.
+            if (pr.state !== 'open') return core.info(`PR이 ${pr.state} 상태 — base 변경 생략.`);
+
             // 실패해도 로그에만 남으면 눈에 띄지 않으므로, 결과를 PR에 코멘트로 남긴다.
             // edited 마다 새 코멘트가 쌓이지 않게 마커로 찾아 갱신한다.
             const notify = async (message) => {
@@ -87,6 +90,14 @@ jobs:
             }
 
             const previous = pr.base.ref;
-            await github.rest.pulls.update({ ...context.repo, pull_number: pr.number, base: target });
+            try {
+              await github.rest.pulls.update({ ...context.repo, pull_number: pr.number, base: target });
+            } catch (error) {
+              // 실행 중에 PR 이 닫히면 여기서 422 (#22). 이미 손 쓸 게 없으니 실패로 끝내지 않는다.
+              if (error.status === 422) {
+                return core.warning(`base 를 '${target}'(으)로 변경하지 못함 — 실행 중 PR 상태가 바뀜: ${error.message}`);
+              }
+              throw error;
+            }
             await notify(`이슈 ${linked}의 마일스톤에 따라 base 브랜치를 \`${previous}\` → \`${target}\`(으)로 자동 변경했습니다.`);
             core.info(`Retargeted base ${previous} -> ${target}.`);

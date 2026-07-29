@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'v[0-9]*']
+  # base 를 필터하지 않는다. 이슈 브랜치 PR 은 Auto Base Branch 가 base 를 마일스톤
+  # 브랜치(v1.0.2 등)로 옮기는데, [main, develop] 만 받으면 그 순간 검증 대상에서
+  # 빠져 릴리즈 PR 에서야 처음 린트/빌드가 돌게 된다.
   pull_request:
-    branches: [main, develop]
 
 jobs:
   lint-and-typecheck:
