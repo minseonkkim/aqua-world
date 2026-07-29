@@ -14,5 +14,8 @@ skills-lock.json
 firebase-debug.log
 
 # Claude Code 로컬 워킹 디렉토리
-.claude/
+# commands/ 는 팀이 같이 쓰는 작업 절차라 공유하고, skills/ 나 settings.local.json 처럼
+# 개인 설정에 가까운 것은 로컬에만 둔다.
+.claude/*
+!.claude/commands/
 .firebase/
