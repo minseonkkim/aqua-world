@@ -17,17 +17,21 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const body = pr.body || '';
-            const regex = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)/gi;
-
             const numbers = new Set();
+
+            // 이슈에서 만든 브랜치는 `20-버튼-통해-먹이-줄-때-연출`처럼 번호가 앞에 붙는다.
+            const fromBranch = /^(\d+)-/.exec(pr.head.ref);
+            if (fromBranch) numbers.add(Number(fromBranch[1]));
+
+            // 본문의 closing 키워드는 보조 수단 (브랜치 이름이 규칙을 벗어난 경우 대비)
+            const regex = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d+)/gi;
             let match;
-            while ((match = regex.exec(body)) !== null) {
+            while ((match = regex.exec(pr.body || '')) !== null) {
               numbers.add(Number(match[1]));
             }
 
             if (numbers.size === 0) {
-              core.info('No closing keywords found in PR body.');
+              core.info('브랜치 이름과 본문 어디에서도 이슈 번호를 찾지 못함.');
               return;
             }
 

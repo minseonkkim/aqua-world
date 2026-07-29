@@ -22,6 +22,13 @@ jobs:
             const currentBody = (pr.body || '').trim();
             const defaultBody = 'Closes #이슈번호';
 
+            // 이슈 브랜치 PR은 Auto Base Branch가 base를 마일스톤 브랜치로 옮긴다.
+            // 두 워크플로우가 opened 에 동시에 뜨므로, 여기서 본문을 덮어쓰면
+            // 리타겟 전에 릴리즈 템플릿이 씌워질 수 있어 건너뛴다.
+            if (/^\d+-/.test(pr.head.ref)) {
+              return core.info('이슈 브랜치 PR — 본문을 덮어쓰지 않음.');
+            }
+
             if (currentBody !== '' && currentBody !== defaultBody) {
               return core.info('PR body already customized — skip.');
             }
