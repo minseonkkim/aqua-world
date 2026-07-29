@@ -18,7 +18,7 @@ import { useTankStore } from '@/store/useTankStore';
 import { useFishStore } from '@/store/useFishStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useUiStore } from '@/store/useUiStore';
-import { Fish, TankDecoration, TankEnvironment, EggTier, User, Tank } from '@/types';
+import { Fish, TankDecoration, TankEnvironment, EggTier, FishGrowthStage } from '@/types';
 import { getDecorationMeta } from '@/utils/decorationModels';
 import { CLEAN_TANK_COST_PEARL } from '@/utils/mood';
 import { getTankCapacity, getTankScale, TANK_MAX_CAPACITY_LEVEL, TANK_EXPAND_COST_PEARL, BREED_COST_PEARL } from '@/constants';
@@ -118,29 +118,29 @@ export default function TankPage() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  // 먹이 서버 호출 실패 시 공통 처리.
+  // 먹이 서버 호출 실패 시 공통 처리 — 롤백은 optimistic() 이 이미 끝냈고 여기선 안내만 한다.
   // - '오늘 먹이 소진'(failed-precondition): 서버 권위. 클라 카운터가 서버보다 낮게 스테일하면
   //   계속 헛탭→400→롤백이 반복되므로, 클라 feedCountToday 를 한도로 맞춰 UI 를 즉시 동기화한다.
+  //   스냅샷(prevUser)이 아니라 롤백이 끝난 지금 상태 위에 얹는다 — 그래야 왕복 중에 도착한
+  //   다른 응답(부화 수확 등)을 이 보정이 다시 밀어내지 않는다.
   // - 그 외 에러: 진짜 사유를 가리지 않도록 별도 메시지. (기존엔 모든 에러를 '소진'으로 위장했음)
   const handleFeedError = useCallback(
-    (err: unknown, prevUser: User | null, prevTanks: Tank[]) => {
-      useTankStore.getState().setTanks(prevTanks);
+    (err: unknown) => {
       const code = (err as { code?: string } | null)?.code;
       const exhausted = code === 'functions/failed-precondition' || code === 'failed-precondition';
-      if (exhausted) {
-        const base = prevUser ?? useUserStore.getState().user;
-        if (base) {
-          useUserStore.getState().setUser({
-            ...base,
-            feedCountToday: feedMax(tanks),
-            lastFeedResetAt: Date.now(),
-          });
-        }
-        showToast('오늘 먹이를 모두 사용했어요 🐟');
-      } else {
-        useUserStore.getState().setUser(prevUser);
+      if (!exhausted) {
         showToast('먹이주기에 실패했어요. 잠시 후 다시 시도해주세요 🐟');
+        return;
       }
+      const base = useUserStore.getState().user;
+      if (base) {
+        useUserStore.getState().setUser({
+          ...base,
+          feedCountToday: feedMax(tanks),
+          lastFeedResetAt: Date.now(),
+        });
+      }
+      showToast('오늘 먹이를 모두 사용했어요 🐟');
     },
     [feedMax, tanks],
   );
@@ -280,92 +280,105 @@ export default function TankPage() {
 
   // 서버를 치는 액션은 응답이 올 때까지 잠근다 — 연타하면 두 번째 요청이 거절돼 롤백 + 실패
   // 토스트가 뜬다. 서버 호출 Promise 를 return 하는 것이 잠금의 조건이다.
+  //
+  // 먹이 3종도 다른 서버 액션과 같이 optimistic() 을 태운다. 직접 스냅샷을 떠서 롤백하면
+  // "그 사이 스토어가 바뀌었으면 되돌리지 않는다" 보호를 못 받아, 왕복 중에 성공한 다른 동작
+  // (부화 수확 등)까지 같이 되돌아갔다.
+  //
+  // recordFeed 는 한도 검사와 차감을 같이 하므로 apply 안에서 부를 수밖에 없다 — 차감분도
+  // 실패하면 되돌려야 하기 때문. 한도 미달 여부(fed)만 밖으로 꺼내 안내/서버 호출을 가른다.
   const [handleFeed, feeding] = useAsyncAction(() => {
-    if (isCloudUser()) {
-      const prevUser = useUserStore.getState().user;
-      const prevTanks = useTankStore.getState().tanks;
-      if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
+    let fed = false;
+    const feed = () => {
+      fed = recordFeed(tanks);
+      if (!fed) return;
       addPearl(10);
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
-      // 수면 탭 급여와 같은 연출 — 먹이가 실제로 떨어지고 물고기가 쫓아간다
-      tankSceneRef.current?.sprinkleFood();
-      showToast('🍤 먹이 뿌리기 · +10 🪙');
-      analytics.sprinkleFeed();
-      return sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
+    };
+    let pending: Promise<void> | undefined;
+    if (isCloudUser()) {
+      pending = optimistic(
+        feed,
+        () => (fed ? sprinkleFeed({ tankId: activeTankId ?? '' }) : Promise.resolve()),
+        handleFeedError,
+      );
+    } else {
+      feed();
     }
-    if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
-    addPearl(10);
-    if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
+    if (!fed) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
+    // 수면 탭 급여와 같은 연출 — 먹이가 실제로 떨어지고 물고기가 쫓아간다
     tankSceneRef.current?.sprinkleFood();
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
+    return pending;
   });
 
   // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
+  // 파티클을 바로 띄워야 해서 서버 왕복은 기다리지 않는다(반환값은 동기 boolean).
   const handleSurfaceFeed = useCallback((): boolean => {
-    if (isCloudUser()) {
-      const prevUser = useUserStore.getState().user;
-      const prevTanks = useTankStore.getState().tanks;
-      if (!recordFeed(tanks)) {
-        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
-        return false;
-      }
+    let fed = false;
+    const feed = () => {
+      fed = recordFeed(tanks);
+      if (!fed) return;
       addPearl(10);
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
-      showToast('🍤 먹이 뿌리기 · +10 🪙');
-      analytics.sprinkleFeed();
-      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
-      return true;
+    };
+    if (isCloudUser()) {
+      void optimistic(
+        feed,
+        () => (fed ? sprinkleFeed({ tankId: activeTankId ?? '' }) : Promise.resolve()),
+        handleFeedError,
+      );
+    } else {
+      feed();
     }
-    if (!recordFeed(tanks)) {
+    if (!fed) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       return false;
     }
-    addPearl(10);
-    if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
     return true;
   }, [recordFeed, addPearl, activeTankId, contaminate, feedAllFish, tanks, handleFeedError]);
 
-  const [handleFeedFish] = useAsyncAction(async (fish: Fish) => {
+  const [handleFeedFish] = useAsyncAction((fish: Fish) => {
     if (!activeTankId) return;
     // 다 자란(large) 물고기도 먹일 수 있다 — 성장은 멈췄지만 배고픔/기분에 영향을 준다.
     const fedToast =
       fish.growthStage === 'large'
         ? `🍖 ${fish.name} 배부르게 먹었어요 · +10 🪙`
         : `🍖 +5분 성장 가속 · +10 🪙`;
-    if (isCloudUser()) {
-      const prevUser = useUserStore.getState().user;
-      const prevTanks = useTankStore.getState().tanks;
-      if (!recordFeed(tanks)) {
-        showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
-        return;
-      }
+    let fed = false;
+    let newStage: FishGrowthStage | null = null;
+    const feed = () => {
+      fed = recordFeed(tanks);
+      if (!fed) return;
       addPearl(10);
-      const result = feedFish(activeTankId, fish.id);
+      newStage = feedFish(activeTankId, fish.id)?.newStage ?? null;
       contaminate(activeTankId);
-      analytics.feedFish(fish.growthStage);
-      if (result?.newStage) {
-        analytics.fishGrowStage(result.newStage);
-        showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
-      } else showToast(fedToast);
-      return feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(err => handleFeedError(err, prevUser, prevTanks));
+    };
+    let pending: Promise<void> | undefined;
+    if (isCloudUser()) {
+      pending = optimistic(
+        feed,
+        () => (fed ? feedFishServer({ tankId: activeTankId, fishId: fish.id }) : Promise.resolve()),
+        handleFeedError,
+      );
+    } else {
+      feed();
     }
-    if (!recordFeed(tanks)) {
+    if (!fed) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
       return;
     }
-    addPearl(10);
-    const result = feedFish(activeTankId, fish.id);
-    contaminate(activeTankId);
     analytics.feedFish(fish.growthStage);
-    if (result?.newStage) {
-      analytics.fishGrowStage(result.newStage);
-      showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
+    if (newStage) {
+      analytics.fishGrowStage(newStage);
+      showToast(`🌱 ${fish.name} → ${stageLabel(newStage)} 성장!`);
     } else {
       showToast(fedToast);
     }
+    return pending;
   });
 
   const handleHatchCollect = async (eggId: string, eggTier: EggTier) => {
