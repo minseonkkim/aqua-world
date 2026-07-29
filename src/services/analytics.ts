@@ -120,6 +120,11 @@ export const analytics = {
     track('purchase_star_coral', { pkg_id: pkgId, amount, price_krw: priceKrw }),
   exchangePearl: (pkgId: string) => track('exchange_pearl', { pkg_id: pkgId }),
 
+  // 광고 — 실패 원인(no_fill/network/invalid_request…)을 집계해야
+  // "광고 재고가 없는 것" 과 "우리 설정이 틀린 것" 을 구분할 수 있다.
+  adLoadFailed: (stage: string, reason: string) =>
+    track('ad_load_failed', { stage, reason }),
+
   // 참여
   photoCapture: (filter: string, frame: string, action: 'shared' | 'downloaded') =>
     track('photo_capture', { filter, frame, action }),
