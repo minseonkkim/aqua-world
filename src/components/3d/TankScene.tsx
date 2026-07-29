@@ -8,6 +8,7 @@ import { cloneFishModel, getFishModel, preloadFishModels } from '@/utils/fishMod
 import { buildDecorationMesh, getDecorationMeta } from '@/utils/decorationModels';
 import { preloadDecorationModels } from '@/utils/decorationModelLoader';
 import { moodSpeedFactor, moodSinkBias } from '@/utils/mood';
+import { isWebGLAvailable } from '@/utils/webglSupport';
 
 export interface TankSceneHandle {
   /** 현재 프레임을 강제 렌더 후 PNG dataURL로 반환. 실패 시 null. */
@@ -110,6 +111,26 @@ const LOADING_MESSAGES = [
   '🐟 물고기들 점호 중...',
 ];
 
+/**
+ * 3D 렌더링 실패 종류.
+ * - unsupported: WebGL 자체를 못 씀 (미지원 기기 · 하드웨어 가속 off · 브라우저 차단) 또는 렌더러 생성 실패
+ * - context-lost: 렌더 중 GPU 컨텍스트를 잃음 (백그라운드 복귀 · 메모리 부족 · 드라이버 리셋)
+ */
+type GlFailure = 'unsupported' | 'context-lost';
+
+const GL_FAILURE_MESSAGE: Record<GlFailure, { icon: string; title: string; body: string }> = {
+  unsupported: {
+    icon: '🐟',
+    title: '수조를 그릴 수 없어요',
+    body: '이 기기에서 3D 그래픽(WebGL)을 사용할 수 없습니다.\n브라우저 설정에서 하드웨어 가속을 켜거나,\n최신 브라우저·기기에서 다시 시도해 주세요.',
+  },
+  'context-lost': {
+    icon: '💤',
+    title: '수조 연결이 끊겼어요',
+    body: '그래픽 처리가 중단되었습니다.\n실행 중인 다른 앱을 정리한 뒤 다시 시도해 주세요.',
+  },
+};
+
 interface BubbleData {
   speed: number;
   wobbleAmp: number;
@@ -186,6 +207,18 @@ function TankSceneImpl({
   // 모델 프리로드 중 표시할 오버레이 — 마운트 시 한 번 랜덤 선택
   const [loading, setLoading] = useState(true);
   const loadingMsgRef = useRef(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
+
+  // WebGL 실패 상태. null 이 아니면 씬 초기화 이펙트가 통째로 건너뛰고 안내 UI가 뜬다.
+  // null 로 되돌리는 것(다시 시도 · 컨텍스트 복구)이 곧 재초기화 트리거다.
+  const [glFailure, setGlFailure] = useState<GlFailure | null>(null);
+  // 캔버스 세대. "다시 시도"는 이 값을 올려 canvas 를 새 엘리먼트로 갈아끼운다 —
+  // 컨텍스트를 잃은 캔버스는 브라우저가 복구 이벤트를 안 줄 수도 있어서, 같은 엘리먼트에
+  // 렌더러만 다시 만들면 예외 없이 검은 화면만 나온다.
+  const [canvasGen, setCanvasGen] = useState(0);
+  const retryGl = useCallback(() => {
+    setCanvasGen(g => g + 1);
+    setGlFailure(null);
+  }, []);
 
   // 최신 값을 ref로 보관 (이벤트 핸들러 안에서 stale closure 방지)
   const fishRef = useRef<Fish[]>(fish);
@@ -351,6 +384,10 @@ function TankSceneImpl({
   const syncHighlight = useCallback((scene: THREE.Scene) => {
     const id = selectedDecoIdRef.current;
     const mode = decorationModeRef.current;
+    // 씬이 재생성됐으면(컨텍스트 복구 등) 이전 씬에 붙어 있던 링은 버리고 새로 만든다
+    if (decoHighlightRef.current && decoHighlightRef.current.parent !== scene) {
+      decoHighlightRef.current = null;
+    }
     if (!decoHighlightRef.current) {
       const ringMat = new THREE.MeshBasicMaterial({
         color: 0x4dd0e1, transparent: true, opacity: 0.7, side: THREE.DoubleSide,
@@ -381,6 +418,7 @@ function TankSceneImpl({
     const halfZ = BASE_HALF_Z * s;
     boundsRef.current = { halfX, halfZ };
 
+    // 컨텍스트를 못 얻으면 여기서 throw 된다 — 호출부(마운트 이펙트)가 잡아 안내 UI로 전환한다.
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // 3번째 인자 false: canvas 인라인 px 스타일을 건드리지 않아 width/height:100% 반응형을 유지.
@@ -933,10 +971,58 @@ function TankSceneImpl({
     }
   }, [tickCamera]);
 
+  // 컨텍스트 손실/복구 감시 — 초기화 성공 여부와 무관하게 캔버스가 살아 있는 동안 계속 붙어 있어야
+  // 하므로 아래 초기화 이펙트와 분리한다 (초기화 쪽은 glFailure 가 세팅되면 조기 반환한다).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ro = init(canvas);
+
+    const handleContextLost = (e: Event) => {
+      // preventDefault 를 해야 브라우저가 컨텍스트 복구(webglcontextrestored)를 시도한다.
+      e.preventDefault();
+      cancelAnimationFrame(rafRef.current);
+      console.warn('[TankScene] WebGL 컨텍스트 손실 — 렌더 중단');
+      setGlFailure('context-lost');
+    };
+    // 복구되면 실패 상태를 풀어 초기화 이펙트가 씬을 다시 세우게 한다 (GPU 리소스는 전부 날아간 상태).
+    const handleContextRestored = () => {
+      console.info('[TankScene] WebGL 컨텍스트 복구 — 씬 재구성');
+      setGlFailure(null);
+    };
+
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
+    return () => {
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+    };
+  }, [canvasGen]); // 캔버스가 교체되면 새 엘리먼트에 다시 붙는다
+
+  useEffect(() => {
+    // 실패 상태에서는 씬을 세우지 않는다. glFailure 가 null 로 바뀌면 이 이펙트가 다시 돌며 재초기화.
+    if (glFailure) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // 렌더러 생성 전에 지원 여부부터 확인 — 미지원 환경에서 three 내부 throw 대신 안내 UI로 분기
+    if (!isWebGLAvailable()) {
+      console.warn('[TankScene] WebGL 미지원 환경');
+      setGlFailure('unsupported');
+      return;
+    }
+
+    let ro: ResizeObserver;
+    try {
+      ro = init(canvas);
+    } catch (err) {
+      // 지원 감지는 통과했지만 실제 렌더러 생성이 실패한 경우 (컨텍스트 한도 초과 · 드라이버 문제 등)
+      console.error('[TankScene] WebGL 렌더러 초기화 실패', err);
+      rendererRef.current?.dispose();
+      rendererRef.current = null;
+      setGlFailure('unsupported');
+      return;
+    }
+
     animate();
     const cleanup = bindCanvas(canvas);
 
@@ -956,12 +1042,15 @@ function TankSceneImpl({
       bubblesRef.current.forEach(b => b.geometry.dispose());
       bubblesRef.current = [];
       rendererRef.current?.dispose();
+      // 죽은 렌더러로 captureFrame 이 호출되지 않도록 참조를 끊는다
+      rendererRef.current = null;
     };
-  }, [init, animate, bindCanvas, handlePointerDown, handlePointerMove, handlePointerUp]);
+  }, [glFailure, init, animate, bindCanvas, handlePointerDown, handlePointerMove, handlePointerUp]);
 
   return (
     <div style={{ position: 'relative', overflow: 'hidden', ...style }}>
       <canvas
+        key={canvasGen}
         ref={canvasRef}
         style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none' }}
       />
@@ -972,8 +1061,8 @@ function TankSceneImpl({
           alignItems: 'center', justifyContent: 'center', gap: 16,
           background: `linear-gradient(180deg, ${env.bg} 0%, #000 100%)`,
           color: '#fff', fontSize: 15, fontWeight: 500,
-          opacity: loading ? 1 : 0,
-          pointerEvents: loading ? 'auto' : 'none',
+          opacity: loading && !glFailure ? 1 : 0,
+          pointerEvents: loading && !glFailure ? 'auto' : 'none',
           transition: 'opacity 600ms ease',
         }}
       >
@@ -988,6 +1077,37 @@ function TankSceneImpl({
         <div style={{ opacity: 0.9, letterSpacing: 0.3 }}>{loadingMsgRef.current}</div>
         <style>{`@keyframes tankscene-spin { to { transform: rotate(360deg); } }`}</style>
       </div>
+
+      {/* WebGL 미지원 / 컨텍스트 손실 안내 — 검은 화면 대신 원인과 다음 행동을 보여준다 */}
+      {glFailure && (
+        <div
+          role="alert"
+          style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 12,
+            padding: '0 32px', textAlign: 'center',
+            background: `linear-gradient(180deg, ${env.bg} 0%, #000 100%)`,
+            color: '#fff',
+          }}
+        >
+          <div style={{ fontSize: 44, lineHeight: 1 }}>{GL_FAILURE_MESSAGE[glFailure].icon}</div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{GL_FAILURE_MESSAGE[glFailure].title}</div>
+          <div style={{
+            fontSize: 13, lineHeight: 1.7, whiteSpace: 'pre-line',
+            color: 'var(--color-text-secondary)',
+          }}>
+            {GL_FAILURE_MESSAGE[glFailure].body}
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 8, padding: '12px 28px', fontSize: 15 }}
+            onClick={retryGl}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
     </div>
   );
 }
