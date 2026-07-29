@@ -1,11 +1,49 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Fish } from '@/types';
+import { Fish, FishSpecies } from '@/types';
 import { useFishStore } from '@/store/useFishStore';
 import { serverNow } from '@/services/clock';
 import { isBreedable, breedCooldownRemaining, canPair } from '@/utils/breeding';
 import { BREEDABLE_STAGES } from '@/constants';
 
-const STAGE_EMOJI: Record<string, string> = { adult: '🐡', large: '🦈' };
+const RARITY_COLOR: Record<string, string> = {
+  common: 'var(--color-rarity-common)',
+  rare: 'var(--color-rarity-rare)',
+  epic: 'var(--color-rarity-epic)',
+  legendary: 'var(--color-rarity-legendary)',
+};
+
+// 썸네일 누락/로드 실패 시에만 쓰는 폴백 (FishInventoryPanel 과 동일 규칙)
+const STAGE_EMOJI: Record<string, string> = {
+  egg: '🥚', fry: '🐟', juvenile: '🐠', adult: '🐡', large: '🦈',
+};
+
+/**
+ * 도감 썸네일(실물 사진)로 물고기를 표시. 종이 같으면 성장 단계와 무관하게 같은 그림이 나온다.
+ * 썸네일이 없거나 로드에 실패하면 성장단계 이모지로 폴백.
+ */
+function FishThumb({ fish, species, size }: { fish: Fish; species?: FishSpecies; size: number }) {
+  const [imgError, setImgError] = useState(false);
+  const color = RARITY_COLOR[species?.rarity ?? 'common'];
+  const showImage = !!species?.thumbnailPath && !imgError;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size * 0.28, flexShrink: 0, overflow: 'hidden',
+      background: 'rgba(255,255,255,0.06)', border: `2px solid ${color}`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: Math.round(size * 0.55),
+    }}>
+      {showImage ? (
+        <img
+          src={`${import.meta.env.BASE_URL}${species!.thumbnailPath}`}
+          alt={species!.name}
+          loading="lazy"
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          onError={() => setImgError(true)}
+        />
+      ) : STAGE_EMOJI[fish.growthStage] ?? '🐟'}
+    </div>
+  );
+}
 
 function formatCooldown(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -123,9 +161,9 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
 
           {/* 선택된 부모 슬롯 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <ParentSlot fish={parentA} label="부모 1" name={parentA ? getSpeciesById(parentA.speciesId)?.name : undefined} />
+            <ParentSlot fish={parentA} label="부모 1" species={parentA ? getSpeciesById(parentA.speciesId) : undefined} />
             <div style={{ fontSize: 18 }}>➕</div>
-            <ParentSlot fish={parentB} label="부모 2" name={parentB ? getSpeciesById(parentB.speciesId)?.name : undefined} />
+            <ParentSlot fish={parentB} label="부모 2" species={parentB ? getSpeciesById(parentB.speciesId) : undefined} />
           </div>
 
           {/* 성어 후보가 부족하면 안내 */}
@@ -165,7 +203,7 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
                     width: '100%',
                   }}
                 >
-                  <span style={{ fontSize: 18 }}>{STAGE_EMOJI[f.growthStage] ?? '🐟'}</span>
+                  <FishThumb fish={f} species={species} size={30} />
                   <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {f.name}
                     <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 400, color: 'var(--color-text-secondary)' }}>
@@ -211,21 +249,32 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
   );
 }
 
-function ParentSlot({ fish, label, name }: { fish: Fish | null; label: string; name?: string }) {
+function ParentSlot({ fish, label, species }: { fish: Fish | null; label: string; species?: FishSpecies }) {
   return (
     <div style={{
       flex: 1,
       background: 'rgba(255,255,255,0.05)',
       border: `1px dashed ${fish ? 'rgba(255,107,157,0.6)' : 'rgba(255,255,255,0.15)'}`,
       borderRadius: 10, padding: '8px 6px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
       textAlign: 'center', minWidth: 0,
     }}>
-      <div style={{ fontSize: 20 }}>{fish ? (STAGE_EMOJI[fish.growthStage] ?? '🐟') : '➖'}</div>
-      <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {fish ? (
+        // key: 슬롯에 다른 물고기가 들어오면 이미지 폴백 상태를 초기화
+        <FishThumb key={fish.id} fish={fish} species={species} size={38} />
+      ) : (
+        <div style={{
+          width: 38, height: 38, borderRadius: 11,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+        }}>➖</div>
+      )}
+      <div style={{ fontSize: 11, fontWeight: 600, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {fish ? fish.name : label}
       </div>
-      {fish && name && (
-        <div style={{ fontSize: 9, color: 'var(--color-text-secondary)' }}>{name}</div>
+      {fish && species?.name && (
+        <div style={{ fontSize: 9, color: 'var(--color-text-secondary)', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {species.name}
+        </div>
       )}
     </div>
   );
