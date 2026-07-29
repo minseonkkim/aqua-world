@@ -12,6 +12,8 @@ import { moodSpeedFactor, moodSinkBias } from '@/utils/mood';
 export interface TankSceneHandle {
   /** 현재 프레임을 강제 렌더 후 PNG dataURL로 반환. 실패 시 null. */
   captureFrame: () => string | null;
+  /** 수면 전체에 먹이를 흩뿌린다 — 먹이 버튼처럼 특정 지점 없이 급여할 때 사용 */
+  sprinkleFood: () => void;
 }
 
 interface Props {
@@ -123,6 +125,13 @@ interface FoodParticle {
   eaten: boolean;
 }
 
+// 먹이 알갱이는 개체별 차이가 없으므로 지오메트리/머티리얼을 모듈 단위로 공유한다
+// (spawn마다 새로 만들면 dispose되지 않은 머티리얼이 급여 횟수만큼 쌓인다).
+const FOOD_GEOMETRY = new THREE.SphereGeometry(0.06, 6, 6);
+const FOOD_MATERIAL = new THREE.MeshStandardMaterial({
+  color: 0xffa64d, emissive: 0x552200, roughness: 0.6,
+});
+
 function TankSceneImpl({
   environment, fish = [], decorations = [],
   onFishClick, decorationMode = false, selectedDecorationId = null,
@@ -173,19 +182,6 @@ function TankSceneImpl({
 
   const { bindCanvas, apply, setEnabled, setFocusOffsetY, tickCamera } = useCameraControls(cameraRef);
   const env = ENV[environment];
-
-  // 부모에서 호출 가능한 캡처 — preserveDrawingBuffer 없이도 같은 task에서 render+toDataURL 연속 호출 시 동작
-  useImperativeHandle(ref, () => ({
-    captureFrame: () => {
-      const renderer = rendererRef.current;
-      const scene = sceneRef.current;
-      const camera = cameraRef.current;
-      const canvas = canvasRef.current;
-      if (!renderer || !scene || !camera || !canvas) return null;
-      renderer.render(scene, camera);
-      return canvas.toDataURL('image/png');
-    },
-  }), []);
 
   // 모델 프리로드 중 표시할 오버레이 — 마운트 시 한 번 랜덤 선택
   const [loading, setLoading] = useState(true);
@@ -570,11 +566,8 @@ function TankSceneImpl({
     const scene = sceneRef.current;
     if (!scene) return;
     const count = 4 + Math.floor(Math.random() * 3); // 4~6개
-    const foodMat = new THREE.MeshStandardMaterial({
-      color: 0xffa64d, emissive: 0x552200, roughness: 0.6,
-    });
     for (let i = 0; i < count; i++) {
-      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), foodMat);
+      const mesh = new THREE.Mesh(FOOD_GEOMETRY, FOOD_MATERIAL);
       const jitterX = (Math.random() - 0.5) * 0.4;
       const jitterZ = (Math.random() - 0.5) * 0.4;
       mesh.position.set(
@@ -595,6 +588,31 @@ function TankSceneImpl({
       });
     }
   }, []);
+
+  // 부모에서 호출 가능한 명령들.
+  // captureFrame: preserveDrawingBuffer 없이도 같은 task에서 render+toDataURL 연속 호출 시 동작.
+  // sprinkleFood: 먹이 버튼처럼 지점이 없는 급여 — 수면 가로 방향으로 고르게 나눠 여러 무리를 뿌려
+  //               수조 어디에 있는 물고기든 추적 반경(2.2) 안에 먹이가 들어오게 한다.
+  useImperativeHandle(ref, () => ({
+    captureFrame: () => {
+      const renderer = rendererRef.current;
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!renderer || !scene || !camera || !canvas) return null;
+      renderer.render(scene, camera);
+      return canvas.toDataURL('image/png');
+    },
+    sprinkleFood: () => {
+      const { halfX, halfZ } = boundsRef.current;
+      const clusters = 5;
+      for (let i = 0; i < clusters; i++) {
+        const x = (-1 + ((i + 0.5) / clusters) * 2) * halfX * 0.85;
+        const z = (Math.random() - 0.5) * halfZ * 1.4;
+        spawnFoodParticles(x, z);
+      }
+    },
+  }), [spawnFoodParticles]);
 
   const handlePointerDown = useCallback((e: PointerEvent) => {
     clickStartRef.current = { x: e.clientX, y: e.clientY };
@@ -745,7 +763,6 @@ function TankSceneImpl({
         // 바닥/수명 도달 → 제거
         if (fp.mesh.position.y < FLOOR_Y + 0.1 || now - fp.bornAt > FOOD_LIFETIME_MS) {
           scene?.remove(fp.mesh);
-          fp.mesh.geometry.dispose();
           foods.splice(i, 1);
         }
       }
@@ -787,7 +804,6 @@ function TankSceneImpl({
         if (nearestDist < 0.25) {
           nearestFood.eaten = true;
           sceneRef.current?.remove(nearestFood.mesh);
-          nearestFood.mesh.geometry.dispose();
           const idx = foods.indexOf(nearestFood);
           if (idx >= 0) foods.splice(idx, 1);
         }
@@ -935,8 +951,7 @@ function TankSceneImpl({
       canvas.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
-      // 거품/먹이 파티클 정리 — geometry는 풀별로 동일 (BubbleGeometry는 각자 다름)
-      foodsRef.current.forEach(fp => fp.mesh.geometry.dispose());
+      // 거품/먹이 파티클 정리 — 먹이는 모듈 공유 geometry/material 이라 참조만 끊는다
       foodsRef.current = [];
       bubblesRef.current.forEach(b => b.geometry.dispose());
       bubblesRef.current = [];
