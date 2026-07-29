@@ -11,7 +11,7 @@
 [![Google Play](https://img.shields.io/badge/Google_Play-설치하기-01875f?style=for-the-badge&logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=aquaworld.app)
 [![Instagram](https://img.shields.io/badge/Instagram-@aquaworld.app-E4405F?style=for-the-badge&logo=instagram&logoColor=white)](https://www.instagram.com/aquaworld.app)
 
-![Version](https://img.shields.io/badge/version-1.0.1-0a1628?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.2-0a1628?style=flat-square)
 ![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Web%20(PWA)-3DDC84?style=flat-square)
 
 </div>
