@@ -62,21 +62,35 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
     <div style={{
       background: 'rgba(255,255,255,0.06)',
       borderRadius: 12,
-      padding: 12,
+      // 왼쪽 아이콘 주변 여백을 좁혀 가운데 텍스트 열에 폭을 넘긴다
+      padding: '12px 12px 12px 4px',
       display: 'flex',
       alignItems: 'center',
-      gap: 12,
+      gap: 6,
     }}>
-      <div style={{ fontSize: 32 }}>{egg.breedSpeciesId ? '💞' : TIER_EMOJI[egg.tier]}</div>
+      <div style={{ fontSize: 30, flexShrink: 0, lineHeight: 1 }}>
+        {egg.breedSpeciesId ? '💞' : TIER_EMOJI[egg.tier]}
+      </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>
+        {/* minWidth:0 이 없으면 이 행이 내용 너비 아래로 못 줄어 배지가 카드 밖으로
+            넘치고, 뒤에 그려지는 수확/부화 버튼 밑에 깔린다.
+            280px 패널에서 이름+배지+버튼을 한 줄에 다 넣을 폭이 안 나오므로(LEGENDARY 기준)
+            wrap 으로 배지를 아랫줄에 흘린다 — 이름을 말줄임하는 것보다 낫다. */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, rowGap: 2,
+          flexWrap: 'wrap', marginBottom: 4, minWidth: 0,
+        }}>
+          <span style={{
+            fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap',
+            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
             {egg.breedSpeciesId ? '번식 알' : TIER_LABEL[egg.tier]}
           </span>
           <span style={{
             fontSize: 10, padding: '2px 6px', borderRadius: 4,
             background: TIER_COLOR[egg.tier], color: '#fff',
+            flexShrink: 0, whiteSpace: 'nowrap',
           }}>
             {egg.tier.toUpperCase()}
           </span>
@@ -99,8 +113,12 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+              minWidth: 0,
             }}>
-              <div style={{ fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+              <div style={{
+                fontSize: 12, color: isReady ? 'var(--color-success)' : 'var(--color-text-secondary)',
+                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
                 {isReady ? '🎉 부화 완료!' : `⏳ ${formatTime(remaining)}`}
               </div>
               {!isReady && isAdsAvailable() && (
@@ -117,6 +135,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
                     cursor: boostInFlight ? 'wait' : 'pointer',
                     opacity: boostInFlight ? 0.5 : 1,
                     whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                   title="광고를 보고 부화 시간을 5분 단축합니다"
                 >
@@ -132,7 +151,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
         <button onClick={onStart} disabled={busy} style={{
           background: 'var(--color-primary)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+          fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
         }}>
           {busy ? '시작 중…' : '부화 시작'}
@@ -142,7 +161,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
         <button onClick={onCollect} disabled={busy} style={{
           background: 'var(--color-success)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
           animation: busy ? 'none' : 'pulse 1s infinite',
         }}>
@@ -283,7 +302,8 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 130,
-          width: 280,
+          // 좁은 화면에서 패널이 오른쪽으로 삐져나가지 않게 (left 12 + right 12 여백 확보)
+          width: 'min(280px, calc(100vw - 24px))',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,

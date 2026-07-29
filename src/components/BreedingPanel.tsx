@@ -106,7 +106,7 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
       {open && (
         <div style={{
           position: 'absolute', left: 12, bottom: 80,
-          width: 288,
+          width: 'min(288px, calc(100vw - 24px))',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
