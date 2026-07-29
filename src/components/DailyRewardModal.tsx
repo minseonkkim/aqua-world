@@ -7,6 +7,7 @@ import {
   prepareAdReward,
   claimAdReward,
 } from '@/services/firebase/functions';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 const REWARD_ICONS: Record<DailyRewardResult['type'], string> = {
   pearl: '🪙',
@@ -41,8 +42,10 @@ export default function DailyRewardModal({ reward }: Props) {
     if (isAdsAvailable()) void preloadRewardedAd();
   }, []);
 
-  const handleDouble = async () => {
-    if (!user || doubling || doubled) return;
+  // doubling 은 버튼 문구용. 중복 진입은 useAsyncAction 의 ref 가드가 막는다
+  // (state 기반 가드는 리렌더 전에 들어온 두 번째 탭을 통과시킨다).
+  const [handleDouble] = useAsyncAction(async () => {
+    if (!user || doubled) return;
     // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
@@ -95,7 +98,7 @@ export default function DailyRewardModal({ reward }: Props) {
     } finally {
       setDoubling(false);
     }
-  };
+  });
 
   const icon = REWARD_ICONS[reward.type];
   let rewardText = '';

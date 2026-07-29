@@ -5,6 +5,7 @@ import {
 } from '@/utils/photoCompose';
 import { playSFX } from '@/services/audio';
 import { analytics } from '@/services/analytics';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 interface Props {
   /** 부모에서 TankScene의 captureFrame을 호출해 PNG dataURL을 반환 */
@@ -41,7 +42,8 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
   const [preview, setPreview] = useState<string | null>(null);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
 
-  const handleCapture = useCallback(async () => {
+  // 촬영·저장·공유는 합성/네이티브 왕복이 있어 연타하면 중복 저장·중복 공유 시트가 뜬다.
+  const [handleCapture] = useAsyncAction(async () => {
     const raw = onCapture();
     if (!raw) {
       onToast('캡처 실패 — 잠시 후 다시 시도해주세요');
@@ -59,7 +61,7 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
       onToast('이미지 합성 실패');
       setStage('compose');
     }
-  }, [onCapture, filter, frame, onToast]);
+  });
 
   const handleRetake = useCallback(() => {
     setStage('compose');
@@ -67,7 +69,7 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
     setResultBlob(null);
   }, []);
 
-  const handleShare = useCallback(async () => {
+  const [handleShare, sharing] = useAsyncAction(async () => {
     if (!resultBlob) return;
     const result = await sharePhoto(resultBlob);
     if (result === 'shared') {
@@ -78,15 +80,15 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
       onToast('💾 갤러리에 저장됨');
     } else if (result === 'cancelled') {/* 무음 */}
     else onToast('공유 실패');
-  }, [resultBlob, onToast, filter, frame]);
+  });
 
-  const handleSave = useCallback(async () => {
+  const [handleSave, saving] = useAsyncAction(async () => {
     if (!resultBlob) return;
     if (await savePhoto(resultBlob)) {
       analytics.photoCapture(filter, frame, 'downloaded');
       onToast('💾 저장 완료!');
     } else onToast('저장 실패');
-  }, [resultBlob, onToast, filter, frame]);
+  });
 
   // 미리보기 화면
   if (stage === 'preview' && preview) {
@@ -110,8 +112,12 @@ export default function PhotoModeOverlay({ onCapture, onExit, onToast }: Props) 
           justifyContent: 'center', background: 'rgba(0,0,0,0.85)',
         }}>
           <button onClick={handleRetake} style={previewBtnStyle('#9e9e9e')}>↺ 재촬영</button>
-          <button onClick={handleSave} style={previewBtnStyle('#ffd54f')}>💾 저장</button>
-          <button onClick={handleShare} style={previewBtnStyle('#4dd0e1', true)}>📤 공유</button>
+          <button onClick={handleSave} disabled={saving} style={{ ...previewBtnStyle('#ffd54f'), opacity: saving ? 0.5 : 1 }}>
+            {saving ? '저장 중…' : '💾 저장'}
+          </button>
+          <button onClick={handleShare} disabled={sharing} style={{ ...previewBtnStyle('#4dd0e1', true), opacity: sharing ? 0.5 : 1 }}>
+            {sharing ? '공유 중…' : '📤 공유'}
+          </button>
           <button onClick={onExit} style={previewBtnStyle('#ef5350')}>✕ 닫기</button>
         </div>
       </div>

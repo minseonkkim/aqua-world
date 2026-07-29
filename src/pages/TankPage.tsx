@@ -38,6 +38,7 @@ import {
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
 import { serverNow } from '@/services/clock';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 interface PendingHatch {
   speciesId: string;
@@ -277,7 +278,9 @@ export default function TankPage() {
   };
   // =====================
 
-  const handleFeed = () => {
+  // 서버를 치는 액션은 응답이 올 때까지 잠근다 — 연타하면 두 번째 요청이 거절돼 롤백 + 실패
+  // 토스트가 뜬다. 서버 호출 Promise 를 return 하는 것이 잠금의 조건이다.
+  const [handleFeed, feeding] = useAsyncAction(() => {
     if (isCloudUser()) {
       const prevUser = useUserStore.getState().user;
       const prevTanks = useTankStore.getState().tanks;
@@ -286,15 +289,14 @@ export default function TankPage() {
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
-      sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
-      return;
+      return sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
     }
     if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
     if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
-  };
+  });
 
   // 수면을 직접 클릭/탭하면 먹이가 떨어진다. 일일 한도면 파티클 생략을 위해 false 반환.
   const handleSurfaceFeed = useCallback((): boolean => {
@@ -323,7 +325,7 @@ export default function TankPage() {
     return true;
   }, [recordFeed, addPearl, activeTankId, contaminate, feedAllFish, tanks, handleFeedError]);
 
-  const handleFeedFish = async (fish: Fish) => {
+  const [handleFeedFish] = useAsyncAction(async (fish: Fish) => {
     if (!activeTankId) return;
     // 다 자란(large) 물고기도 먹일 수 있다 — 성장은 멈췄지만 배고픔/기분에 영향을 준다.
     const fedToast =
@@ -345,8 +347,7 @@ export default function TankPage() {
         analytics.fishGrowStage(result.newStage);
         showToast(`🌱 ${fish.name} → ${stageLabel(result.newStage)} 성장!`);
       } else showToast(fedToast);
-      feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(err => handleFeedError(err, prevUser, prevTanks));
-      return;
+      return feedFishServer({ tankId: activeTankId, fishId: fish.id }).catch(err => handleFeedError(err, prevUser, prevTanks));
     }
     if (!recordFeed(tanks)) {
       showToast('오늘 먹이주기를 모두 사용했습니다 🐟');
@@ -362,7 +363,7 @@ export default function TankPage() {
     } else {
       showToast(fedToast);
     }
-  };
+  });
 
   const handleHatchCollect = async (eggId: string, eggTier: EggTier) => {
     if (isCloudUser()) {
@@ -438,7 +439,7 @@ export default function TankPage() {
   // ===== 물고기 보관함 핸들러 =====
   // tank.fish 는 서버 소유 → 클라우드 유저는 서버 함수로 이동(낙관적 UI + 실패 시 롤백),
   // 게스트/로컬 유저는 기존 로컬 로직 그대로.
-  const handlePlaceFish = useCallback((fishId: string) => {
+  const [handlePlaceFish] = useAsyncAction((fishId: string) => {
     if (!activeTankId) return;
     const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
     if (!tank) return;
@@ -459,24 +460,27 @@ export default function TankPage() {
         },
       });
     };
+    let pending: Promise<void> | undefined;
     if (isCloudUser()) {
-      optimistic(place, () => placeFishServer({ tankId: activeTankId, fishId }), () =>
+      pending = optimistic(place, () => placeFishServer({ tankId: activeTankId, fishId }), () =>
         showToast('배치에 실패했어요 — 다시 시도해주세요'),
       );
     } else {
       place();
     }
     showToast(`🐟 ${invFish.name} 수조에 배치`);
-  }, [activeTankId, removeFishFromInventory, addFishToTank]);
+    return pending;
+  });
 
-  const handleStoreFish = useCallback((fish: Fish) => {
+  const [handleStoreFish] = useAsyncAction((fish: Fish) => {
     if (!activeTankId) return;
     const store = () => {
       removeFish(activeTankId, fish.id);
       addFishToInventory(fish);
     };
+    let pending: Promise<void> | undefined;
     if (isCloudUser()) {
-      optimistic(store, () => storeFishServer({ tankId: activeTankId, fishId: fish.id }), () =>
+      pending = optimistic(store, () => storeFishServer({ tankId: activeTankId, fishId: fish.id }), () =>
         showToast('보관에 실패했어요 — 다시 시도해주세요'),
       );
     } else {
@@ -484,12 +488,13 @@ export default function TankPage() {
     }
     setSelectedFishId(null);
     showToast(`📦 ${fish.name} 보관함에 보관`);
-  }, [activeTankId, removeFish, addFishToInventory]);
+    return pending;
+  });
 
   // ===== 짝짓기(번식) 핸들러 =====
   // 같은 종 성어 2마리 → Pearl 차감 + 부모 쿨다운 + 번식 알 지급.
   // 클라우드는 서버 breedFish 가 권위(낙관적 UI + 실패 시 롤백), 게스트는 로컬 처리.
-  const handleBreed = useCallback((a: Fish, b: Fish) => {
+  const [handleBreed] = useAsyncAction((a: Fish, b: Fish) => {
     if (!activeTankId) return;
     const now = serverNow();
     if (a.speciesId !== b.speciesId) { showToast('같은 종끼리만 짝지을 수 있어요'); return; }
@@ -501,12 +506,13 @@ export default function TankPage() {
       showToast(`Pearl이 부족합니다 (${BREED_COST_PEARL} 🪙 필요)`);
       return;
     }
+    let pending: Promise<void> | undefined;
     if (isCloudUser()) {
       // 알 id 는 서버가 발급한다. 낙관적으로 로컬 id 알을 만들면 인큐베이터가 곧바로 열리는
       // 이 동선에서 유저가 왕복 이전에 "부화 시작"을 눌러버려, 서버가 모르는 id 로 요청이
       // 나가 404 → 무음 롤백으로 유령 알이 고정된다. 재화·쿨다운만 낙관적으로 반영하고
       // 알은 서버 응답(setUser)으로 받는다 — 체감 지연은 수백 ms.
-      optimistic(
+      pending = optimistic(
         () => {
           spendPearl(BREED_COST_PEARL);
           markFishBred(activeTankId, [a.id, b.id], Date.now());
@@ -522,9 +528,10 @@ export default function TankPage() {
     analytics.breedFish(a.speciesId);
     showToast('💞 짝짓기 성공! 알이 인큐베이터에 담겼어요');
     setLeftPanel('incubator');
-  }, [activeTankId, user?.pearl, spendPearl, markFishBred, addBreedingEgg]);
+    return pending;
+  });
 
-  const handleExpandCapacity = useCallback(() => {
+  const [handleExpandCapacity] = useAsyncAction(() => {
     if (!activeTankId) return;
     const tank = useTankStore.getState().tanks.find(t => t.id === activeTankId);
     if (!tank) return;
@@ -538,8 +545,9 @@ export default function TankPage() {
       showToast(`Pearl이 부족합니다 (${cost} 🪙 필요)`);
       return;
     }
+    let pending: Promise<void> | undefined;
     if (isCloudUser()) {
-      optimistic(
+      pending = optimistic(
         () => {
           spendPearl(cost);
           expandTankCapacity(activeTankId);
@@ -555,11 +563,12 @@ export default function TankPage() {
       expandTankCapacity(activeTankId);
     }
     showToast(`🔧 수조 확장! 최대 ${getTankCapacity(lvl + 1)}마리`);
-  }, [activeTankId, user?.pearl, spendPearl, expandTankCapacity]);
+    return pending;
+  });
 
   const remaining = feedRemaining(tanks);
 
-  const handleCleanTank = () => {
+  const [handleCleanTank, cleaning] = useAsyncAction(() => {
     if (!activeTankId) return;
     if (cleanliness >= 95) {
       showToast('이미 깨끗해요 ✨');
@@ -574,8 +583,9 @@ export default function TankPage() {
       cleanTank(activeTankId);
       tickMoodAndCleanliness(activeTankId);
     };
+    let pending: Promise<void> | undefined;
     if (isCloudUser()) {
-      optimistic(clean, () => cleanTankServer({ tankId: activeTankId }), (e) => {
+      pending = optimistic(clean, () => cleanTankServer({ tankId: activeTankId }), (e) => {
         const err = e as { code?: string; message?: string };
         console.error('cleanTank failed', { tankId: activeTankId, code: err.code, message: err.message, error: e });
         showToast(err.message ?? '청소에 실패했어요 — 다시 시도해주세요');
@@ -590,7 +600,8 @@ export default function TankPage() {
     }
     analytics.cleanTank();
     showToast('💧 물을 갈았어요 — 청결도 100%');
-  };
+    return pending;
+  });
 
   // ===== 꾸미기 모드 핸들러 =====
   const handleAddDecoration = useCallback((modelId: string) => {
@@ -838,12 +849,14 @@ export default function TankPage() {
                     ? `먹이\n🎟️${user?.feedTickets ?? 0}`
                     : `먹이\n0/${feedMax(tanks)}`,
               action: handleFeed,
+              busy: feeding,
             },
             {
               icon: '💧',
               label: `청소\n${CLEAN_TANK_COST_PEARL}🪙`,
               action: handleCleanTank,
               active: cleanliness < 35,
+              busy: cleaning,
             },
             { icon: '🪴', label: '꾸미기', action: () => { setDecorationMode(true); setSelectedDecoId(null); } },
             { icon: '📷', label: '포토', action: () => setPhotoMode(true) },
@@ -859,13 +872,15 @@ export default function TankPage() {
               active: activeTank?.lightOn ?? false,
             },
           ].map(btn => (
-            <button key={btn.icon} onClick={btn.action} style={{
+            <button key={btn.icon} onClick={btn.action} disabled={btn.busy} style={{
               background: btn.active ? 'rgba(77, 208, 225, 0.25)' : 'rgba(0,0,0,0.6)',
               borderRadius: 11, padding: '7px 10px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               border: `1px solid ${btn.active ? 'rgba(77, 208, 225, 0.7)' : 'rgba(255,255,255,0.15)'}`,
               minWidth: 54, color: '#fff',
               fontSize: 9, whiteSpace: 'pre-line', textAlign: 'center',
+              opacity: btn.busy ? 0.5 : 1,
+              cursor: btn.busy ? 'wait' : 'pointer',
             }}>
               <span style={{ fontSize: 20 }}>{btn.icon}</span>
               {btn.label}

@@ -11,6 +11,7 @@ import {
 import { analytics } from '@/services/analytics';
 import { isAdsAvailable, preloadRewardedAd, showRewardedAd } from '@/services/ads';
 import { serverNow } from '@/services/clock';
+import { useAsyncAction } from '@/hooks/useAsyncAction';
 
 const TIER_EMOJI: Record<string, string> = { basic: '🥚', rare: '💎', legendary: '✨' };
 const TIER_LABEL: Record<string, string> = { basic: '기본 알', rare: '희귀 알', legendary: '전설 알' };
@@ -34,9 +35,11 @@ interface EggCardProps {
   onCollect: () => void;
   onBoostAd: () => void;
   boostInFlight: boolean;
+  /** 부화 시작/수확 요청이 서버 응답을 기다리는 중 — 버튼을 잠근다 */
+  busy: boolean;
 }
 
-function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardProps) {
+function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -126,22 +129,24 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
       </div>
 
       {!egg.isHatching && (
-        <button onClick={onStart} style={{
+        <button onClick={onStart} disabled={busy} style={{
           background: 'var(--color-primary)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+          fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap',
+          cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
         }}>
-          부화 시작
+          {busy ? '시작 중…' : '부화 시작'}
         </button>
       )}
       {isReady && (
-        <button onClick={onCollect} style={{
+        <button onClick={onCollect} disabled={busy} style={{
           background: 'var(--color-success)', color: '#fff',
           border: 'none', borderRadius: 8, padding: '6px 12px',
-          fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-          animation: 'pulse 1s infinite',
+          fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+          cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
+          animation: busy ? 'none' : 'pulse 1s infinite',
         }}>
-          수확! 🐟
+          {busy ? '수확 중…' : '수확! 🐟'}
         </button>
       )}
     </div>
@@ -149,8 +154,11 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight }: EggCardP
 }
 
 interface Props {
-  /** 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리. */
-  onCollect: (eggId: string, eggTier: EggTier) => void;
+  /**
+   * 알이 부화 가능 상태에서 수확 버튼이 눌렸을 때. 종 추첨 + 인벤토리 제거는 부모에서 처리.
+   * Promise 를 돌려주면 서버 응답이 올 때까지 수확 버튼이 잠긴다.
+   */
+  onCollect: (eggId: string, eggTier: EggTier) => void | Promise<void>;
   /** 패널 열림 상태 (부모가 제어 — 좌측 패널 상호 배타) */
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -173,23 +181,32 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     void preloadRewardedAd();
   }, [open, hasHatchingEgg]);
 
-  const handleStart = (eggId: string) => {
+  // optimistic() 을 return 해야 서버 왕복이 끝날 때까지 잠긴다. 안 그러면 연타로 두 번째
+  // startHatching 이 나가 서버가 "이미 부화 중"으로 거절 → 롤백 + 실패 토스트가 뜬다.
+  const [handleStart, starting] = useAsyncAction((eggId: string) => {
     const egg = user?.inventory.find(e => e.id === eggId);
     if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
       // onError 없이 두면 서버 거절 시 조용히 롤백돼 "눌러도 아무 반응 없음"으로 보인다.
-      optimistic(
+      return optimistic(
         () => startHatching(eggId),
         () => startHatchingServer({ eggId }),
         () => showToast('부화를 시작하지 못했어요. 잠시 후 다시 시도해주세요'),
       );
-      return;
     }
     startHatching(eggId);
-  };
+  });
 
-  const handleBoostAd = async (eggId: string) => {
-    if (!user || boostingEggId) return;
+  // 수확도 서버 왕복(hatchEgg)이라 같은 이유로 잠근다.
+  const [handleCollect, collecting] = useAsyncAction(async (eggId: string, eggTier: EggTier) => {
+    const wasLast = (user?.inventory.length ?? 0) <= 1;
+    await onCollect(eggId, eggTier);
+    if (wasLast) onOpenChange(false);
+  });
+
+  // boostingEggId 는 해당 알의 버튼 표시용. 중복 진입 차단은 useAsyncAction 의 ref 가드.
+  const [handleBoostAd] = useAsyncAction(async (eggId: string) => {
+    if (!user) return;
     // 오프라인이면 광고/서버 호출이 ~10초 타임아웃 끝에 실패한다. 미리 즉시 안내.
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       showToast('광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요');
@@ -240,7 +257,7 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     } finally {
       setBoostingEggId(null);
     }
-  };
+  });
 
   const inventory = user?.inventory ?? [];
 
@@ -285,12 +302,10 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
                 key={egg.id}
                 egg={egg}
                 onStart={() => handleStart(egg.id)}
-                onCollect={() => {
-                  onCollect(egg.id, egg.tier);
-                  if (inventory.length <= 1) onOpenChange(false);
-                }}
+                onCollect={() => handleCollect(egg.id, egg.tier)}
                 onBoostAd={() => handleBoostAd(egg.id)}
                 boostInFlight={boostingEggId === egg.id}
+                busy={starting || collecting}
               />
             ))}
           </div>
