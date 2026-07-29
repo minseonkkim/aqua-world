@@ -1,0 +1,63 @@
+name: Strip Commit Body
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  strip-commit-body:
+    name: Remove prefilled commit body from PR description
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            // 커밋이 하나뿐인 PR은 GitHub이 본문을 `커밋 본문 + PR 템플릿`으로 채운다.
+            // 커밋 본문 끝에도 `Closes #17`이 있어 템플릿의 `Closes #이슈번호`와 겹치므로,
+            // 프리필된 커밋 본문을 걷어내고 템플릿만 남긴다. 프리필은 끌 수 없어 사후에 정리한다.
+            const { data: commits } = await github.rest.pulls.listCommits({
+              ...context.repo,
+              pull_number: pr.number,
+              per_page: 2,
+            });
+            if (commits.length !== 1) {
+              return core.info('커밋이 하나가 아님 — 커밋 본문 프리필이 일어나지 않는다.');
+            }
+
+            // 커밋 메시지의 첫 줄은 제목, 그 뒤가 본문. 프리필되는 건 본문 쪽이다.
+            const message = commits[0].commit.message.replace(/\r\n/g, '\n');
+            const firstNewline = message.indexOf('\n');
+            const commitBody = firstNewline === -1 ? '' : message.slice(firstNewline + 1).trim();
+            if (commitBody === '') return core.info('커밋 본문이 비어 있음 — 정리할 게 없다.');
+
+            const body = (pr.body || '').replace(/\r\n/g, '\n');
+
+            // 프리필된 그대로일 때만 손댄다. 직접 고쳐 쓴 설명은 원문과 어긋나므로 건드리지 않는다.
+            if (!body.includes(commitBody)) {
+              return core.info('본문에 커밋 본문이 그대로 있지 않음 — 직접 작성한 설명으로 보고 건너뛴다.');
+            }
+
+            let stripped = body.replace(commitBody, '').replace(/\n{3,}/g, '\n\n').trim();
+
+            // 템플릿의 `Closes #이슈번호`는 자리표시자다. 브랜치 이름(`17-...`)에서 번호를
+            // 알 수 있으면 채워 넣어, 손으로 고칠 것을 남기지 않는다.
+            const fromBranch = /^(\d+)-/.exec(pr.head.ref);
+            if (fromBranch) {
+              const closes = `Closes #${fromBranch[1]}`;
+              stripped = stripped.replace(/Closes #이슈번호/g, closes);
+              if (stripped === '') stripped = closes;
+            }
+
+            if (stripped === body) return core.info('바뀐 내용 없음.');
+
+            await github.rest.pulls.update({
+              ...context.repo,
+              pull_number: pr.number,
+              body: stripped,
+            });
+            core.info('프리필된 커밋 본문을 제거했다.');
