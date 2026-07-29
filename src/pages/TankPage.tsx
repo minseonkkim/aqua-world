@@ -287,6 +287,8 @@ export default function TankPage() {
       if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
       addPearl(10);
       if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
+      // 수면 탭 급여와 같은 연출 — 먹이가 실제로 떨어지고 물고기가 쫓아간다
+      tankSceneRef.current?.sprinkleFood();
       showToast('🍤 먹이 뿌리기 · +10 🪙');
       analytics.sprinkleFeed();
       return sprinkleFeed({ tankId: activeTankId ?? '' }).catch(err => handleFeedError(err, prevUser, prevTanks));
@@ -294,6 +296,7 @@ export default function TankPage() {
     if (!recordFeed(tanks)) { showToast('오늘 먹이주기를 모두 사용했습니다 🐟'); return; }
     addPearl(10);
     if (activeTankId) { contaminate(activeTankId); feedAllFish(activeTankId); }
+    tankSceneRef.current?.sprinkleFood();
     showToast('🍤 먹이 뿌리기 · +10 🪙');
     analytics.sprinkleFeed();
   });
