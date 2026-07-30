@@ -980,7 +980,9 @@ export default function TankPage() {
         </div>
       )}
 
-      {/* 토스트 */}
+      {/* 토스트 — 어떤 오버레이 위에서도 보여야 하므로 앱 최상단 z-index(현재 최고는 2100).
+          포토 모드 오버레이(1400)가 불투명 검정이라 저장/공유 결과 토스트가 통째로 뒤에 깔렸었다.
+          같은 이유로 인큐베이터·상점 패널(200) 위 토스트도 안 보였다. */}
       {toast && (
         <div style={{
           position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
@@ -989,7 +991,7 @@ export default function TankPage() {
           maxWidth: 'min(360px, calc(100vw - 32px))',
           textAlign: 'center', lineHeight: 1.4, wordBreak: 'keep-all',
           pointerEvents: 'none',
-          zIndex: 100,
+          zIndex: 2200,
         }}>
           {toast}
         </div>
