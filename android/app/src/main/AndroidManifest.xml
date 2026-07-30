@@ -64,4 +64,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ 런타임 알림 권한. 미만 버전은 자동 허용. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 포토 모드 갤러리 저장(GallerySaverPlugin). Android 10+ 는 scoped storage 라
+         MediaStore 로 권한 없이 쓰므로, 공용 Pictures 에 직접 써야 하는 9 이하에서만 요청된다. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 </manifest>
