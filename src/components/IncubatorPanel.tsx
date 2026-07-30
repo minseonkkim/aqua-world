@@ -35,11 +35,22 @@ interface EggCardProps {
   onCollect: () => void;
   onBoostAd: () => void;
   boostInFlight: boolean;
-  /** 부화 시작/수확 요청이 서버 응답을 기다리는 중 — 버튼을 잠근다 */
+  /**
+   * 알 하나의 요청이라도 서버 응답을 기다리는 중 — 모든 카드의 버튼을 잠근다.
+   * useAsyncAction 의 단일 비행 가드는 훅 단위라 다른 알의 클릭도 삼키므로,
+   * 잠그지 않으면 "눌러도 아무 반응 없음"이 된다.
+   */
   busy: boolean;
+  /**
+   * 이 카드에서 눌러 진행 중인 액션. 진행 문구("시작 중…"/"수확 중…")는 이 값으로만
+   * 바꾼다 — busy 로 바꾸면 남의 부화 시작 때문에 내 수확 버튼이 "수확 중…"이 된다.
+   */
+  pendingAction: 'start' | 'collect' | null;
 }
 
-function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: EggCardProps) {
+function EggCard({
+  egg, onStart, onCollect, onBoostAd, boostInFlight, busy, pendingAction,
+}: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -154,7 +165,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
           fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
         }}>
-          {busy ? '시작 중…' : '부화 시작'}
+          {pendingAction === 'start' ? '시작 중…' : '부화 시작'}
         </button>
       )}
       {isReady && (
@@ -165,7 +176,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
           animation: busy ? 'none' : 'pulse 1s infinite',
         }}>
-          {busy ? '수확 중…' : '수확! 🐟'}
+          {pendingAction === 'collect' ? '수확 중…' : '수확! 🐟'}
         </button>
       )}
     </div>
@@ -200,9 +211,15 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     void preloadRewardedAd();
   }, [open, hasHatchingEgg]);
 
+  // 진행 문구를 띄울 카드를 특정하기 위해 "누른 알"을 기억한다. 완료 후 굳이 비우지
+  // 않는다 — 문구는 starting/collecting 과 AND 로 묶여 있어 남은 id 는 무해하다.
+  const [startingEggId, setStartingEggId] = useState<string | null>(null);
+  const [collectingEggId, setCollectingEggId] = useState<string | null>(null);
+
   // optimistic() 을 return 해야 서버 왕복이 끝날 때까지 잠긴다. 안 그러면 연타로 두 번째
   // startHatching 이 나가 서버가 "이미 부화 중"으로 거절 → 롤백 + 실패 토스트가 뜬다.
   const [handleStart, starting] = useAsyncAction((eggId: string) => {
+    setStartingEggId(eggId);
     const egg = user?.inventory.find(e => e.id === eggId);
     if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
@@ -218,6 +235,7 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
 
   // 수확도 서버 왕복(hatchEgg)이라 같은 이유로 잠근다.
   const [handleCollect, collecting] = useAsyncAction(async (eggId: string, eggTier: EggTier) => {
+    setCollectingEggId(eggId);
     const wasLast = (user?.inventory.length ?? 0) <= 1;
     await onCollect(eggId, eggTier);
     if (wasLast) onOpenChange(false);
@@ -326,6 +344,13 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
                 onBoostAd={() => handleBoostAd(egg.id)}
                 boostInFlight={boostingEggId === egg.id}
                 busy={starting || collecting}
+                pendingAction={
+                  starting && startingEggId === egg.id
+                    ? 'start'
+                    : collecting && collectingEggId === egg.id
+                      ? 'collect'
+                      : null
+                }
               />
             ))}
           </div>
