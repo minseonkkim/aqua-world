@@ -3,18 +3,25 @@
 //
 // 웹(브라우저)에선 navigator.share / <a download> 가 동작하지만
 // Capacitor WebView(Android)에선 둘 다 무반응이라 네이티브 플러그인으로 처리한다.
-//  - 저장: @capacitor-community/media → 갤러리(카메라 롤)에 저장
+//  - 저장: GallerySaver(자체 플러그인) → MediaStore 로 Pictures/AquaWorld 에 저장
 //  - 공유: @capacitor/filesystem 캐시 파일 + @capacitor/share → 네이티브 공유 시트
+import { registerPlugin } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { Media } from '@capacitor-community/media';
 import { platformName } from '@/services/platform';
 
-// 갤러리에 표시될 앨범 이름. Android 에선 getExternalMediaDirs 하위 폴더로 생성된다
-// (앱 전용 미디어 경로 — 별도 저장소 권한 불필요, MediaStore 가 자동 인덱싱).
-const ALBUM_NAME = 'AquaWorld';
+/**
+ * 구현: android/app/src/main/java/aquaworld/app/GallerySaverPlugin.java
+ * 현재 네이티브 타깃이 Android 뿐이라 Android 구현만 있다 — iOS 를 추가하면 같은 이름으로 붙여야 한다.
+ */
+interface GallerySaverPlugin {
+  /** 갤러리(Pictures/AquaWorld)에 PNG 저장. 실패 시 사유 code 를 실어 reject 한다. */
+  save(options: { dataUrl: string; fileName?: string }): Promise<{ uri: string }>;
+}
 
-/** Blob → data URL (data:image/png;base64,... 프리픽스 포함). Media.savePhoto 입력용. */
+const GallerySaver = registerPlugin<GallerySaverPlugin>('GallerySaver');
+
+/** Blob → data URL (data:image/png;base64,... 프리픽스 포함). GallerySaver.save 입력용. */
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -43,30 +50,40 @@ async function writeToCache(blob: Blob): Promise<string> {
   return uri;
 }
 
+let sentryPromise: Promise<typeof import('@sentry/react')> | null = null;
+function getSentry() {
+  if (!sentryPromise) sentryPromise = import('@sentry/react');
+  return sentryPromise;
+}
+
+/**
+ * 저장 실패는 사용자에게 "저장 실패" 토스트 한 줄로만 보이고 끝난다.
+ * 사유(권한 거부/용량 부족/MediaStore 거절)를 남기지 않으면 실기기에서 추적할 방법이 없어
+ * 플러그인이 reject 에 실어 보낸 code 를 태그로 올려 사유별로 묶이게 한다.
+ */
+function reportSaveFailure(e: unknown): void {
+  const err = e as { message?: string; code?: string } | null;
+  const code = err?.code ?? 'unknown';
+  console.error('[PhotoMode] native save failed', e);
+  void getSentry()
+    .then(S =>
+      S.captureMessage(`[photo] gallery save failed: ${code}`, {
+        level: 'warning',
+        tags: { photo_save_code: code },
+        extra: { message: err?.message ?? String(e), platform: platformName() },
+      }),
+    )
+    .catch(() => {});
+}
+
 /** 네이티브 갤러리 저장. 성공 시 true. */
 export async function saveToGalleryNative(blob: Blob): Promise<boolean> {
   try {
     const dataUrl = await blobToDataUrl(blob);
-    const fileName = `aquaworld_${Date.now()}`; // 확장자는 플러그인이 mime 로 추론
-
-    if (platformName() === 'android') {
-      // Android: savePhoto 는 대상 앨범(디렉터리)이 반드시 존재해야 한다.
-      // getExternalMediaDirs 기반이라 저장소 권한이 필요 없다.
-      const { path } = await Media.getAlbumsPath();
-      const albumIdentifier = `${path}/${ALBUM_NAME}`;
-      try {
-        await Media.createAlbum({ name: ALBUM_NAME });
-      } catch {
-        // 이미 존재하면 reject — 무시하고 진행
-      }
-      await Media.savePhoto({ path: dataUrl, albumIdentifier, fileName });
-    } else {
-      // iOS/기타: 앨범 지정 없이 카메라 롤에 저장
-      await Media.savePhoto({ path: dataUrl, fileName });
-    }
+    await GallerySaver.save({ dataUrl, fileName: `aquaworld_${Date.now()}.png` });
     return true;
-  } catch (e) {
-    console.error('[PhotoMode] native save failed', e);
+  } catch (e: unknown) {
+    reportSaveFailure(e);
     return false;
   }
 }

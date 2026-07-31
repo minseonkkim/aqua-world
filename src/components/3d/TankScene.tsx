@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback, forwardRef, useImperat
 import * as THREE from 'three';
 import { createWaterMaterial } from './WaterShader';
 import { useCameraControls } from '@/hooks/useCameraControls';
+import { LANDSCAPE_QUERY, useIsLandscape } from '@/hooks/useIsLandscape';
 import { Fish, TankDecoration, TankEnvironment } from '@/types';
 import { STAGE_SCALE } from '@/constants';
 import { cloneFishModel, getFishModel, preloadFishModels } from '@/utils/fishModelLoader';
@@ -65,6 +66,9 @@ const BASE_BOX_W = 10;
 const BASE_BOX_D = 8;
 const BOX_H = 6;
 const BUBBLE_COUNT = 35;
+const CAMERA_FOV = 60;
+// 세로 기본 시점 거리 (useCameraControls 의 DEFAULT.radius 와 같은 값)
+const PORTRAIT_RADIUS = 8;
 const FOOD_LIFETIME_MS = 8000;
 // 저전력 모드 목표 프레임 간격 (≈30fps). 모달/패널로 수조가 가려질 때 렌더 빈도를 낮춰 배터리 절약
 const LOW_POWER_FRAME_MS = 1000 / 30;
@@ -80,6 +84,50 @@ const BOID_W_COHESION = 0.7;
 const BOID_W_SEPARATION = 1.8;
 const BOID_BOUND_FORCE = 0.0012;  // 벽 근처에서 중심 쪽으로 미는 힘
 const BOID_BOUND_MARGIN = 0.7;    // 벽으로부터 이 거리 안에서 조향 시작
+
+/**
+ * 기본 시점의 카메라 거리.
+ *
+ * 세로 FOV(60°)는 화면 비율과 무관하게 고정이라, 기본 거리 8 에서는 기본 각도(phi 45°)
+ * 기준으로 유리 박스의 앞아래 모서리가 프레임 밖으로 밀린다. 세로에서는 가로 시야가 좁아
+ * 수조 안쪽만 보이니 티가 안 나지만, 가로에서는 수조 전체가 화면에 들어오면서 잘린 경계
+ * 밖으로 물고기가 헤엄쳐 나가는 것처럼 보인다 — 그래서 가로에서만 카메라를 뒤로 뺀다.
+ *
+ * 거리는 phi=45°에서 박스 앞아래/뒤위 모서리가 세로 FOV 안에 들어오는 최소값 + 5% 여유.
+ * (init/ResizeObserver 안에서 호출하므로 훅이 아니라 matchMedia 를 직접 읽는다 —
+ *  회전 시엔 캔버스 크기가 바뀌며 ResizeObserver 가 다시 부른다.)
+ */
+function defaultCameraRadius(tankScale: number): number {
+  const landscape = typeof window !== 'undefined' && window.matchMedia(LANDSCAPE_QUERY).matches;
+  if (!landscape) return PORTRAIT_RADIUS;
+  const sin45 = Math.SQRT1_2;
+  const tanHalfFov = Math.tan((CAMERA_FOV * Math.PI) / 180 / 2);
+  const halfY = BOX_H / 2;
+  const halfZ = (BASE_BOX_D * tankScale) / 2;
+  const fit = (sin45 * (halfY + halfZ)) / tanHalfFov - sin45 * (halfY - halfZ);
+  return Math.max(PORTRAIT_RADIUS, fit * 1.05);
+}
+
+/**
+ * 꾸미기 모드에서 수조를 옆으로 밀 거리(월드 단위).
+ *
+ * 가로에서는 카탈로그가 우측 세로 패널이라, 그 폭의 절반만큼 화면을 왼쪽으로 밀어야
+ * 수조가 '보이는 영역'의 가운데에 온다 (세로에서 -1.8 로 위로 올리는 것과 같은 보정).
+ * 패널 폭의 출처는 global.css 의 --deco-catalog-w — 거기서 읽어야 CSS 를 바꿔도 시점이 따라온다.
+ */
+function decoFocusOffsetX(canvas: HTMLCanvasElement | null, tankScale: number): number {
+  if (!canvas || typeof window === 'undefined') return 0;
+  const panelPx = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--deco-catalog-w'),
+  );
+  const h = canvas.clientHeight;
+  if (!panelPx || !h) return 0;
+  // 원근 FOV 는 세로 기준이라 화면 1px 당 월드 거리 = 세로 시야 높이 / 캔버스 높이.
+  // 거리는 기본 시점 기준 — 사용자가 직접 줌한 상태면 근사값이 된다.
+  const worldPerPx =
+    (2 * defaultCameraRadius(tankScale) * Math.tan((CAMERA_FOV * Math.PI) / 180 / 2)) / h;
+  return (panelPx / 2) * worldPerPx;
+}
 
 // 벡터 길이를 max로 제한 (in-place)
 function limitVec(v: THREE.Vector3, max: number): THREE.Vector3 {
@@ -180,7 +228,10 @@ function TankSceneImpl({
   useEffect(() => { onSurfaceFeedRef.current = onSurfaceFeed; }, [onSurfaceFeed]);
   useEffect(() => { lowPowerRef.current = lowPower; }, [lowPower]);
 
-  const { bindCanvas, apply, setEnabled, setFocusOffsetY, tickCamera } = useCameraControls(cameraRef);
+  const {
+    bindCanvas, apply, setEnabled, setDefaultRadius, setFocusOffsetX, setFocusOffsetY, tickCamera,
+  } = useCameraControls(cameraRef);
+  const isLandscape = useIsLandscape();
   const env = ENV[environment];
 
   // 모델 프리로드 중 표시할 오버레이 — 마운트 시 한 번 랜덤 선택
@@ -194,9 +245,15 @@ function TankSceneImpl({
   useEffect(() => { decorationsRef.current = decorations; }, [decorations]);
   const decorationModeRef = useRef(decorationMode);
   useEffect(() => { decorationModeRef.current = decorationMode; }, [decorationMode]);
-  // 꾸미기 모드 진입 시 시점을 아래로 내려 바닥을 화면 중앙으로 끌어올린다 (하단 카탈로그 패널과 안 겹치게).
+  // 꾸미기 모드 진입 시 카탈로그에 가린 만큼 수조를 반대쪽으로 민다 —
+  // 세로는 하단 카탈로그를 피해 위로, 가로는 우측 카탈로그를 피해 왼쪽으로.
   // 종료 시 0으로 복귀 — tickCamera가 부드럽게 보간한다.
-  useEffect(() => { setFocusOffsetY(decorationMode ? -1.8 : 0); }, [decorationMode, setFocusOffsetY]);
+  useEffect(() => {
+    setFocusOffsetY(decorationMode && !isLandscape ? -1.8 : 0);
+    setFocusOffsetX(
+      decorationMode && isLandscape ? decoFocusOffsetX(canvasRef.current, tankScale) : 0,
+    );
+  }, [decorationMode, isLandscape, tankScale, setFocusOffsetX, setFocusOffsetY]);
   const selectedDecoIdRef = useRef<string | null>(selectedDecorationId);
   useEffect(() => { selectedDecoIdRef.current = selectedDecorationId; }, [selectedDecorationId]);
 
@@ -393,11 +450,11 @@ function TankSceneImpl({
     scene.fog = new THREE.FogExp2(new THREE.Color(env.bg), 0.05);
     sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 100);
-    // 수조가 커진 만큼 카메라를 뒤로 빼서 프레이밍 유지
-    camera.position.set(0, 4 * s, 8 * s);
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, w / h, 0.1, 100);
     cameraRef.current = camera;
+    // 카메라 위치는 useCameraControls 가 궤도(theta·phi·radius)로 잡는다 —
+    // 여기서 position 을 직접 세팅해도 곧바로 apply() 가 덮어쓴다.
+    setDefaultRadius(defaultCameraRadius(s));
     apply();
 
     const ambient = new THREE.AmbientLight(env.ambient, AMBIENT_DAY);
@@ -490,10 +547,13 @@ function TankSceneImpl({
       renderer.setSize(cw, ch, false); // 인라인 스타일 유지(위 init 주석 참고) — 드로잉 버퍼만 갱신
       camera.aspect = cw / ch;
       camera.updateProjectionMatrix();
+      // 회전으로 가로/세로가 바뀌면 기본 시점 거리를 다시 잡는다
+      // (사용자가 직접 줌한 뒤라면 useCameraControls 가 무시한다)
+      setDefaultRadius(defaultCameraRadius(s));
     });
     ro.observe(canvas);
     return ro;
-  }, [apply, env, tankScale, syncFishMeshes, syncDecorationMeshes, syncHighlight]);
+  }, [apply, setDefaultRadius, env, tankScale, syncFishMeshes, syncDecorationMeshes, syncHighlight]);
 
   // fish prop 변경 시 메시 동기화
   useEffect(() => {

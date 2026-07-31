@@ -7,13 +7,19 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <!--
+          screenOrientation="fullUser": 4방향 모두 허용하되 기기의 화면 회전 잠금 설정은 따른다.
+          (fullSensor 는 사용자가 회전을 잠가둬도 무시하고 돌아가 버린다.)
+          configChanges 에 orientation|screenSize 가 이미 있어 회전해도 액티비티가 재생성되지 않는다
+          — WebView 가 살아있으니 three.js 컨텍스트·게임 상태가 그대로 유지된다.
+        -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullUser"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -64,4 +70,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+ 런타임 알림 권한. 미만 버전은 자동 허용. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 포토 모드 갤러리 저장(GallerySaverPlugin). Android 10+ 는 scoped storage 라
+         MediaStore 로 권한 없이 쓰므로, 공용 Pictures 에 직접 써야 하는 9 이하에서만 요청된다. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 </manifest>

@@ -126,6 +126,9 @@ export default function HatchAnimationModal({ speciesId, eggTier, onComplete }: 
             animation: 'aw-pop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards',
             padding: '0 24px',
             textAlign: 'center',
+            // 가로에서는 화면이 낮아 확인 버튼이 잘려 부화 연출에서 못 빠져나온다
+            maxHeight: '100%',
+            overflowY: 'auto',
           }}
         >
           <div

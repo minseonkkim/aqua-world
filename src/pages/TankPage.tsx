@@ -37,6 +37,7 @@ import {
   breedFish as breedFishServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
+import { playSFX } from '@/services/audio';
 import { serverNow } from '@/services/clock';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
 
@@ -854,7 +855,7 @@ export default function TankPage() {
 
       {/* 우측 액션 버튼 — 꾸미기/포토/전체화면 모드 중에는 숨김 */}
       {!decorationMode && !photoMode && !immersiveMode && (
-        <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="tank-actions">
           {[
             {
               icon: '🍖',
@@ -882,23 +883,21 @@ export default function TankPage() {
               action: () => {
                 if (!activeTankId) return;
                 const next = !(activeTank?.lightOn ?? false);
+                // 설정 화면 토글과 같은 click 음. 스위치를 올리고 내리는 느낌을 주려고 켤 땐 높게, 끌 땐 낮게.
+                playSFX('click', next ? 1.15 : 0.85);
                 setLightOn(activeTankId, next);
                 showToast(next ? '💡 조명 켜짐' : '💡 조명 꺼짐');
               },
               active: activeTank?.lightOn ?? false,
             },
           ].map(btn => (
-            <button key={btn.icon} onClick={btn.action} disabled={btn.busy} style={{
+            <button key={btn.icon} className="tank-action-btn" onClick={btn.action} disabled={btn.busy} style={{
               background: btn.active ? 'rgba(77, 208, 225, 0.25)' : 'rgba(0,0,0,0.6)',
-              borderRadius: 11, padding: '7px 10px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               border: `1px solid ${btn.active ? 'rgba(77, 208, 225, 0.7)' : 'rgba(255,255,255,0.15)'}`,
-              minWidth: 54, color: '#fff',
-              fontSize: 9, whiteSpace: 'pre-line', textAlign: 'center',
               opacity: btn.busy ? 0.5 : 1,
               cursor: btn.busy ? 'wait' : 'pointer',
             }}>
-              <span style={{ fontSize: 20 }}>{btn.icon}</span>
+              <span>{btn.icon}</span>
               {btn.label}
             </button>
           ))}
@@ -980,7 +979,9 @@ export default function TankPage() {
         </div>
       )}
 
-      {/* 토스트 */}
+      {/* 토스트 — 어떤 오버레이 위에서도 보여야 하므로 앱 최상단 z-index(현재 최고는 2100).
+          포토 모드 오버레이(1400)가 불투명 검정이라 저장/공유 결과 토스트가 통째로 뒤에 깔렸었다.
+          같은 이유로 인큐베이터·상점 패널(200) 위 토스트도 안 보였다. */}
       {toast && (
         <div style={{
           position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
@@ -989,7 +990,7 @@ export default function TankPage() {
           maxWidth: 'min(360px, calc(100vw - 32px))',
           textAlign: 'center', lineHeight: 1.4, wordBreak: 'keep-all',
           pointerEvents: 'none',
-          zIndex: 100,
+          zIndex: 2200,
         }}>
           {toast}
         </div>

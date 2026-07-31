@@ -170,6 +170,9 @@ export default function PWAPrompts() {
               padding: '24px 22px',
               maxWidth: 320,
               width: '100%',
+              // 가로에서는 화면이 낮아 안내 아래쪽이 잘린다
+              maxHeight: '100%',
+              overflowY: 'auto',
               border: '1px solid rgba(255,255,255,0.1)',
               textAlign: 'center',
             }}

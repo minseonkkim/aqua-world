@@ -35,11 +35,22 @@ interface EggCardProps {
   onCollect: () => void;
   onBoostAd: () => void;
   boostInFlight: boolean;
-  /** 부화 시작/수확 요청이 서버 응답을 기다리는 중 — 버튼을 잠근다 */
+  /**
+   * 알 하나의 요청이라도 서버 응답을 기다리는 중 — 모든 카드의 버튼을 잠근다.
+   * useAsyncAction 의 단일 비행 가드는 훅 단위라 다른 알의 클릭도 삼키므로,
+   * 잠그지 않으면 "눌러도 아무 반응 없음"이 된다.
+   */
   busy: boolean;
+  /**
+   * 이 카드에서 눌러 진행 중인 액션. 진행 문구("시작 중…"/"수확 중…")는 이 값으로만
+   * 바꾼다 — busy 로 바꾸면 남의 부화 시작 때문에 내 수확 버튼이 "수확 중…"이 된다.
+   */
+  pendingAction: 'start' | 'collect' | null;
 }
 
-function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: EggCardProps) {
+function EggCard({
+  egg, onStart, onCollect, onBoostAd, boostInFlight, busy, pendingAction,
+}: EggCardProps) {
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
@@ -154,7 +165,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
           fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
         }}>
-          {busy ? '시작 중…' : '부화 시작'}
+          {pendingAction === 'start' ? '시작 중…' : '부화 시작'}
         </button>
       )}
       {isReady && (
@@ -165,7 +176,7 @@ function EggCard({ egg, onStart, onCollect, onBoostAd, boostInFlight, busy }: Eg
           cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1,
           animation: busy ? 'none' : 'pulse 1s infinite',
         }}>
-          {busy ? '수확 중…' : '수확! 🐟'}
+          {pendingAction === 'collect' ? '수확 중…' : '수확! 🐟'}
         </button>
       )}
     </div>
@@ -200,9 +211,15 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
     void preloadRewardedAd();
   }, [open, hasHatchingEgg]);
 
+  // 진행 문구를 띄울 카드를 특정하기 위해 "누른 알"을 기억한다. 완료 후 굳이 비우지
+  // 않는다 — 문구는 starting/collecting 과 AND 로 묶여 있어 남은 id 는 무해하다.
+  const [startingEggId, setStartingEggId] = useState<string | null>(null);
+  const [collectingEggId, setCollectingEggId] = useState<string | null>(null);
+
   // optimistic() 을 return 해야 서버 왕복이 끝날 때까지 잠긴다. 안 그러면 연타로 두 번째
   // startHatching 이 나가 서버가 "이미 부화 중"으로 거절 → 롤백 + 실패 토스트가 뜬다.
   const [handleStart, starting] = useAsyncAction((eggId: string) => {
+    setStartingEggId(eggId);
     const egg = user?.inventory.find(e => e.id === eggId);
     if (egg) analytics.startHatching(egg.tier);
     if (isCloudUser()) {
@@ -218,6 +235,7 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
 
   // 수확도 서버 왕복(hatchEgg)이라 같은 이유로 잠근다.
   const [handleCollect, collecting] = useAsyncAction(async (eggId: string, eggTier: EggTier) => {
+    setCollectingEggId(eggId);
     const wasLast = (user?.inventory.length ?? 0) <= 1;
     await onCollect(eggId, eggTier);
     if (wasLast) onOpenChange(false);
@@ -299,20 +317,19 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
         🥚 {inventory.length}
       </button>
 
+      {/* 패널 위치·폭·높이는 global.css 의 .left-panel — 가로에서는 버튼 위가 아니라
+          버튼 오른쪽으로 펼쳐야 해서 미디어쿼리가 이길 수 있는 클래스로 뺐다. */}
       {open && (
-        <div style={{
-          position: 'absolute', left: 12, bottom: 130,
-          // 좁은 화면에서 패널이 오른쪽으로 삐져나가지 않게 (left 12 + right 12 여백 확보)
-          width: 'min(280px, calc(100vw - 24px))',
+        <div className="left-panel" style={{
+          '--panel-bottom': '130px',
+          '--panel-max': '320px',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          maxHeight: 320,
           overflowY: 'auto',
-          zIndex: 70,
-        }}>
+        } as React.CSSProperties}>
           <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 14 }}>
             🥚 인큐베이터 ({inventory.length})
           </div>
@@ -326,6 +343,13 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
                 onBoostAd={() => handleBoostAd(egg.id)}
                 boostInFlight={boostingEggId === egg.id}
                 busy={starting || collecting}
+                pendingAction={
+                  starting && startingEggId === egg.id
+                    ? 'start'
+                    : collecting && collectingEggId === egg.id
+                      ? 'collect'
+                      : null
+                }
               />
             ))}
           </div>

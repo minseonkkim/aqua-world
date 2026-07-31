@@ -55,6 +55,13 @@ jobs:
           sed -i "s/versionCode [0-9]\+/versionCode $NEW_CODE/" android/app/build.gradle
           sed -i "s/versionName \"[^\"]*\"/versionName \"$NEW_VERSION\"/" android/app/build.gradle
 
+      - name: Bump in-app version
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          sed -i -E "s/(export const APP_VERSION = ')[^']*(')/\1${NEW_VERSION}\2/" src/services/feedback.ts
+          # sed 는 패턴을 못 찾아도 성공으로 끝난다 — 그대로 넘어가면 설정 > 정보 버전이 또 굳는다(#28).
+          grep -q "APP_VERSION = '${NEW_VERSION}'" src/services/feedback.ts
+
       - name: Update README version badge
         run: |
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
@@ -65,7 +72,7 @@ jobs:
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json android/app/build.gradle README.md
+          git add package.json package-lock.json android/app/build.gradle src/services/feedback.ts README.md
           git commit -m "v${NEW_VERSION}"
           git tag "v${NEW_VERSION}"
           git push origin HEAD:main

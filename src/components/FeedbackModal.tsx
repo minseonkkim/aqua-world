@@ -81,6 +81,9 @@ export default function FeedbackModal({ open, onClose }: { open: boolean; onClos
           padding: '24px 22px 18px',
           width: '100%',
           maxWidth: 360,
+          // 가로에서는 화면이 낮아 입력폼 아래쪽(보내기 버튼)이 잘려 나간다
+          maxHeight: '100%',
+          overflowY: 'auto',
           boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
           border: '1px solid rgba(255,255,255,0.1)',
         }}
