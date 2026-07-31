@@ -37,6 +37,7 @@ import {
   breedFish as breedFishServer,
 } from '@/services/firebase/functions';
 import { analytics } from '@/services/analytics';
+import { playSFX } from '@/services/audio';
 import { serverNow } from '@/services/clock';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
 
@@ -882,6 +883,8 @@ export default function TankPage() {
               action: () => {
                 if (!activeTankId) return;
                 const next = !(activeTank?.lightOn ?? false);
+                // 설정 화면 토글과 같은 click 음. 스위치를 올리고 내리는 느낌을 주려고 켤 땐 높게, 끌 땐 낮게.
+                playSFX('click', next ? 1.15 : 0.85);
                 setLightOn(activeTankId, next);
                 showToast(next ? '💡 조명 켜짐' : '💡 조명 꺼짐');
               },
