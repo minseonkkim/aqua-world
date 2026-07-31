@@ -75,6 +75,9 @@ export default function DecorationModePanel({
           transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: 6,
           background: 'rgba(10, 22, 40, 0.95)', borderRadius: 12, padding: 10,
           border: '1px solid rgba(77, 208, 225, 0.4)', minWidth: 260, zIndex: 50,
+          // 가로에서는 화면이 낮아 슬롯 3개가 하단 카탈로그를 뚫고 내려간다
+          maxHeight: 'calc(var(--content-height) - var(--safe-top) - 112px)',
+          overflowY: 'auto',
         }}>
           <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: 2 }}>
             현재 배치를 슬롯에 저장하거나 불러옵니다
@@ -110,11 +113,11 @@ export default function DecorationModePanel({
         </div>
       )}
 
-      {/* 선택된 데코 조작 패널 (우측) */}
+      {/* 선택된 데코 조작 패널 (우측).
+          위치·배치는 global.css 의 .deco-controls — 가로에서는 세로 가운데 세로 스택이
+          하단 카탈로그에 깔려서 방향과 위치를 미디어쿼리로 바꿔야 한다. */}
       {selectedDecoration && (
-        <div style={{
-          position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-          display: 'flex', flexDirection: 'column', gap: 6,
+        <div className="deco-controls" style={{
           background: 'rgba(0,0,0,0.75)', borderRadius: 12, padding: 8,
           border: '1px solid rgba(77, 208, 225, 0.4)', zIndex: 50,
         }}>

@@ -134,7 +134,8 @@ export default function FishInventoryPanel({ onPlace, onExpand, tankFishCount, c
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          maxHeight: 380,
+          // 가로에서는 화면이 낮아 380px 을 그대로 쓰면 위로 삐져나가 잘린다 (bottom 180 + 여백 12)
+          maxHeight: 'min(380px, calc(var(--content-height) - 192px))',
           display: 'flex', flexDirection: 'column',
           zIndex: 70,
         }}>

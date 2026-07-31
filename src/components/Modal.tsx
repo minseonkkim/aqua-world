@@ -50,6 +50,9 @@ export default function Modal() {
           padding: '28px 24px 20px',
           width: '100%',
           maxWidth: 320,
+          // 가로에서는 화면이 낮아 본문이 긴 모달이 위아래로 잘린다
+          maxHeight: '100%',
+          overflowY: 'auto',
           boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
           border: '1px solid rgba(255,255,255,0.1)',
           textAlign: 'center',

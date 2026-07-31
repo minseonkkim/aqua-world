@@ -89,6 +89,8 @@ export default function FishInfoCard({ fish, feedRemaining, feedMax, feedTickets
           background: 'var(--color-bg-light)',
           borderRadius: '24px 24px 0 0',
           padding: '20px 20px 32px',
+          // 가로에서는 화면 높이가 시트보다 낮아 위쪽(썸네일·이름)이 잘려 나간다
+          maxHeight: 'calc(100vh - 24px)', overflowY: 'auto',
         }}
         onClick={e => e.stopPropagation()}
       >

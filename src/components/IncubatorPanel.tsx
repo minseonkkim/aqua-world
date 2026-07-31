@@ -327,7 +327,8 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          maxHeight: 320,
+          // 가로에서는 화면이 낮아 320px 을 그대로 쓰면 위로 삐져나가 잘린다 (bottom 130 + 여백 12)
+          maxHeight: 'min(320px, calc(var(--content-height) - 142px))',
           overflowY: 'auto',
           zIndex: 70,
         }}>

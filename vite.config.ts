@@ -44,7 +44,8 @@ export default defineConfig(({ mode }) => {
         theme_color: '#0a1628',
         background_color: '#0a1628',
         display: 'standalone',
-        orientation: 'portrait',
+        // 설치형 PWA 도 네이티브와 같이 회전을 막지 않는다
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [

@@ -114,7 +114,9 @@ export default function CompendiumPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px 16px' }}>
+      {/* 가로에서는 폭이 두 배 넘게 넓어진다 — 2열 고정이면 카드가 그만큼 늘어나 버려서 폭에 맞춰 열을 늘린다.
+          minmax 160px 은 세로(최대 480px)에서 지금처럼 2열로 떨어지는 하한. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, padding: '0 16px 16px' }}>
         {allSpecies.map(s => {
           const unlocked = collected.includes(s.id);
           return (
