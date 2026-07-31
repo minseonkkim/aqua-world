@@ -116,6 +116,9 @@ export default function DailyRewardModal({ reward }: Props) {
         borderRadius: 24,
         padding: '32px 28px',
         width: 280,
+        // 가로에서는 화면이 낮아 '받기!' 버튼이 잘려 보상을 못 받는다
+        maxHeight: 'calc(100vh - 24px)',
+        overflowY: 'auto',
         textAlign: 'center',
         boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
         border: '1px solid rgba(255,255,255,0.1)',

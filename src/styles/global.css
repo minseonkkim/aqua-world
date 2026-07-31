@@ -62,6 +62,12 @@ img { display: block; max-width: 100%; }
   --tab-height: 60px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 가로에서는 노치·펀치홀이 좌우로 온다 */
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  /* 탭바를 뺀 실제 콘텐츠 높이. 화면 하단에 붙는 패널들이 가로에서 위로 넘쳐
+     잘리지 않도록, 고정 px 대신 이 값을 기준으로 maxHeight 를 잡는다 */
+  --content-height: calc(100vh - var(--tab-height) - var(--safe-bottom));
 }
 
 /* ── Bottom Tab Bar ── */
@@ -127,6 +133,261 @@ img { display: block; max-width: 100%; }
   font-size: 12px; font-weight: 600;
 }
 
+/* ── Tank action stack (수조 우측 액션 버튼) ── */
+/* 가로에서 배치를 바꿔야 해서 인라인 스타일이 아닌 클래스로 뺐다.
+   배경·테두리·비활성 표시는 상태에 따라 달라지므로 TankPage 에 인라인으로 남겨둔다. */
+.tank-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* ── 좌하단 패널 (인큐베이터·보관함·짝짓기) ── */
+/* 세로에서는 짝을 이루는 버튼 바로 위로 펼친다. 위치·높이를 인라인이 아니라 여기서 잡는 건
+   가로에서 미디어쿼리로 뒤집어야 하기 때문 — 인라인 스타일은 미디어쿼리가 못 이긴다.
+   --panel-bottom: 버튼 바로 위 y 좌표, --panel-max: 세로에서의 높이 상한, --panel-width: 폭. */
+.left-panel {
+  position: absolute;
+  left: 12px;
+  bottom: var(--panel-bottom);
+  width: min(var(--panel-width, 280px), calc(100vw - 24px));
+  /* 위로 삐져나가 잘리지 않게 남은 높이로 제한 (버튼 위 여백 12px) */
+  max-height: min(var(--panel-max), calc(var(--content-height) - var(--panel-bottom) - 12px));
+  z-index: 70;
+}
+
+.tank-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-radius: 11px;
+  padding: 7px 10px;
+  min-width: 54px;
+  color: #fff;
+  font-size: 9px;
+  white-space: pre-line;
+  text-align: center;
+}
+.tank-action-btn > span { font-size: 20px; }
+
+/* ── 꾸미기 모드 카탈로그 ── */
+/* 세로에서는 화면 하단에 눕는 가로 스크롤 바. 가로 배치는 아래 미디어쿼리에서 뒤집는다. */
+.deco-catalog {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 22, 40, 0.95);
+  border-top: 1px solid rgba(77, 208, 225, 0.3);
+  padding: 8px 8px calc(var(--safe-bottom, 0px) + 8px);
+  z-index: 50;
+}
+.deco-catalog-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.deco-catalog-items {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-top: 4px;
+}
+.deco-item {
+  flex: 0 0 auto;
+  width: 68px;
+  height: 86px;
+  position: relative;
+  border-radius: 11px;
+  padding: 5px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+/* 꾸미기 모드 헤더(프리셋·완료)와 프리셋 슬롯 패널 — 화면이 아니라 '수조가 보이는 영역'의
+   가운데에 맞춘다. 가로에서는 우측 카탈로그 폭만큼 왼쪽으로 미는 규칙이 아래 미디어쿼리에 있다. */
+.deco-header,
+.deco-presets {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+}
+.deco-header {
+  top: calc(var(--safe-top) + 56px);
+  max-width: calc(100vw - 16px);
+}
+.deco-presets {
+  top: calc(var(--safe-top) + 100px);
+  /* 가로에서는 화면이 낮아 슬롯 3개가 아래로 삐져나간다 */
+  max-height: calc(var(--content-height) - var(--safe-top) - 112px);
+  overflow-y: auto;
+}
+
+/* 꾸미기 모드의 데코 조작 패널 — 위치와 배치만 여기서 잡는다 (색·여백은 DecorationModePanel 인라인) */
+.deco-controls {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Auth screens (온보딩·로그인) ── */
+/* 탭바 없이 화면 전체를 세로로 쓰는 진입 화면. 가로에서 통째로 줄여야 해서 클래스로 뺐다. */
+.auth-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 48px 32px;
+  background: var(--color-bg);
+}
+.auth-logo { font-size: 80px; }
+.auth-title { font-size: 36px; font-weight: 700; letter-spacing: 2px; }
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+  margin-bottom: 40px;
+}
+.onboarding-slide {
+  flex: 0 0 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  text-align: center;
+}
+.onboarding-slide h1 { font-size: 28px; font-weight: 700; line-height: 1.4; white-space: pre-line; }
+.onboarding-slide p {
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
 /* ── Scrollbar hide ── */
 .page::-webkit-scrollbar { display: none; }
 .page { scrollbar-width: none; }
+
+/* ── 가로 모드 ──
+   화면을 돌리면 높이가 400px 안팎으로 줄어든다. 세로 기준으로 잡아둔 480px 폭 제한과
+   60px 탭바를 그대로 두면 넓어진 화면 한가운데 좁은 세로 띠만 남아 수조가 거의 안 보인다.
+   방향이 아니라 높이로도 거르는 이유: 데스크톱 브라우저 창도 landscape 라, orientation 만
+   보면 웹에서 의도한 '가운데 폰 프레임' 연출까지 같이 풀려버린다. */
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --tab-height: 44px; }
+
+  .app-shell {
+    max-width: none;
+    /* 노치가 좌우로 오므로 UI 를 그만큼 안쪽으로 민다 */
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  /* 줄어든 탭바 높이에 맞춰 아이콘과 라벨을 나란히 눕힌다 */
+  .tab-item {
+    flex-direction: row;
+    gap: 6px;
+    font-size: 12px;
+    padding-bottom: 0;
+  }
+  .tab-item span { font-size: 17px; }
+
+  .page-header {
+    padding-top: calc(var(--safe-top) + var(--sp-md));
+    font-size: 20px;
+  }
+
+  /* 액션 5개를 세로로 쌓으면 낮아진 화면 위로 잘려 나간다 — 남아도는 가로 폭에 눕힌다.
+     right 68px 은 우하단 전체화면(⛶) 버튼 자리를 비켜 앉기 위한 값. */
+  .tank-actions {
+    flex-direction: row;
+    right: 68px;
+    bottom: 12px;
+  }
+
+  /* 좌하단 패널을 버튼 위로 펼치면 남는 높이가 100~200px 뿐이라 목록이 두어 줄로 눌려
+     사실상 못 쓴다 — 남아도는 가로 폭으로 옮겨 버튼 오른쪽 옆에 세우고 높이를 다 쓴다.
+     left 112px 은 버튼 열에서 가장 넓은 '💞 짝짓기'(약 90px) 오른쪽에 앉히는 값.
+     max-height 는 상단 HUD(재화 pill·🔔) 를 가리지 않도록 그만큼 뺀다. */
+  .left-panel {
+    left: 112px;
+    bottom: 12px;
+    width: min(var(--panel-width, 280px), calc(100vw - 124px));
+    max-height: min(var(--panel-max), calc(var(--content-height) - var(--safe-top) - 52px));
+  }
+
+  /* 하단 가로 바로 두면 카탈로그(약 145px)가 낮아진 화면 높이의 절반을 먹어 수조가 거의
+     안 보인다 — 남아도는 가로 폭 쪽(우측)에 세로 패널로 세우고 아이템을 2열로 흘린다.
+     폭 188px = 아이템 80px 2개 + 간격 8px + 좌우 여백 16px + 여유.
+     (TankScene 이 이 변수를 읽어 꾸미기 모드 시점을 그만큼 왼쪽으로 민다) */
+  :root { --deco-catalog-w: 188px; }
+  .deco-catalog {
+    left: auto;
+    top: 0;
+    bottom: 0;
+    width: var(--deco-catalog-w);
+    padding: 8px;
+    border-top: none;
+    border-left: 1px solid rgba(77, 208, 225, 0.3);
+    display: flex;
+    flex-direction: column;
+  }
+  /* 헤더·프리셋 패널은 화면 가운데가 아니라 카탈로그를 뺀 '수조 영역'의 가운데로 */
+  .deco-header,
+  .deco-presets {
+    left: calc(50% - var(--deco-catalog-w) / 2);
+  }
+  .deco-header {
+    max-width: calc(100vw - var(--deco-catalog-w) - 16px);
+  }
+
+  .deco-catalog-tabs { flex-shrink: 0; }
+  /* 넓어진 패널 폭을 아이템이 나눠 갖는다 (2열 유지) */
+  .deco-item { width: 80px; }
+  .deco-catalog-items {
+    flex: 1;
+    /* min-height:0 이 없으면 flex 아이템이 내용 높이 아래로 못 줄어, 스크롤되는 대신
+       목록이 패널 밖으로 흘러나간다 */
+    min-height: 0;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  /* 세로 스택이면 카탈로그에 깔린다 — 우측 카탈로그를 비켜 좌하단 쪽으로 눕힌다 */
+  .deco-controls {
+    top: auto;
+    bottom: 12px;
+    right: calc(var(--deco-catalog-w) + 12px);
+    transform: none;
+    flex-direction: row;
+  }
+
+  /* 로그인·온보딩은 탭바가 없는 대신 세로로 길게 짜여 있다. 그대로 두면 로그인 버튼과
+     약관 문구가 화면 밖으로 잘려 아예 로그인을 못 한다 — 여백·로고를 줄이고,
+     그래도 넘치면 스크롤로 넘긴다. (온보딩은 스와이프 캐러셀이라 인라인 overflow:hidden 유지) */
+  .auth-screen {
+    padding: 20px 32px;
+    overflow-y: auto;
+  }
+  .auth-logo { font-size: 44px; }
+  .auth-title { font-size: 26px; }
+  .auth-actions { margin-bottom: 16px; }
+  .onboarding-slide { gap: 12px; }
+  .onboarding-slide h1 { font-size: 20px; }
+  .onboarding-slide p { font-size: 13px; }
+}

@@ -855,7 +855,7 @@ export default function TankPage() {
 
       {/* 우측 액션 버튼 — 꾸미기/포토/전체화면 모드 중에는 숨김 */}
       {!decorationMode && !photoMode && !immersiveMode && (
-        <div style={{ position: 'absolute', right: 12, bottom: 80, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="tank-actions">
           {[
             {
               icon: '🍖',
@@ -891,17 +891,13 @@ export default function TankPage() {
               active: activeTank?.lightOn ?? false,
             },
           ].map(btn => (
-            <button key={btn.icon} onClick={btn.action} disabled={btn.busy} style={{
+            <button key={btn.icon} className="tank-action-btn" onClick={btn.action} disabled={btn.busy} style={{
               background: btn.active ? 'rgba(77, 208, 225, 0.25)' : 'rgba(0,0,0,0.6)',
-              borderRadius: 11, padding: '7px 10px',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               border: `1px solid ${btn.active ? 'rgba(77, 208, 225, 0.7)' : 'rgba(255,255,255,0.15)'}`,
-              minWidth: 54, color: '#fff',
-              fontSize: 9, whiteSpace: 'pre-line', textAlign: 'center',
               opacity: btn.busy ? 0.5 : 1,
               cursor: btn.busy ? 'wait' : 'pointer',
             }}>
-              <span style={{ fontSize: 20 }}>{btn.icon}</span>
+              <span>{btn.icon}</span>
               {btn.label}
             </button>
           ))}

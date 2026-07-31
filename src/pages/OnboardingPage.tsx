@@ -94,7 +94,8 @@ export default function OnboardingPage() {
           e.stopPropagation();
         }
       }}
-      style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '48px 32px 48px', background: 'var(--color-bg)', userSelect: 'none', touchAction: 'pan-y', overflow: 'hidden' }}
+      className="auth-screen"
+      style={{ alignItems: 'center', justifyContent: 'space-between', userSelect: 'none', touchAction: 'pan-y', overflow: 'hidden' }}
     >
       <div style={{ flex: 1, width: '100%', overflow: 'hidden' }}>
         <div
@@ -107,10 +108,10 @@ export default function OnboardingPage() {
           }}
         >
           {SLIDES.map((s, i) => (
-            <div key={i} style={{ flex: '0 0 100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 24, textAlign: 'center' }}>
-              <div style={{ fontSize: 80 }}>{s.emoji}</div>
-              <h1 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.4, whiteSpace: 'pre-line' }}>{s.title}</h1>
-              <p style={{ fontSize: 16, color: 'var(--color-text-secondary)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{s.subtitle}</p>
+            <div key={i} className="onboarding-slide">
+              <div className="auth-logo">{s.emoji}</div>
+              <h1>{s.title}</h1>
+              <p>{s.subtitle}</p>
             </div>
           ))}
         </div>

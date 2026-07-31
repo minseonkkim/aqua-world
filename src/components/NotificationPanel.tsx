@@ -33,7 +33,9 @@ export default function NotificationPanel({ onClose }: Props) {
       <div style={{
         position: 'absolute',
         top: 'calc(var(--safe-top) + 52px)', right: 12,
-        width: 300, maxHeight: 420,
+        width: 300,
+        // 가로에서는 화면이 낮아 420px 을 그대로 쓰면 탭바를 뚫고 내려간다 (top safe+52 + 여백 12)
+        maxHeight: 'min(420px, calc(var(--content-height) - var(--safe-top) - 64px))',
         background: 'rgba(10,22,40,0.97)',
         border: '1px solid rgba(255,255,255,0.12)',
         borderRadius: 16,

@@ -534,8 +534,8 @@ export default function ShopPage() {
               </button>
             ))}
           </div>
-          {/* 그리드 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {/* 그리드 — 가로에서 카드가 늘어지지 않게 폭에 맞춰 열을 늘린다 (세로에서는 그대로 2열) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
             {decoItems.map(item => {
               const owned = inventory[item.modelId] ?? 0;
               const canAfford = (user?.pearl ?? 0) >= item.price;

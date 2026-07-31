@@ -109,6 +109,9 @@ export default function TutorialOverlay({ step, onAction }: Props) {
           style={{
             width: '100%',
             maxWidth: 360,
+            // 가로에서는 화면이 낮아 카드 아래쪽(다음 단계 버튼)이 잘려 진행이 막힌다
+            maxHeight: '100%',
+            overflowY: 'auto',
             background: 'var(--color-bg-light)',
             borderRadius: 20,
             padding: '28px 24px',
