@@ -3,7 +3,7 @@ import { functions } from './firebase/config';
 import { platformName, isNative } from './platform';
 
 /** 앱 버전 — 릴리스 워크플로우가 package.json 의 version 과 함께 갱신한다(직접 고치지 않는다). */
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 
 export type FeedbackType = 'bug' | 'suggestion' | 'other';
 
