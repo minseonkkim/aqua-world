@@ -46,14 +46,13 @@ export default function DecorationModePanel({
 
   return (
     <>
-      {/* 상단 헤더 — 모드 진입 표시 + 프리셋 토글 + 종료 */}
-      <div style={{
-        position: 'absolute', top: 'calc(var(--safe-top) + 56px)', left: '50%',
-        transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 8,
-        flexWrap: 'nowrap', whiteSpace: 'nowrap', maxWidth: 'calc(100vw - 16px)',
+      {/* 상단 헤더 — 모드 진입 표시 + 프리셋 토글 + 종료.
+          위치는 global.css 의 .deco-header (가로에서는 카탈로그를 뺀 수조 영역 가운데) */}
+      <div className="deco-header" style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        flexWrap: 'nowrap', whiteSpace: 'nowrap',
         background: 'rgba(20, 30, 50, 0.85)', borderRadius: 24, padding: '6px 14px',
         border: '1px solid rgba(77, 208, 225, 0.5)', backdropFilter: 'blur(8px)',
-        zIndex: 50,
       }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: '#4dd0e1', whiteSpace: 'nowrap', flexShrink: 0 }}>🪴 꾸미기 모드</span>
         <button onClick={() => setPresetsOpen(v => !v)} style={{
@@ -70,14 +69,10 @@ export default function DecorationModePanel({
 
       {/* 프리셋 슬롯 패널 */}
       {presetsOpen && (
-        <div style={{
-          position: 'absolute', top: 'calc(var(--safe-top) + 100px)', left: '50%',
-          transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: 6,
+        <div className="deco-presets" style={{
+          display: 'flex', flexDirection: 'column', gap: 6,
           background: 'rgba(10, 22, 40, 0.95)', borderRadius: 12, padding: 10,
-          border: '1px solid rgba(77, 208, 225, 0.4)', minWidth: 260, zIndex: 50,
-          // 가로에서는 화면이 낮아 슬롯 3개가 하단 카탈로그를 뚫고 내려간다
-          maxHeight: 'calc(var(--content-height) - var(--safe-top) - 112px)',
-          overflowY: 'auto',
+          border: '1px solid rgba(77, 208, 225, 0.4)', minWidth: 260,
         }}>
           <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: 2 }}>
             현재 배치를 슬롯에 저장하거나 불러옵니다
@@ -141,15 +136,11 @@ export default function DecorationModePanel({
         </div>
       )}
 
-      {/* 하단 카탈로그 */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0,
-        background: 'rgba(10, 22, 40, 0.95)', borderTop: '1px solid rgba(77, 208, 225, 0.3)',
-        padding: '8px 8px calc(var(--safe-bottom, 0px) + 8px)',
-        zIndex: 50,
-      }}>
+      {/* 카탈로그 — 세로는 하단 가로 바, 가로는 우측 세로 패널.
+          위치·배치는 global.css 의 .deco-catalog (미디어쿼리로 뒤집어야 해서 클래스로 뺐다) */}
+      <div className="deco-catalog">
         {/* 카테고리 탭 */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6 }}>
+        <div className="deco-catalog-tabs">
           {(['all', 'plant', 'rock', 'driftwood', 'ornament'] as CategoryFilter[]).map(c => (
             <button key={c} onClick={() => setFilter(c)} style={{
               background: filter === c ? 'rgba(77, 208, 225, 0.25)' : 'rgba(255,255,255,0.06)',
@@ -161,8 +152,8 @@ export default function DecorationModePanel({
             </button>
           ))}
         </div>
-        {/* 아이템 가로 스크롤 — 보유 수량 표시, 미보유는 상점 안내 */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingTop: 4 }}>
+        {/* 아이템 목록 — 보유 수량 표시, 미보유는 상점 안내 */}
+        <div className="deco-catalog-items">
           {items.map(item => {
             const count = inventory[item.modelId] ?? 0;
             const owned = count > 0;
@@ -170,14 +161,12 @@ export default function DecorationModePanel({
               <button
                 key={item.modelId}
                 onClick={owned ? () => { playSFX('place'); onAdd(item.modelId); } : onShopRedirect}
+                className="deco-item"
                 style={{
-                  flex: '0 0 auto', width: 68, height: 86, position: 'relative',
                   background: owned ? 'rgba(77, 208, 225, 0.08)' : 'rgba(255,255,255,0.04)',
                   border: `1px solid ${owned ? 'rgba(77, 208, 225, 0.35)' : 'rgba(255,255,255,0.08)'}`,
-                  borderRadius: 11, padding: '5px 4px',
                   color: owned ? '#fff' : 'var(--color-text-disabled)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
-                  cursor: 'pointer', opacity: owned ? 1 : 0.7,
+                  opacity: owned ? 1 : 0.7,
                 }}
               >
                 <span style={{ fontSize: 25, lineHeight: 1, filter: owned ? 'none' : 'grayscale(80%)' }}>
