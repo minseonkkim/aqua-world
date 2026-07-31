@@ -141,20 +141,19 @@ export default function BreedingPanel({ fish, costPearl, pearl, onBreed, open, o
         💞 짝짓기
       </button>
 
+      {/* 패널 위치·폭·높이는 global.css 의 .left-panel (가로에서는 버튼 오른쪽으로 펼친다) */}
       {open && (
-        <div style={{
-          position: 'absolute', left: 12, bottom: 80,
-          width: 'min(288px, calc(100vw - 24px))',
+        <div className="left-panel" style={{
+          '--panel-bottom': '80px',
+          '--panel-max': '360px',
+          '--panel-width': '288px',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          // 가로에서는 화면이 낮아 360px 을 그대로 쓰면 위로 삐져나가 잘린다 (bottom 80 + 여백 12)
-          maxHeight: 'min(360px, calc(var(--content-height) - 92px))',
           overflowY: 'auto',
-          zIndex: 70,
-        }}>
+        } as React.CSSProperties}>
           <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 14 }}>💞 짝짓기</div>
           <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 10, lineHeight: 1.4 }}>
             같은 종 성어 2마리를 골라 알을 얻어요. 부모는 사라지지 않고 잠시 쉬어요.

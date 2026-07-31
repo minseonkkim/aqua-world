@@ -144,6 +144,20 @@ img { display: block; max-width: 100%; }
   flex-direction: column;
   gap: 8px;
 }
+/* ── 좌하단 패널 (인큐베이터·보관함·짝짓기) ── */
+/* 세로에서는 짝을 이루는 버튼 바로 위로 펼친다. 위치·높이를 인라인이 아니라 여기서 잡는 건
+   가로에서 미디어쿼리로 뒤집어야 하기 때문 — 인라인 스타일은 미디어쿼리가 못 이긴다.
+   --panel-bottom: 버튼 바로 위 y 좌표, --panel-max: 세로에서의 높이 상한, --panel-width: 폭. */
+.left-panel {
+  position: absolute;
+  left: 12px;
+  bottom: var(--panel-bottom);
+  width: min(var(--panel-width, 280px), calc(100vw - 24px));
+  /* 위로 삐져나가 잘리지 않게 남은 높이로 제한 (버튼 위 여백 12px) */
+  max-height: min(var(--panel-max), calc(var(--content-height) - var(--panel-bottom) - 12px));
+  z-index: 70;
+}
+
 .tank-action-btn {
   display: flex;
   flex-direction: column;
@@ -244,6 +258,17 @@ img { display: block; max-width: 100%; }
     flex-direction: row;
     right: 68px;
     bottom: 12px;
+  }
+
+  /* 좌하단 패널을 버튼 위로 펼치면 남는 높이가 100~200px 뿐이라 목록이 두어 줄로 눌려
+     사실상 못 쓴다 — 남아도는 가로 폭으로 옮겨 버튼 오른쪽 옆에 세우고 높이를 다 쓴다.
+     left 112px 은 버튼 열에서 가장 넓은 '💞 짝짓기'(약 90px) 오른쪽에 앉히는 값.
+     max-height 는 상단 HUD(재화 pill·🔔) 를 가리지 않도록 그만큼 뺀다. */
+  .left-panel {
+    left: 112px;
+    bottom: 12px;
+    width: min(var(--panel-width, 280px), calc(100vw - 124px));
+    max-height: min(var(--panel-max), calc(var(--content-height) - var(--safe-top) - 52px));
   }
 
   /* 세로 스택이면 하단 데코 카탈로그(약 145px)에 깔린다 — 카탈로그 바로 위에 눕힌다 */

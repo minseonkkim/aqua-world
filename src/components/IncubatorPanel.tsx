@@ -317,21 +317,19 @@ export default function IncubatorPanel({ onCollect, open, onOpenChange }: Props)
         🥚 {inventory.length}
       </button>
 
+      {/* 패널 위치·폭·높이는 global.css 의 .left-panel — 가로에서는 버튼 위가 아니라
+          버튼 오른쪽으로 펼쳐야 해서 미디어쿼리가 이길 수 있는 클래스로 뺐다. */}
       {open && (
-        <div style={{
-          position: 'absolute', left: 12, bottom: 130,
-          // 좁은 화면에서 패널이 오른쪽으로 삐져나가지 않게 (left 12 + right 12 여백 확보)
-          width: 'min(280px, calc(100vw - 24px))',
+        <div className="left-panel" style={{
+          '--panel-bottom': '130px',
+          '--panel-max': '320px',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          // 가로에서는 화면이 낮아 320px 을 그대로 쓰면 위로 삐져나가 잘린다 (bottom 130 + 여백 12)
-          maxHeight: 'min(320px, calc(var(--content-height) - 142px))',
           overflowY: 'auto',
-          zIndex: 70,
-        }}>
+        } as React.CSSProperties}>
           <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 14 }}>
             🥚 인큐베이터 ({inventory.length})
           </div>

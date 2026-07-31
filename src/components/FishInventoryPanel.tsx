@@ -125,20 +125,18 @@ export default function FishInventoryPanel({ onPlace, onExpand, tankFishCount, c
         📦 {fishInventory.length}
       </button>
 
+      {/* 패널 위치·폭·높이는 global.css 의 .left-panel (가로에서는 버튼 오른쪽으로 펼친다) */}
       {open && (
-        <div style={{
-          position: 'absolute', left: 12, bottom: 180,
-          width: 'min(280px, calc(100vw - 24px))',
+        <div className="left-panel" style={{
+          '--panel-bottom': '180px',
+          '--panel-max': '380px',
           background: 'rgba(10,22,40,0.95)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
           padding: 14,
           backdropFilter: 'blur(12px)',
-          // 가로에서는 화면이 낮아 380px 을 그대로 쓰면 위로 삐져나가 잘린다 (bottom 180 + 여백 12)
-          maxHeight: 'min(380px, calc(var(--content-height) - 192px))',
           display: 'flex', flexDirection: 'column',
-          zIndex: 70,
-        }}>
+        } as React.CSSProperties}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>📦 보관함 ({fishInventory.length})</div>
             <div style={{
