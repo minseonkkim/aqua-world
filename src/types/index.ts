@@ -115,8 +115,10 @@ export interface User {
   tutorialStep?: number;
   /** 데코 인벤토리: modelId → 보유 수량 */
   decorationInventory?: Record<string, number>;
-  /** 청구 완료한 도감 마일스톤(%) 목록 */
+  /** 청구 완료한 도감 마일스톤(%) 목록 — 1페이지(시작의 바다) 트랙 */
   claimedCompendiumMilestones?: number[];
+  /** 청구 완료한 도감 마일스톤(%) 목록 — 2페이지(미지의 바다) 트랙 */
+  claimedCompendiumMilestones2?: number[];
   /** 광고 보상 일일 카운터: type → { YYYYMMDD: 사용횟수 }. 남은 횟수 표시에 사용. */
   adWatchCounters?: Record<string, Record<string, number>>;
 }

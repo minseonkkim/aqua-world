@@ -126,7 +126,8 @@ export interface DailyRewardPayload {
 }
 export const claimDailyReward = call<void, DailyRewardPayload>('claimDailyReward');
 
-export const claimMilestone = call<{ pct: number }, { user: User; reward: unknown }>(
+// page: 도감 페이지(1-based). 미지정 시 서버가 1페이지(시작의 바다)로 처리 (구버전 호환)
+export const claimMilestone = call<{ pct: number; page?: number }, { user: User; reward: unknown }>(
   'claimMilestone',
 );
 

@@ -91,10 +91,11 @@ function computeNextHatchAt(user) {
   return next;
 }
 
-function rollSpecies(tier) {
+function rollSpecies(tier, collectedSpecies) {
   const rarityPool = G.RARITY_BY_EGG[tier];
   const rarity = rarityPool[Math.floor(Math.random() * rarityPool.length)];
-  const pool = G.SPECIES_BY_RARITY[rarity];
+  // 2세대 종은 1세대 도감 완성 전에는 나오지 않는다
+  const pool = G.getGachaPool(rarity, collectedSpecies);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -104,10 +105,11 @@ function speciesRarity(speciesId) {
 }
 
 /** 번식 알 부화 종 추첨: 기본은 부모와 같은 종, 낮은 확률로 한 단계 상위 등급 풀에서. */
-function rollBreedingSpecies(parentSpeciesId) {
+function rollBreedingSpecies(parentSpeciesId, collectedSpecies) {
   const upgraded = G.NEXT_RARITY[speciesRarity(parentSpeciesId)];
   if (upgraded && Math.random() < G.BREED_UPGRADE_RATE) {
-    const pool = G.SPECIES_BY_RARITY[upgraded];
+    // 상위 등급 풀도 2세대 해금 여부를 따른다
+    const pool = G.getGachaPool(upgraded, collectedSpecies);
     if (pool && pool.length) return pool[Math.floor(Math.random() * pool.length)];
   }
   return parentSpeciesId;
@@ -433,8 +435,8 @@ exports.hatchEgg = onCall(async (request) => {
     // ★ 종 추첨은 반드시 서버에서
     // 번식 알은 부모 종(낮은 확률로 상위 등급), 일반 알은 tier 풀에서 추첨
     const speciesId = egg.breedSpeciesId
-      ? rollBreedingSpecies(egg.breedSpeciesId)
-      : rollSpecies(egg.tier);
+      ? rollBreedingSpecies(egg.breedSpeciesId, user.collectedSpecies)
+      : rollSpecies(egg.tier, user.collectedSpecies);
     const species = G.SPECIES[speciesId];
     const now = Date.now();
     const fish = {
@@ -1035,22 +1037,31 @@ exports.purchaseFeedTicket = onCall(async (request) => {
 exports.claimMilestone = onCall(async (request) => {
   const uid = requireAuth(request);
   const pct = request.data && request.data.pct;
-  const reward = G.COMPENDIUM_REWARDS[pct];
+  // 도감 페이지(1-based). 구버전 클라는 page 없이 호출 → 1페이지(시작의 바다).
+  // 페이지별로 보상 테이블·청구 기록·진행도 계산이 모두 독립이다.
+  const page = (request.data && request.data.page) || 1;
+  if (page !== 1 && page !== 2) throw new HttpsError("invalid-argument", "잘못된 페이지");
+  const rewards = page === 2 ? G.COMPENDIUM_REWARDS_PAGE2 : G.COMPENDIUM_REWARDS;
+  const reward = rewards[pct];
   if (!reward) throw new HttpsError("invalid-argument", "잘못된 마일스톤");
+  const claimedField = page === 2 ? "claimedCompendiumMilestones2" : "claimedCompendiumMilestones";
+  const pageSpeciesIds = page === 2 ? G.GEN2_SPECIES_IDS : G.GEN1_SPECIES_IDS;
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef(uid));
     if (!snap.exists) throw new HttpsError("not-found", "유저 없음");
     const user = snap.data();
-    const claimed = user.claimedCompendiumMilestones || [];
+    const claimed = user[claimedField] || [];
     if (claimed.includes(pct)) throw new HttpsError("failed-precondition", "이미 청구함");
 
-    // ★ 진행도를 서버 데이터로 재계산
-    const actualPct = Math.floor(((user.collectedSpecies || []).length / G.SPECIES_COUNT) * 100);
+    // ★ 해당 페이지 진행도를 서버 데이터로 재계산
+    const collected = user.collectedSpecies || [];
+    const pageCollected = pageSpeciesIds.filter((id) => collected.includes(id)).length;
+    const actualPct = Math.floor((pageCollected / pageSpeciesIds.length) * 100);
     if (actualPct < pct) throw new HttpsError("failed-precondition", "조건 미달");
 
     applyReward(user, reward);
-    user.claimedCompendiumMilestones = [...claimed, pct];
+    user[claimedField] = [...claimed, pct];
     tx.set(userRef(uid), user);
     return { user, reward };
   });

@@ -218,6 +218,27 @@ export const COMPENDIUM_REWARDS: Record<number, CompendiumReward> = {
   100: { type: 'egg', tier: 'legendary' },
 };
 
+// 2페이지(미지의 바다) 전용 마일스톤 보상 — 후반 콘텐츠라 1페이지보다 상향.
+// 서버 gameData.js COMPENDIUM_REWARDS_PAGE2 와 일치시킬 것.
+export const COMPENDIUM_REWARDS_PAGE2: Record<number, CompendiumReward> = {
+  10: { type: 'pearl', amount: 200 },
+  20: { type: 'egg', tier: 'rare' },
+  30: { type: 'pearl', amount: 400 },
+  40: { type: 'star_coral', amount: 30 },
+  50: { type: 'egg', tier: 'rare' },
+  60: { type: 'pearl', amount: 600 },
+  70: { type: 'star_coral', amount: 60 },
+  80: { type: 'egg', tier: 'rare' },
+  90: { type: 'pearl', amount: 1000 },
+  100: { type: 'egg', tier: 'legendary' },
+};
+
+/** 도감 페이지 인덱스(0-based) → 마일스톤 보상 테이블 */
+export const COMPENDIUM_REWARDS_BY_PAGE: Record<number, CompendiumReward>[] = [
+  COMPENDIUM_REWARDS,
+  COMPENDIUM_REWARDS_PAGE2,
+];
+
 // ==================== 가챠: 알 등급별 희귀도 풀 ====================
 
 export const RARITY_BY_EGG: Record<EggTier, FishRarity[]> = {
@@ -226,12 +247,47 @@ export const RARITY_BY_EGG: Record<EggTier, FishRarity[]> = {
   legendary: ['epic','epic','epic','epic','epic','legendary','legendary','legendary','legendary','legendary'],
 };
 
-export const SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
+// ==================== 종 세대(도감 페이지) ====================
+// 1세대: 출시 10종 (도감 1페이지). 2세대: v1.1.0 신규 10종 (도감 2페이지).
+// 2세대는 1세대 도감을 전부 모아야 해금된다 — 해금 전에는 가챠·번식 풀에서 제외.
+// 서버 functions/gameData.js 와 일치시킬 것.
+
+export const GEN1_SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
   common:    ['clownfish', 'guppy', 'goldfish', 'seahorse', 'zebrafish'],
   rare:      ['betta', 'angelfish', 'mandarin_fish'],
   epic:      ['leafy_sea_dragon'],
   legendary: ['coelacanth'],
 };
+
+export const GEN2_SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
+  common:    ['neon_tetra', 'butterflyfish', 'pufferfish'],
+  rare:      ['blue_tang', 'discus', 'koi'],
+  epic:      ['lionfish', 'anglerfish'],
+  legendary: ['arowana', 'oarfish'],
+};
+
+/** 전체 종 풀 — rarity 역추적 등 조회용. 가챠 추첨에는 getGachaPool 을 쓸 것. */
+export const SPECIES_BY_RARITY: Record<FishRarity, string[]> = {
+  common:    [...GEN1_SPECIES_BY_RARITY.common,    ...GEN2_SPECIES_BY_RARITY.common],
+  rare:      [...GEN1_SPECIES_BY_RARITY.rare,      ...GEN2_SPECIES_BY_RARITY.rare],
+  epic:      [...GEN1_SPECIES_BY_RARITY.epic,      ...GEN2_SPECIES_BY_RARITY.epic],
+  legendary: [...GEN1_SPECIES_BY_RARITY.legendary, ...GEN2_SPECIES_BY_RARITY.legendary],
+};
+
+export const GEN1_SPECIES_IDS = Object.values(GEN1_SPECIES_BY_RARITY).flat();
+export const GEN2_SPECIES_IDS = Object.values(GEN2_SPECIES_BY_RARITY).flat();
+
+/** 2세대 해금 여부 — 1세대(출시 10종) 도감을 전부 모았는가 */
+export function isGen2Unlocked(collectedSpecies: string[]): boolean {
+  return GEN1_SPECIES_IDS.every(id => collectedSpecies.includes(id));
+}
+
+/** 가챠 추첨 풀: 2세대 해금 전에는 1세대만 나온다 */
+export function getGachaPool(rarity: FishRarity, collectedSpecies: string[]): string[] {
+  return isGen2Unlocked(collectedSpecies)
+    ? SPECIES_BY_RARITY[rarity]
+    : GEN1_SPECIES_BY_RARITY[rarity];
+}
 
 // ==================== 번식(짝짓기) ====================
 // 같은 종 성어 2마리를 짝지어 알을 얻는다. 부모는 사라지지 않고 각자 쿨다운에 들어가며,
@@ -274,12 +330,13 @@ export function getSpeciesRarity(speciesId: string): FishRarity {
 /**
  * 번식 알의 부화 종을 추첨한다. 기본은 부모와 같은 종이고,
  * BREED_UPGRADE_RATE 확률로 한 단계 상위 등급 풀에서 뽑는다(상위 등급이 있을 때만).
+ * 상위 등급 풀도 2세대 해금 여부를 따른다(해금 전에는 1세대만).
  * 클라(게스트)·서버 모두 동일 규칙을 사용한다.
  */
-export function rollBreedingSpecies(parentSpeciesId: string): string {
+export function rollBreedingSpecies(parentSpeciesId: string, collectedSpecies: string[]): string {
   const upgraded = NEXT_RARITY[getSpeciesRarity(parentSpeciesId)];
   if (upgraded && Math.random() < BREED_UPGRADE_RATE) {
-    const pool = SPECIES_BY_RARITY[upgraded];
+    const pool = getGachaPool(upgraded, collectedSpecies);
     if (pool && pool.length) return pool[Math.floor(Math.random() * pool.length)];
   }
   return parentSpeciesId;

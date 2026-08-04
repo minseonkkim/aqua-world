@@ -23,19 +23,31 @@ function getTankCapacity(capacityLevel) {
 }
 
 // ─── 물고기 종 (id → 메타) ───
+// gen 1: 출시 10종 (도감 1페이지), gen 2: v1.1.0 신규 10종 (도감 2페이지).
+// 2세대는 1세대 도감을 전부 모아야 해금 — 해금 전에는 가챠·번식 풀에서 제외.
 const SPECIES = {
-  clownfish: { name: "클라운피시", rarity: "common" },
-  guppy: { name: "구피", rarity: "common" },
-  goldfish: { name: "금붕어", rarity: "common" },
-  seahorse: { name: "해마", rarity: "common" },
-  zebrafish: { name: "제브라피시", rarity: "common" },
-  betta: { name: "베타", rarity: "rare" },
-  angelfish: { name: "엔젤피시", rarity: "rare" },
-  mandarin_fish: { name: "만다린피시", rarity: "rare" },
-  leafy_sea_dragon: { name: "바다용", rarity: "epic" },
-  coelacanth: { name: "실러캔스", rarity: "legendary" },
+  clownfish: { name: "클라운피시", rarity: "common", gen: 1 },
+  guppy: { name: "구피", rarity: "common", gen: 1 },
+  goldfish: { name: "금붕어", rarity: "common", gen: 1 },
+  seahorse: { name: "해마", rarity: "common", gen: 1 },
+  zebrafish: { name: "제브라피시", rarity: "common", gen: 1 },
+  betta: { name: "베타", rarity: "rare", gen: 1 },
+  angelfish: { name: "엔젤피시", rarity: "rare", gen: 1 },
+  mandarin_fish: { name: "만다린피시", rarity: "rare", gen: 1 },
+  leafy_sea_dragon: { name: "바다용", rarity: "epic", gen: 1 },
+  coelacanth: { name: "실러캔스", rarity: "legendary", gen: 1 },
+  neon_tetra: { name: "네온테트라", rarity: "common", gen: 2 },
+  butterflyfish: { name: "나비고기", rarity: "common", gen: 2 },
+  pufferfish: { name: "복어", rarity: "common", gen: 2 },
+  blue_tang: { name: "블루탱", rarity: "rare", gen: 2 },
+  discus: { name: "디스커스", rarity: "rare", gen: 2 },
+  koi: { name: "코이", rarity: "rare", gen: 2 },
+  lionfish: { name: "라이언피시", rarity: "epic", gen: 2 },
+  anglerfish: { name: "초롱아귀", rarity: "epic", gen: 2 },
+  arowana: { name: "아로와나", rarity: "legendary", gen: 2 },
+  oarfish: { name: "산갈치", rarity: "legendary", gen: 2 },
 };
-const SPECIES_COUNT = Object.keys(SPECIES).length; // 도감 총 종 수 (10)
+const SPECIES_COUNT = Object.keys(SPECIES).length; // 도감 총 종 수 (20)
 
 // ─── 가챠: 알 등급별 희귀도 풀 ───
 const RARITY_BY_EGG = {
@@ -43,12 +55,39 @@ const RARITY_BY_EGG = {
   rare: ["rare", "rare", "rare", "rare", "rare", "rare", "epic", "epic", "epic", "legendary"],
   legendary: ["epic", "epic", "epic", "epic", "epic", "legendary", "legendary", "legendary", "legendary", "legendary"],
 };
-const SPECIES_BY_RARITY = {
-  common: ["clownfish", "guppy", "goldfish", "seahorse", "zebrafish"],
-  rare: ["betta", "angelfish", "mandarin_fish"],
-  epic: ["leafy_sea_dragon"],
-  legendary: ["coelacanth"],
+
+function speciesIdsBy(rarity, gen) {
+  return Object.keys(SPECIES).filter(
+    (id) => SPECIES[id].rarity === rarity && (gen === undefined || SPECIES[id].gen === gen),
+  );
+}
+
+// 1세대 전용 풀(해금 전) / 전체 풀(해금 후)
+const GEN1_SPECIES_BY_RARITY = {
+  common: speciesIdsBy("common", 1),
+  rare: speciesIdsBy("rare", 1),
+  epic: speciesIdsBy("epic", 1),
+  legendary: speciesIdsBy("legendary", 1),
 };
+const SPECIES_BY_RARITY = {
+  common: speciesIdsBy("common"),
+  rare: speciesIdsBy("rare"),
+  epic: speciesIdsBy("epic"),
+  legendary: speciesIdsBy("legendary"),
+};
+const GEN1_SPECIES_IDS = Object.keys(SPECIES).filter((id) => SPECIES[id].gen === 1);
+const GEN2_SPECIES_IDS = Object.keys(SPECIES).filter((id) => SPECIES[id].gen === 2);
+
+/** 2세대 해금 여부 — 1세대(출시 10종) 도감을 전부 모았는가 */
+function isGen2Unlocked(collectedSpecies) {
+  const collected = collectedSpecies || [];
+  return GEN1_SPECIES_IDS.every((id) => collected.includes(id));
+}
+
+/** 가챠 추첨 풀: 2세대 해금 전에는 1세대만 나온다 (클라 src/constants getGachaPool 과 일치) */
+function getGachaPool(rarity, collectedSpecies) {
+  return isGen2Unlocked(collectedSpecies) ? SPECIES_BY_RARITY[rarity] : GEN1_SPECIES_BY_RARITY[rarity];
+}
 
 // ─── 번식(짝짓기) ───
 // 같은 종 성어 2마리로 번식 알을 얻는다. 부모는 사라지지 않고 각자 쿨다운에 들어간다.
@@ -137,6 +176,9 @@ const PEARL_PACKAGES = {
 // 영수증 검증용 패키지명은 결제 경로를 걷어내면서 함께 제거했다.
 
 // ─── 도감 마일스톤 보상 ───
+// 페이지(바다)별 독립 트랙: COMPENDIUM_REWARDS = 1페이지(시작의 바다),
+// COMPENDIUM_REWARDS_PAGE2 = 2페이지(미지의 바다, 후반 콘텐츠라 상향).
+// 청구 기록도 페이지별 분리: claimedCompendiumMilestones / claimedCompendiumMilestones2.
 const COMPENDIUM_REWARDS = {
   10: { type: "pearl", amount: 100 },
   20: { type: "egg", tier: "basic" },
@@ -147,6 +189,18 @@ const COMPENDIUM_REWARDS = {
   70: { type: "star_coral", amount: 50 },
   80: { type: "egg", tier: "rare" },
   90: { type: "pearl", amount: 500 },
+  100: { type: "egg", tier: "legendary" },
+};
+const COMPENDIUM_REWARDS_PAGE2 = {
+  10: { type: "pearl", amount: 200 },
+  20: { type: "egg", tier: "rare" },
+  30: { type: "pearl", amount: 400 },
+  40: { type: "star_coral", amount: 30 },
+  50: { type: "egg", tier: "rare" },
+  60: { type: "pearl", amount: 600 },
+  70: { type: "star_coral", amount: 60 },
+  80: { type: "egg", tier: "rare" },
+  90: { type: "pearl", amount: 1000 },
   100: { type: "egg", tier: "legendary" },
 };
 
@@ -173,6 +227,11 @@ module.exports = {
   SPECIES_COUNT,
   RARITY_BY_EGG,
   SPECIES_BY_RARITY,
+  GEN1_SPECIES_BY_RARITY,
+  GEN1_SPECIES_IDS,
+  GEN2_SPECIES_IDS,
+  isGen2Unlocked,
+  getGachaPool,
   BREEDABLE_STAGES,
   BREED_COST_PEARL,
   BREED_COOLDOWN_SECONDS,
@@ -195,5 +254,6 @@ module.exports = {
   DAILY_LOGIN_REWARDS,
   PEARL_PACKAGES,
   COMPENDIUM_REWARDS,
+  COMPENDIUM_REWARDS_PAGE2,
   DECORATION_PRICES,
 };
