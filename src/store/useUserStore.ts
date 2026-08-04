@@ -4,13 +4,13 @@ import { User, Egg, EggTier, FishRarity, Fish, Tank } from '../types';
 import { serverNow } from '../services/clock';
 import { isNewDayKst } from '../utils/day';
 import {
-  COMPENDIUM_REWARDS,
+  COMPENDIUM_REWARDS_BY_PAGE,
   CompendiumReward,
   CURRENCY,
   DAILY_LOGIN_REWARDS,
   LEVEL_EXP_TABLE,
   RARITY_BY_EGG,
-  SPECIES_BY_RARITY,
+  getGachaPool,
   computeFeedMaxPerDay,
   BREED_EGG_TIER_BY_RARITY,
   EGG_HATCH_TIME,
@@ -86,14 +86,15 @@ interface UserState {
   /** 인벤토리에서 1개 소비 (배치). 보유 0이면 false */
   consumeDecorationInventory: (modelId: string) => boolean;
 
-  /** 마일스톤(%) 청구. 조건 미달이면 null, 성공 시 지급된 보상 반환 */
-  claimCompendiumMilestone: (pct: number, currentCollectedCount: number, totalSpecies: number) => CompendiumReward | null;
+  /** 도감 페이지별 마일스톤(%) 청구. 조건 미달이면 null, 성공 시 지급된 보상 반환 */
+  claimCompendiumMilestone: (pageIndex: number, pct: number, pageCollectedCount: number, pageTotalSpecies: number) => CompendiumReward | null;
 }
 
-function rollSpecies(tier: EggTier): string {
+function rollSpecies(tier: EggTier, collectedSpecies: string[]): string {
   const rarityPool = RARITY_BY_EGG[tier];
   const rarity: FishRarity = rarityPool[Math.floor(Math.random() * rarityPool.length)];
-  const pool = SPECIES_BY_RARITY[rarity];
+  // 2세대 종은 1세대 도감 완성 전에는 나오지 않는다
+  const pool = getGachaPool(rarity, collectedSpecies);
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -222,8 +223,8 @@ export const useUserStore = create<UserState>()(
 
         // 번식 알은 부모 종(낮은 확률로 상위 등급)으로, 일반 알은 tier 풀에서 추첨
         const speciesId = egg.breedSpeciesId
-          ? rollBreedingSpecies(egg.breedSpeciesId)
-          : rollSpecies(egg.tier);
+          ? rollBreedingSpecies(egg.breedSpeciesId, user.collectedSpecies)
+          : rollSpecies(egg.tier, user.collectedSpecies);
         set({ user: { ...user, inventory: user.inventory.filter(e => e.id !== eggId) } });
         return speciesId;
       },
@@ -372,15 +373,18 @@ export const useUserStore = create<UserState>()(
         return true;
       },
 
-      claimCompendiumMilestone: (pct, collectedCount, totalSpecies) => {
+      claimCompendiumMilestone: (pageIndex, pct, pageCollectedCount, pageTotalSpecies) => {
         const { user, addPearl, addStarCoral, addEggToInventory } = get();
         if (!user) return null;
-        const reward = COMPENDIUM_REWARDS[pct];
+        const reward = COMPENDIUM_REWARDS_BY_PAGE[pageIndex]?.[pct];
         if (!reward) return null;
-        const claimed = user.claimedCompendiumMilestones ?? [];
+        // 페이지별로 독립된 청구 기록을 쓴다 — 기존 필드는 1페이지(시작의 바다) 트랙
+        const claimed = (pageIndex === 1
+          ? user.claimedCompendiumMilestones2
+          : user.claimedCompendiumMilestones) ?? [];
         if (claimed.includes(pct)) return null;
-        // 조건 검증: 현재 진행도가 마일스톤 이상이어야 함
-        const actualPct = Math.floor((collectedCount / totalSpecies) * 100);
+        // 조건 검증: 해당 페이지 진행도가 마일스톤 이상이어야 함
+        const actualPct = Math.floor((pageCollectedCount / pageTotalSpecies) * 100);
         if (actualPct < pct) return null;
 
         if (reward.type === 'pearl') addPearl(reward.amount);
@@ -389,7 +393,12 @@ export const useUserStore = create<UserState>()(
 
         set(state => ({
           user: state.user
-            ? { ...state.user, claimedCompendiumMilestones: [...claimed, pct] }
+            ? {
+                ...state.user,
+                ...(pageIndex === 1
+                  ? { claimedCompendiumMilestones2: [...claimed, pct] }
+                  : { claimedCompendiumMilestones: [...claimed, pct] }),
+              }
             : null,
         }));
         return reward;

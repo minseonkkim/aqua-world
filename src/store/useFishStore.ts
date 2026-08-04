@@ -7,8 +7,8 @@ interface FishStoreState {
   getSpeciesById: (id: string) => FishSpecies | undefined;
 }
 
-// MVP 10종 fish species 데이터
-const MVP_FISH_SPECIES: FishSpecies[] = [
+// 1세대(출시) 10종 — 도감 1페이지
+const GEN1_FISH_SPECIES: FishSpecies[] = [
   {
     id: 'clownfish',
     name: '클라운피시',
@@ -121,8 +121,125 @@ const MVP_FISH_SPECIES: FishSpecies[] = [
   },
 ];
 
+// 2세대(v1.1.0) 10종 — 도감 2페이지. 1세대 도감 완성 시 해금 (constants isGen2Unlocked)
+const GEN2_FISH_SPECIES: FishSpecies[] = [
+  {
+    id: 'neon_tetra',
+    name: '네온테트라',
+    scientificName: 'Paracheirodon innesi',
+    rarity: 'common',
+    habitat: '아마존 담수',
+    description: '네온처럼 빛나는 파란 줄과 붉은 꼬리가 매력적인 소형어. 무리 지어 헤엄치는 모습이 아름답다.',
+    modelPath: 'models/fish/neon_tetra.glb',
+    thumbnailPath: 'images/fish/neon_tetra.png',
+    baseGrowthTime: 200,
+  },
+  {
+    id: 'butterflyfish',
+    name: '나비고기',
+    scientificName: 'Chaetodontidae',
+    rarity: 'common',
+    habitat: '산호초',
+    description: '나비처럼 나풀거리며 헤엄치는 노란 물고기. 꼬리 쪽 가짜 눈으로 천적을 속인다.',
+    modelPath: 'models/fish/butterflyfish.glb',
+    thumbnailPath: 'images/fish/butterflyfish.png',
+    baseGrowthTime: 300,
+  },
+  {
+    id: 'pufferfish',
+    name: '복어',
+    scientificName: 'Tetraodontidae',
+    rarity: 'common',
+    habitat: '연안',
+    description: '위험을 느끼면 몸을 풍선처럼 부풀리는 물고기. 동글동글한 몸매가 사랑스럽다.',
+    modelPath: 'models/fish/pufferfish.glb',
+    thumbnailPath: 'images/fish/pufferfish.png',
+    baseGrowthTime: 360,
+  },
+  {
+    id: 'blue_tang',
+    name: '블루탱',
+    scientificName: 'Paracanthurus hepatus',
+    rarity: 'rare',
+    habitat: '산호초',
+    description: '선명한 파란 몸과 노란 꼬리의 대비가 아름다운 어종. 영화 주인공으로도 유명하다.',
+    modelPath: 'models/fish/blue_tang.glb',
+    thumbnailPath: 'images/fish/blue_tang.png',
+    baseGrowthTime: 600,
+  },
+  {
+    id: 'discus',
+    name: '디스커스',
+    scientificName: 'Symphysodon',
+    rarity: 'rare',
+    habitat: '아마존',
+    description: '원반 모양의 몸에 물결무늬가 흐르는 열대어의 제왕. 부모가 새끼에게 몸의 점액을 먹인다.',
+    modelPath: 'models/fish/discus.glb',
+    thumbnailPath: 'images/fish/discus.png',
+    baseGrowthTime: 720,
+  },
+  {
+    id: 'koi',
+    name: '코이',
+    scientificName: 'Cyprinus rubrofuscus',
+    rarity: 'rare',
+    habitat: '담수',
+    description: '홍백의 무늬가 한 마리마다 다른 비단잉어. 환경에 따라 크기가 달라지는 것으로 유명하다.',
+    modelPath: 'models/fish/koi.glb',
+    thumbnailPath: 'images/fish/koi.png',
+    baseGrowthTime: 900,
+  },
+  {
+    id: 'lionfish',
+    name: '라이언피시',
+    scientificName: 'Pterois volitans',
+    rarity: 'epic',
+    habitat: '산호초',
+    description: '사자 갈기처럼 펼쳐진 독가시 지느러미를 가진 화려한 포식자. 아름답지만 만지면 위험하다.',
+    modelPath: 'models/fish/lionfish.glb',
+    thumbnailPath: 'images/fish/lionfish.png',
+    baseGrowthTime: 1800,
+  },
+  {
+    id: 'anglerfish',
+    name: '초롱아귀',
+    scientificName: 'Melanocetus johnsonii',
+    rarity: 'epic',
+    habitat: '심해',
+    description: '이마의 발광 미끼로 먹잇감을 유인하는 심해의 사냥꾼. 어둠 속에서 초롱불처럼 빛난다.',
+    modelPath: 'models/fish/anglerfish.glb',
+    thumbnailPath: 'images/fish/anglerfish.png',
+    baseGrowthTime: 2400,
+  },
+  {
+    id: 'arowana',
+    name: '아로와나',
+    scientificName: 'Scleropages formosus',
+    rarity: 'legendary',
+    habitat: '동남아 담수',
+    description: '용을 닮은 금빛 비늘과 수염 때문에 행운을 부르는 물고기로 불린다. 1억 년을 살아온 고대 어종.',
+    modelPath: 'models/fish/arowana.glb',
+    thumbnailPath: 'images/fish/arowana.png',
+    baseGrowthTime: 7200,
+  },
+  {
+    id: 'oarfish',
+    name: '산갈치',
+    scientificName: 'Regalecus glesne',
+    rarity: 'legendary',
+    habitat: '심해',
+    description: '붉은 관을 쓴 은빛 리본 같은 심해어. 깊은 바다의 전령이라 불리는 신비로운 존재.',
+    modelPath: 'models/fish/oarfish.glb',
+    thumbnailPath: 'images/fish/oarfish.png',
+    baseGrowthTime: 7200,
+  },
+];
+
+/** 도감 페이지 구성: [0]=1세대, [1]=2세대 */
+export const FISH_SPECIES_PAGES: FishSpecies[][] = [GEN1_FISH_SPECIES, GEN2_FISH_SPECIES];
+
 export const useFishStore = create<FishStoreState>((set, get) => ({
-  allSpecies: MVP_FISH_SPECIES,
+  allSpecies: [...GEN1_FISH_SPECIES, ...GEN2_FISH_SPECIES],
 
   setAllSpecies: species => set({ allSpecies: species }),
 

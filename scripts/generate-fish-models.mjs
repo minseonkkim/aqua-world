@@ -350,6 +350,14 @@ function buildGenericFish(preset) {
     });
   });
 
+  // free-form ellipsoid accents — horizontal stripes, back patches, barbels 등
+  // 세로 밴드(stripes)/측면 스팟(spots)으로 표현 못 하는 장식용
+  (preset.ellipses || []).forEach((e, i) => {
+    parts.push({ name: `ellipse${i}`, color: hex(e.color),
+      geom: transformGeom(sphere(e.length, e.height, e.width, 10, 16),
+        M.translate(e.x, e.y, e.z ?? 0)) });
+  });
+
   // dorsal fin (top)
   if (preset.dorsal) {
     const d = preset.dorsal;
@@ -588,6 +596,198 @@ const PRESETS = {
     pelvic:   { x: -0.05, y: -0.30, width: 0.12, length: 0.22 },
     eye:      { x: 0.50, y: 0.10, size: 0.07, z: 0.28 },
   },
+
+  // ==================== v1.1.0 신규 10종 ====================
+
+  neon_tetra: {
+    length: 0.85, maxHeight: 0.16, maxWidth: 0.11,
+    bodyColor: '#c9d6e0', finColor: '#b8c4cf',
+    sideProfile: torpedoSide(0.16, 0.35),
+    topProfile:  torpedoSide(0.11, 0.35),
+    // 시그니처: 네온 블루 가로 스트라이프 + 꼬리쪽 빨간 스트라이프
+    // 몸을 관통하는 큰 타원 대신 표면에 밀착하는 좌우 한 쌍 — 법선이 카메라를 향해 조명을 제대로 받는다
+    ellipses: [
+      { x: 0.02,  y: 0.04,  z: 0.105,  length: 0.22, height: 0.035, width: 0.02,  color: '#00c3ff' },
+      { x: 0.02,  y: 0.04,  z: -0.105, length: 0.22, height: 0.035, width: 0.02,  color: '#00c3ff' },
+      { x: -0.26, y: -0.02, z: 0.048,  length: 0.16, height: 0.045, width: 0.015, color: '#ff2e4d' },
+      { x: -0.26, y: -0.02, z: -0.048, length: 0.16, height: 0.045, width: 0.015, color: '#ff2e4d' },
+    ],
+    dorsal:   { length: 0.20, height: 0.09, x: -0.08, attach: 0.15 },
+    anal:     { length: 0.16, height: 0.07, x: -0.16, attach: -0.13 },
+    tail:     { spread: 0.24, height: 0.16, fork: 0.30, baseWidth: 0.04 },
+    pectoral: { x: 0.16, y: -0.03, width: 0.07, length: 0.12 },
+    eye:      { x: 0.32, y: 0.03, size: 0.045 },
+  },
+
+  butterflyfish: {
+    length: 0.85, maxHeight: 0.46, maxWidth: 0.10,
+    bodyColor: '#ffd23f', finColor: '#ffb703',
+    sideProfile: discProfile(0.46, 0.45),
+    topProfile:  discProfile(0.10, 0.45),
+    stripes: [
+      // 눈을 가로지르는 검은 세로띠
+      { x: 0.26, thickness: 0.035, color: '#1a1a1a', heightR: 0.40, widthR: 0.105 },
+    ],
+    spots: [
+      // 꼬리쪽 아이스팟(가짜 눈)
+      { x: -0.24, y: 0.16, size: 0.07, color: '#1a1a1a' },
+    ],
+    dorsal:   { length: 0.50, height: 0.30, peakPos: 0.55, x: -0.05, attach: 0.42 },
+    anal:     { length: 0.40, height: 0.24, x: -0.08, attach: -0.42 },
+    tail:     { spread: 0.30, height: 0.28, fork: 0.10, baseWidth: 0.08 },
+    pectoral: { x: 0.12, y: -0.06, width: 0.09, length: 0.20 },
+    eye:      { x: 0.28, y: 0.12, size: 0.05, z: 0.10 },
+  },
+
+  pufferfish: {
+    length: 0.95, maxHeight: 0.42, maxWidth: 0.38,
+    bodyColor: '#d9c26b', finColor: '#c4a94f',
+    sideProfile: roundProfile(0.42),
+    topProfile:  roundProfile(0.38),
+    bellyColor: '#f7f0d8',
+    belly: { length: 0.34, height: 0.14, width: 0.30, x: 0.02, y: -0.28 },
+    spots: [
+      { x: 0.18,  y: 0.14,  size: 0.06, color: '#6b5423' },
+      { x: -0.02, y: 0.22,  size: 0.055, color: '#6b5423' },
+      { x: -0.20, y: 0.10,  size: 0.06, color: '#6b5423' },
+      { x: 0.02,  y: 0.02,  size: 0.05, color: '#6b5423' },
+      { x: -0.24, y: -0.06, size: 0.045, color: '#6b5423' },
+    ],
+    dorsal:   { length: 0.18, height: 0.10, x: -0.18, attach: 0.38 },
+    anal:     { length: 0.14, height: 0.09, x: -0.20, attach: -0.36 },
+    tail:     { style: 'fan', spread: 0.26, height: 0.20 },
+    pectoral: { x: 0.10, y: 0.0, width: 0.12, length: 0.16 },
+    eye:      { x: 0.30, y: 0.16, size: 0.075, z: 0.28 },
+  },
+
+  blue_tang: {
+    length: 1.0, maxHeight: 0.34, maxWidth: 0.12,
+    bodyColor: '#1565e8', finColor: '#ffd400',
+    sideProfile: discProfile(0.34, 0.40),
+    topProfile:  discProfile(0.12, 0.40),
+    // 등쪽 검은 팔레트 무늬 — 표면에 밀착하는 스팟으로 표현해야 조명을 정면으로 받는다
+    spots: [
+      { x: -0.02, y: 0.10, size: 0.11, color: '#0a1a3a' },
+      { x: 0.14,  y: 0.02, size: 0.08, color: '#0a1a3a' },
+      { x: -0.18, y: 0.06, size: 0.08, color: '#0a1a3a' },
+    ],
+    dorsal:   { length: 0.60, height: 0.16, peakPos: 0.50, x: -0.05, attach: 0.30 },
+    anal:     { length: 0.45, height: 0.13, x: -0.10, attach: -0.28 },
+    tail:     { spread: 0.30, height: 0.28, fork: 0.25, baseWidth: 0.08 },
+    pectoral: { x: 0.16, y: -0.05, width: 0.11, length: 0.20 },
+    eye:      { x: 0.36, y: 0.10, size: 0.05, z: 0.11 },
+  },
+
+  discus: {
+    length: 0.80, maxHeight: 0.52, maxWidth: 0.11,
+    bodyColor: '#c75b39', finColor: '#a34428',
+    sideProfile: discProfile(0.52, 0.48),
+    topProfile:  discProfile(0.11, 0.48),
+    stripes: [
+      // 청록 세로 워터마크 줄무늬 — 실루엣 위아래로 살짝 삐져나와야 측면에서도 보인다(엔젤피시 방식)
+      { x: 0.22,  thickness: 0.022, color: '#5aa9d6', heightR: 0.46, widthR: 0.13 },
+      { x: 0.06,  thickness: 0.025, color: '#5aa9d6', heightR: 0.55, widthR: 0.13 },
+      { x: -0.10, thickness: 0.025, color: '#5aa9d6', heightR: 0.54, widthR: 0.13 },
+      { x: -0.26, thickness: 0.022, color: '#5aa9d6', heightR: 0.47, widthR: 0.125 },
+    ],
+    dorsal:   { length: 0.58, height: 0.26, peakPos: 0.60, x: -0.04, attach: 0.44 },
+    anal:     { length: 0.55, height: 0.24, peakPos: 0.55, x: -0.06, attach: -0.44 },
+    tail:     { style: 'fan', spread: 0.28, height: 0.24 },
+    pectoral: { x: 0.12, y: -0.08, width: 0.09, length: 0.22 },
+    eye:      { x: 0.28, y: 0.12, size: 0.05, z: 0.11 },
+  },
+
+  koi: {
+    length: 1.3, maxHeight: 0.30, maxWidth: 0.24,
+    bodyColor: '#f2f2f2', finColor: '#e8e8e8',
+    sideProfile: torpedoSide(0.30, 0.38, 0.22),
+    topProfile:  torpedoSide(0.24, 0.38, 0.22),
+    // 코이 특유의 홍백+먹 패치
+    spots: [
+      { x: 0.28,  y: 0.08,  size: 0.13, color: '#ff7f27' },
+      { x: -0.12, y: 0.04,  size: 0.12, color: '#ff7f27' },
+      { x: 0.06,  y: -0.04, size: 0.07, color: '#1a1a1a' },
+    ],
+    ellipses: [
+      // 등 위 주황 패치
+      { x: 0.10, y: 0.24, length: 0.20, height: 0.07, width: 0.18, color: '#ff7f27' },
+    ],
+    dorsal:   { length: 0.45, height: 0.14, peakPos: 0.45, x: -0.10, attach: 0.27 },
+    anal:     { length: 0.20, height: 0.10, x: -0.30, attach: -0.24 },
+    tail:     { style: 'fan', spread: 0.36, height: 0.30 },
+    pectoral: { x: 0.30, y: -0.08, width: 0.14, length: 0.24 },
+    eye:      { x: 0.52, y: 0.06, size: 0.055, z: 0.20 },
+  },
+
+  lionfish: {
+    length: 1.0, maxHeight: 0.28, maxWidth: 0.20,
+    bodyColor: '#c0392b', finColor: '#d95f4b',
+    sideProfile: torpedoSide(0.28, 0.35),
+    topProfile:  torpedoSide(0.20, 0.35),
+    stripes: [
+      { x: 0.30,  thickness: 0.035, color: '#f4e9dd', heightR: 0.29, widthR: 0.22 },
+      { x: 0.14,  thickness: 0.040, color: '#f4e9dd', heightR: 0.31, widthR: 0.225 },
+      { x: -0.03, thickness: 0.040, color: '#f4e9dd', heightR: 0.31, widthR: 0.225 },
+      { x: -0.20, thickness: 0.035, color: '#f4e9dd', heightR: 0.28, widthR: 0.215 },
+      { x: -0.35, thickness: 0.030, color: '#f4e9dd', heightR: 0.22, widthR: 0.18 },
+    ],
+    anal:     { length: 0.28, height: 0.14, x: -0.20, attach: -0.25 },
+    tail:     { style: 'fan', spread: 0.30, height: 0.26 },
+    eye:      { x: 0.38, y: 0.10, size: 0.05 },
+    // 독가시 등지느러미·부채 가슴지느러미는 커스텀 빌더에서 추가
+  },
+
+  anglerfish: {
+    length: 0.95, maxHeight: 0.38, maxWidth: 0.30,
+    bodyColor: '#2b2233', finColor: '#1e1826',
+    sideProfile: roundProfile(0.38),
+    topProfile:  roundProfile(0.30),
+    dorsal:   { length: 0.22, height: 0.12, x: -0.22, attach: 0.30 },
+    anal:     { length: 0.18, height: 0.10, x: -0.24, attach: -0.28 },
+    tail:     { style: 'fan', spread: 0.28, height: 0.24 },
+    pectoral: { x: 0.05, y: -0.06, width: 0.12, length: 0.18 },
+    eye:      { x: 0.30, y: 0.16, size: 0.06, z: 0.22 },
+    // 발광 루어·이빨은 커스텀 빌더에서 추가
+  },
+
+  arowana: {
+    length: 1.6, maxHeight: 0.26, maxWidth: 0.16,
+    bodyColor: '#e8b84b', finColor: '#c93c3c',
+    sideProfile: torpedoSide(0.26, 0.35, 0.35),
+    topProfile:  torpedoSide(0.16, 0.35, 0.35),
+    // 큼직한 금빛 비늘 하이라이트
+    spots: [
+      { x: 0.40,  y: 0.04,  size: 0.075, color: '#f7df8f' },
+      { x: 0.18,  y: -0.03, size: 0.08,  color: '#f7df8f' },
+      { x: -0.04, y: 0.05,  size: 0.08,  color: '#f7df8f' },
+      { x: -0.26, y: -0.02, size: 0.075, color: '#f7df8f' },
+      { x: -0.46, y: 0.03,  size: 0.065, color: '#f7df8f' },
+    ],
+    ellipses: [
+      // 턱 수염 한 쌍 — 용을 닮은 시그니처
+      { x: 0.82, y: -0.10, z: 0.03,  length: 0.10, height: 0.015, width: 0.015, color: '#e8b84b' },
+      { x: 0.82, y: -0.10, z: -0.03, length: 0.10, height: 0.015, width: 0.015, color: '#e8b84b' },
+    ],
+    // 등·뒷지느러미가 몸 뒤쪽에 몰려 있는 실루엣
+    dorsal:   { length: 0.50, height: 0.13, peakPos: 0.60, x: -0.42, attach: 0.20 },
+    anal:     { length: 0.55, height: 0.13, peakPos: 0.55, x: -0.40, attach: -0.18 },
+    tail:     { style: 'fan', spread: 0.26, height: 0.22 },
+    pectoral: { x: 0.55, y: -0.08, width: 0.10, length: 0.22 },
+    eye:      { x: 0.68, y: 0.06, size: 0.055, z: 0.13 },
+  },
+
+  oarfish: {
+    length: 2.2, maxHeight: 0.16, maxWidth: 0.08,
+    bodyColor: '#cdd6e0', finColor: '#e63946',
+    sideProfile: eelProfile(0.16, 0.2),
+    topProfile:  eelProfile(0.08, 0.2),
+    // 몸 전체를 따라 흐르는 붉은 등지느러미
+    dorsal:   { length: 1.9, height: 0.11, peakPos: 0.12, x: -0.05, attach: 0.10 },
+    tail:     { spread: 0.14, height: 0.10, fork: 0.20, baseWidth: 0.03 },
+    pectoral: { x: 0.85, y: -0.04, width: 0.05, length: 0.10 },
+    eye:      { x: 0.98, y: 0.03, size: 0.045, z: 0.06 },
+    // 머리 위 붉은 관(冠) 장식과 긴 배지느러미 스트리머는 커스텀 빌더에서 추가
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -687,6 +887,87 @@ function buildSeaDragon() {
   return parts;
 }
 
+function buildLionfish() {
+  const preset = PRESETS.lionfish;
+  const parts = buildGenericFish(preset);
+  const SPINE = hex('#d95f4b');
+  const SPINE_PALE = hex('#f4e9dd');
+  // 등을 따라 늘어선 독가시 — 가늘고 뾰족한 sail 을 부챗살처럼 세운다
+  const spineCount = 7;
+  for (let i = 0; i < spineCount; i++) {
+    const t = i / (spineCount - 1);
+    const x = 0.32 - t * 0.62;
+    const tilt = 0.55 - t * 0.75; // 앞쪽은 앞으로, 뒤쪽은 뒤로 기울기
+    parts.push({ name: `spine${i}`, color: i % 2 === 0 ? SPINE : SPINE_PALE,
+      geom: transformGeom(sailFin({ length: 0.05, height: 0.30 - Math.abs(t - 0.4) * 0.18, peakPos: 0.5 }),
+        M.chain(M.translate(x, 0.24, 0), M.rotZ(tilt * 0.5))) });
+  }
+  // 부채처럼 활짝 펼친 가슴지느러미 — 양쪽 3장씩 각도를 달리해 겹친다
+  [+1, -1].forEach((side) => {
+    [-0.5, 0, 0.5].forEach((roll, i) => {
+      parts.push({ name: `fan${i}_${side}`, color: i % 2 === 0 ? SPINE : SPINE_PALE,
+        geom: transformGeom(pectoralFin({ width: 0.16, length: 0.45, droop: 0.05 }),
+          M.chain(
+            M.translate(0.15, -0.02, side * preset.maxWidth * 0.85),
+            M.rotY(side * Math.PI / 2.6),
+            M.rotX(side * roll),
+            M.rotZ(-0.2),
+          )) });
+    });
+  });
+  return parts;
+}
+
+function buildAnglerfish() {
+  const preset = PRESETS.anglerfish;
+  const parts = buildGenericFish(preset);
+  const BODY = hex(preset.bodyColor);
+  const GLOW = hex('#aef6ff');
+  // 이마에서 앞으로 굽는 루어 줄기 — 구를 촘촘히 이어붙여 끊김 없는 아치를 만든다
+  const stalkPts = [
+    [0.26, 0.34], [0.32, 0.40], [0.38, 0.45], [0.45, 0.48],
+    [0.52, 0.49], [0.58, 0.47], [0.63, 0.44],
+  ];
+  stalkPts.forEach(([x, y], i) => {
+    parts.push({ name: `stalk${i}`, color: BODY,
+      geom: transformGeom(sphere(0.045, 0.055, 0.035, 6, 10), M.translate(x, y, 0)) });
+  });
+  // 발광 미끼 — emissive 로 빛나게
+  parts.push({ name: 'lure', color: GLOW, emissive: [0.55, 0.95, 1.0],
+    geom: transformGeom(sphere(0.055, 0.055, 0.055, 10, 14), M.translate(0.66, 0.42, 0)) });
+  // 아래턱 삐죽 이빨
+  const TOOTH = hex('#f4f4f4');
+  [-0.10, -0.02, 0.06, 0.14].forEach((z, i) => {
+    parts.push({ name: `tooth${i}`, color: TOOTH,
+      geom: transformGeom(sphere(0.014, 0.05, 0.014, 5, 8),
+        M.translate(0.44, -0.10, z)) });
+  });
+  return parts;
+}
+
+function buildOarfish() {
+  const preset = PRESETS.oarfish;
+  const parts = buildGenericFish(preset);
+  const CREST = hex('#e63946');
+  // 머리 위로 길게 뻗는 관(冠) 장식 — 뒤로 눕힌 가는 sail 3장
+  [[1.0, 0.55, 0.9], [0.92, 0.65, 1.1], [0.84, 0.60, 1.3]].forEach(([x, h, rot], i) => {
+    parts.push({ name: `crest${i}`, color: CREST,
+      geom: transformGeom(sailFin({ length: 0.04, height: h, peakPos: 0.5 }),
+        M.chain(M.translate(x, 0.12, 0), M.rotZ(rot - 1.0))) });
+  });
+  // 노처럼 늘어진 배지느러미 스트리머 한 쌍
+  [+1, -1].forEach((side) => {
+    parts.push({ name: `streamer_${side}`, color: CREST,
+      geom: transformGeom(sphere(0.02, 0.45, 0.02, 6, 10),
+        M.chain(M.translate(0.78, -0.42, side * 0.05), M.rotZ(0.25))) });
+    // 스트리머 끝 노깃
+    parts.push({ name: `paddle_${side}`, color: CREST,
+      geom: transformGeom(sphere(0.05, 0.08, 0.02, 6, 10),
+        M.translate(0.66, -0.82, side * 0.05)) });
+  });
+  return parts;
+}
+
 // ---------------------------------------------------------------------------
 // glTF assembly
 // ---------------------------------------------------------------------------
@@ -707,6 +988,7 @@ async function writeFishGlb(id, parts) {
       .setBaseColorFactor([...part.color, 1])
       .setRoughnessFactor(0.55)
       .setMetallicFactor(0.0);
+    if (part.emissive) mat.setEmissiveFactor(part.emissive);
     prim.setMaterial(mat);
     mesh.addPrimitive(prim);
   }
@@ -735,6 +1017,17 @@ const BUILDERS = [
   ['mandarin',   () => buildGenericFish(PRESETS.mandarin)],
   ['sea_dragon', () => buildSeaDragon()],
   ['coelacanth', () => buildGenericFish(PRESETS.coelacanth)],
+  // v1.1.0 신규 10종
+  ['neon_tetra',    () => buildGenericFish(PRESETS.neon_tetra)],
+  ['butterflyfish', () => buildGenericFish(PRESETS.butterflyfish)],
+  ['pufferfish',    () => buildGenericFish(PRESETS.pufferfish)],
+  ['blue_tang',     () => buildGenericFish(PRESETS.blue_tang)],
+  ['discus',        () => buildGenericFish(PRESETS.discus)],
+  ['koi',           () => buildGenericFish(PRESETS.koi)],
+  ['lionfish',      () => buildLionfish()],
+  ['anglerfish',    () => buildAnglerfish()],
+  ['arowana',       () => buildGenericFish(PRESETS.arowana)],
+  ['oarfish',       () => buildOarfish()],
 ];
 
 const written = [];
